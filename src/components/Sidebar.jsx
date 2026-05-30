@@ -109,6 +109,13 @@ export default function Sidebar({
         <span>📚</span> Wiki
       </div>
 
+      <div
+        className={`nav-item ${view === "mytasks" ? "active" : ""}`}
+        onClick={() => onNavigate("mytasks")}
+      >
+        <span>👤</span> My Tasks
+      </div>
+
       <div className="sidebar-section" style={{ marginTop: 8 }}>
         Spaces
       </div>

@@ -6,6 +6,7 @@ import Tasks from "./components/Tasks";
 import Wiki from "./components/Wiki";
 import Login from "./components/Login";
 import Settings from "./components/Settings";
+import MyTasks from "./components/MyTasks";
 import "./App.css";
 
 export default function App() {
@@ -142,6 +143,7 @@ export default function App() {
           />
         )}
         {view === "wiki" && <Wiki spaces={spaces} />}
+        {view === "mytasks" && <MyTasks profile={profile} />}
         {view === "settings" && profile?.role === "admin" && (
           <Settings currentUser={user} profile={profile} />
         )}

@@ -593,10 +593,26 @@ export default function Tasks({
                               <td
                                 style={{
                                   fontSize: 12,
-                                  color: task.due_date ? "#333" : "#ccc",
+                                  color: task.due_date
+                                    ? new Date(task.due_date) < new Date() &&
+                                      task.status !== "Done"
+                                      ? "#b91c1c"
+                                      : "#333"
+                                    : "#ccc",
+                                  fontWeight:
+                                    task.due_date &&
+                                    new Date(task.due_date) < new Date() &&
+                                    task.status !== "Done"
+                                      ? 600
+                                      : 400,
                                 }}
                               >
-                                {task.due_date || "—"}
+                                {task.due_date
+                                  ? new Date(task.due_date) < new Date() &&
+                                    task.status !== "Done"
+                                    ? `⚠️ ${task.due_date}`
+                                    : task.due_date
+                                  : "—"}
                               </td>
                               {getFields().map((f) => {
                                 const fv = task.task_field_values?.find(
@@ -782,14 +798,23 @@ export default function Tasks({
                 <label className="form-label">Space *</label>
                 <select
                   value={newTask.space_id}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const selectedSpace = spaces.find(
+                      (s) => s.id === e.target.value,
+                    );
+                    const firstStatus =
+                      selectedSpace?.space_statuses?.length > 0
+                        ? selectedSpace.space_statuses.sort(
+                            (a, b) => a.status_order - b.status_order,
+                          )[0].name
+                        : "To Do";
                     setNewTask((prev) => ({
                       ...prev,
                       space_id: e.target.value,
                       folder_id: "",
-                      status: "To Do",
-                    }))
-                  }
+                      status: firstStatus,
+                    }));
+                  }}
                 >
                   <option value="">Select space...</option>
                   {spaces.map((s) => (
