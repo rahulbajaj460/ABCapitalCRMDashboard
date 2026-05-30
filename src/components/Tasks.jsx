@@ -20,6 +20,7 @@ export default function Tasks({
     field_name: "",
     field_type: "text",
   });
+  const [members, setMembers] = useState([]);
   const [newStatus, setNewStatus] = useState({ name: "", color: "#378ADD" });
   const [newTask, setNewTask] = useState({
     title: "",
@@ -39,6 +40,18 @@ export default function Tasks({
   useEffect(() => {
     fetchTasks();
   }, [activeSpace, activeFolder]);
+
+  useEffect(() => {
+    fetchMembers();
+  }, []);
+
+  async function fetchMembers() {
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("full_name");
+    if (data) setMembers(data);
+  }
 
   useEffect(() => {
     if (activeSpace) {
@@ -880,16 +893,24 @@ export default function Tasks({
 
               <div className="form-group">
                 <label className="form-label">Assignee</label>
-                <input
-                  placeholder="Name or email..."
-                  value={newTask.assignee}
-                  onChange={(e) =>
+                <select
+                  value={newTask.assignee_id || ""}
+                  onChange={(e) => {
+                    const member = members.find((m) => m.id === e.target.value);
                     setNewTask((prev) => ({
                       ...prev,
-                      assignee: e.target.value,
-                    }))
-                  }
-                />
+                      assignee_id: e.target.value,
+                      assignee: member?.full_name || "",
+                    }));
+                  }}
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.full_name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="form-group">
