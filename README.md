@@ -160,6 +160,23 @@ where email = 'their@email.com';
 
 ---
 
+## Security & Access Control
+
+Row Level Security (RLS) is enabled on all Supabase tables.
+
+| Table         | Members can                      | Admins can                     |
+| ------------- | -------------------------------- | ------------------------------ |
+| Tasks         | Read only their assigned tasks   | Read, create, edit, delete all |
+| Wiki          | Read all articles                | Read, create, edit, delete all |
+| Spaces        | Read all spaces                  | Create, edit, delete           |
+| Profiles      | Read all (for assignee dropdown) | Read all, change roles         |
+| Custom fields | Read only                        | Full control                   |
+| Field values  | Read own task values only        | Full control                   |
+
+> All sessions are authenticated via Supabase Auth. Unauthenticated users cannot access any data.
+
+---
+
 ## Built by
 
 AB Capital Services FZC  
