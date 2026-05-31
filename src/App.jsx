@@ -142,7 +142,7 @@ export default function App() {
             onRefreshSpaces={fetchSpaces}
           />
         )}
-        {view === "wiki" && <Wiki spaces={spaces} />}
+        {view === "wiki" && <Wiki />}
         {view === "mytasks" && <MyTasks profile={profile} />}
         {view === "settings" && profile?.role === "admin" && (
           <Settings currentUser={user} profile={profile} />

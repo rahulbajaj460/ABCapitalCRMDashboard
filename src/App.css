@@ -658,3 +658,13 @@
   background: none;
   color: inherit;
 }
+
+.wiki-cat-row:hover {
+  background: #f5f5f4;
+}
+.wiki-cat-actions {
+  opacity: 0;
+}
+.wiki-cat-row:hover .wiki-cat-actions {
+  opacity: 1;
+}

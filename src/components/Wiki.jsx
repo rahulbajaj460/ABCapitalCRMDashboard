@@ -12,7 +12,6 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
 
-// Toolbar button component
 function ToolbarBtn({ onClick, active, title, children }) {
   return (
     <button
@@ -38,7 +37,6 @@ function ToolbarBtn({ onClick, active, title, children }) {
   );
 }
 
-// Rich text editor component
 function RichEditor({ content, onChange }) {
   const editor = useEditor({
     extensions: [
@@ -47,43 +45,33 @@ function RichEditor({ content, onChange }) {
       Image.configure({ inline: false, allowBase64: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Link.configure({ openOnClick: false }),
-      Placeholder.configure({
-        placeholder:
-          "Start writing your article...\n\nTip: Use the toolbar above to format text, add images, tables, and more.",
-      }),
+      Placeholder.configure({ placeholder: "Start writing your article..." }),
       Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCell,
     ],
     content: content || "",
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
-    },
+    onUpdate: ({ editor }) => onChange(editor.getHTML()),
   });
 
   const addImage = useCallback(() => {
     const url = window.prompt("Enter image URL:");
-    if (url && editor) {
-      editor.chain().focus().setImage({ src: url }).run();
-    }
+    if (url && editor) editor.chain().focus().setImage({ src: url }).run();
   }, [editor]);
 
   const setLink = useCallback(() => {
     const url = window.prompt("Enter URL:");
-    if (url && editor) {
-      editor.chain().focus().setLink({ href: url }).run();
-    }
+    if (url && editor) editor.chain().focus().setLink({ href: url }).run();
   }, [editor]);
 
   const addTable = useCallback(() => {
-    if (editor) {
+    if (editor)
       editor
         .chain()
         .focus()
         .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
         .run();
-    }
   }, [editor]);
 
   if (!editor) return null;
@@ -96,7 +84,6 @@ function RichEditor({ content, onChange }) {
         overflow: "hidden",
       }}
     >
-      {/* Toolbar */}
       <div
         style={{
           display: "flex",
@@ -108,7 +95,6 @@ function RichEditor({ content, onChange }) {
           alignItems: "center",
         }}
       >
-        {/* Text style */}
         <ToolbarBtn
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
@@ -133,11 +119,10 @@ function RichEditor({ content, onChange }) {
         <ToolbarBtn
           onClick={() => editor.chain().focus().toggleStrike().run()}
           active={editor.isActive("strike")}
-          title="Strikethrough"
+          title="Strike"
         >
           <s>S</s>
         </ToolbarBtn>
-
         <div
           style={{
             width: 1,
@@ -146,14 +131,12 @@ function RichEditor({ content, onChange }) {
             margin: "0 4px",
           }}
         />
-
-        {/* Headings */}
         <ToolbarBtn
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 1 }).run()
           }
           active={editor.isActive("heading", { level: 1 })}
-          title="Heading 1"
+          title="H1"
         >
           H1
         </ToolbarBtn>
@@ -162,7 +145,7 @@ function RichEditor({ content, onChange }) {
             editor.chain().focus().toggleHeading({ level: 2 }).run()
           }
           active={editor.isActive("heading", { level: 2 })}
-          title="Heading 2"
+          title="H2"
         >
           H2
         </ToolbarBtn>
@@ -171,11 +154,10 @@ function RichEditor({ content, onChange }) {
             editor.chain().focus().toggleHeading({ level: 3 }).run()
           }
           active={editor.isActive("heading", { level: 3 })}
-          title="Heading 3"
+          title="H3"
         >
           H3
         </ToolbarBtn>
-
         <div
           style={{
             width: 1,
@@ -184,8 +166,6 @@ function RichEditor({ content, onChange }) {
             margin: "0 4px",
           }}
         />
-
-        {/* Lists */}
         <ToolbarBtn
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           active={editor.isActive("bulletList")}
@@ -200,7 +180,6 @@ function RichEditor({ content, onChange }) {
         >
           1. List
         </ToolbarBtn>
-
         <div
           style={{
             width: 1,
@@ -209,12 +188,10 @@ function RichEditor({ content, onChange }) {
             margin: "0 4px",
           }}
         />
-
-        {/* Alignment */}
         <ToolbarBtn
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
           active={editor.isActive({ textAlign: "left" })}
-          title="Align left"
+          title="Left"
         >
           ⬅
         </ToolbarBtn>
@@ -228,11 +205,10 @@ function RichEditor({ content, onChange }) {
         <ToolbarBtn
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
           active={editor.isActive({ textAlign: "right" })}
-          title="Align right"
+          title="Right"
         >
           ➡
         </ToolbarBtn>
-
         <div
           style={{
             width: 1,
@@ -241,8 +217,6 @@ function RichEditor({ content, onChange }) {
             margin: "0 4px",
           }}
         />
-
-        {/* Other */}
         <ToolbarBtn
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           active={editor.isActive("blockquote")}
@@ -251,29 +225,18 @@ function RichEditor({ content, onChange }) {
           "
         </ToolbarBtn>
         <ToolbarBtn
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          active={editor.isActive("code")}
-          title="Inline code"
-        >{`</>`}</ToolbarBtn>
-        <ToolbarBtn
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          active={editor.isActive("codeBlock")}
-          title="Code block"
-        >{`{ }`}</ToolbarBtn>
-        <ToolbarBtn
           onClick={setLink}
           active={editor.isActive("link")}
-          title="Add link"
+          title="Link"
         >
           🔗
         </ToolbarBtn>
-        <ToolbarBtn onClick={addImage} active={false} title="Add image">
+        <ToolbarBtn onClick={addImage} active={false} title="Image">
           🖼
         </ToolbarBtn>
-        <ToolbarBtn onClick={addTable} active={false} title="Insert table">
-          ⊞ Table
+        <ToolbarBtn onClick={addTable} active={false} title="Table">
+          ⊞
         </ToolbarBtn>
-
         <div
           style={{
             width: 1,
@@ -282,8 +245,6 @@ function RichEditor({ content, onChange }) {
             margin: "0 4px",
           }}
         />
-
-        {/* Undo/Redo */}
         <ToolbarBtn
           onClick={() => editor.chain().focus().undo().run()}
           active={false}
@@ -299,8 +260,6 @@ function RichEditor({ content, onChange }) {
           ↪
         </ToolbarBtn>
       </div>
-
-      {/* Editor area */}
       <div style={{ padding: "16px 20px", minHeight: 300, background: "#fff" }}>
         <EditorContent editor={editor} />
       </div>
@@ -308,31 +267,41 @@ function RichEditor({ content, onChange }) {
   );
 }
 
-// Main Wiki component
-export default function Wiki({ spaces }) {
+export default function Wiki() {
+  const [categories, setCategories] = useState([]);
   const [articles, setArticles] = useState([]);
   const [activeArticle, setActiveArticle] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [editingArticle, setEditingArticle] = useState(null);
-  const [filterSpace, setFilterSpace] = useState("all");
+  const [expandedCats, setExpandedCats] = useState({});
   const [search, setSearch] = useState("");
+
+  // Modals
+  const [showArticleModal, setShowArticleModal] = useState(false);
+  const [showCatModal, setShowCatModal] = useState(false);
+  const [editingArticle, setEditingArticle] = useState(null);
+  const [editingCat, setEditingCat] = useState(null);
+
+  // Forms
   const [newArticle, setNewArticle] = useState({
     title: "",
     content: "",
-    space_id: "",
+    category_id: "",
   });
-  const [viewMode, setViewMode] = useState("view");
+  const [newCat, setNewCat] = useState({ name: "", parent_id: "" });
 
   useEffect(() => {
-    fetchArticles();
+    fetchAll();
   }, []);
 
-  async function fetchArticles() {
-    const { data } = await supabase
-      .from("wiki_articles")
-      .select("*")
-      .order("updated_at", { ascending: false });
-    if (data) setArticles(data);
+  async function fetchAll() {
+    const [catsRes, artsRes] = await Promise.all([
+      supabase.from("wiki_categories").select("*").order("category_order"),
+      supabase
+        .from("wiki_articles")
+        .select("*")
+        .order("updated_at", { ascending: false }),
+    ]);
+    if (catsRes.data) setCategories(catsRes.data);
+    if (artsRes.data) setArticles(artsRes.data);
   }
 
   async function saveArticle() {
@@ -340,16 +309,17 @@ export default function Wiki({ spaces }) {
     const payload = {
       title: newArticle.title.trim(),
       content: newArticle.content,
-      space_id: newArticle.space_id || null,
+      category_id: newArticle.category_id || null,
       updated_at: new Date().toISOString(),
     };
     if (editingArticle) {
-      await supabase
+      const { data } = await supabase
         .from("wiki_articles")
         .update(payload)
-        .eq("id", editingArticle.id);
-      // Refresh active article
-      setActiveArticle({ ...editingArticle, ...payload });
+        .eq("id", editingArticle.id)
+        .select()
+        .single();
+      if (data) setActiveArticle(data);
     } else {
       const { data } = await supabase
         .from("wiki_articles")
@@ -358,44 +328,111 @@ export default function Wiki({ spaces }) {
         .single();
       if (data) setActiveArticle(data);
     }
-    closeModal();
-    fetchArticles();
+    closeArticleModal();
+    fetchAll();
   }
 
   async function deleteArticle(id) {
     if (!confirm("Delete this article?")) return;
     await supabase.from("wiki_articles").delete().eq("id", id);
     if (activeArticle?.id === id) setActiveArticle(null);
-    fetchArticles();
+    fetchAll();
   }
 
-  function openNew() {
+  async function saveCategory() {
+    if (!newCat.name.trim()) return;
+    const payload = {
+      name: newCat.name.trim(),
+      parent_id: newCat.parent_id || null,
+      category_order: categories.length + 1,
+    };
+    if (editingCat) {
+      await supabase
+        .from("wiki_categories")
+        .update(payload)
+        .eq("id", editingCat.id);
+    } else {
+      await supabase.from("wiki_categories").insert(payload);
+    }
+    closeCatModal();
+    fetchAll();
+  }
+
+  async function deleteCategory(id, name) {
+    if (
+      !confirm(
+        `Delete category "${name}"? Articles inside will become uncategorised.`,
+      )
+    )
+      return;
+    await supabase.from("wiki_categories").delete().eq("id", id);
+    fetchAll();
+  }
+
+  function openNewArticle(categoryId = "") {
     setEditingArticle(null);
-    setNewArticle({ title: "", content: "", space_id: "" });
-    setShowModal(true);
+    setNewArticle({ title: "", content: "", category_id: categoryId });
+    setShowArticleModal(true);
   }
 
-  function openEdit(article) {
+  function openEditArticle(article) {
     setEditingArticle(article);
     setNewArticle({
       title: article.title,
       content: article.content || "",
-      space_id: article.space_id || "",
+      category_id: article.category_id || "",
     });
-    setShowModal(true);
+    setShowArticleModal(true);
   }
 
-  function closeModal() {
-    setShowModal(false);
+  function closeArticleModal() {
+    setShowArticleModal(false);
     setEditingArticle(null);
   }
 
-  function getSpaceName(spaceId) {
-    return spaces.find((s) => s.id === spaceId)?.name || "General";
+  function openNewCat(parentId = "") {
+    setEditingCat(null);
+    setNewCat({ name: "", parent_id: parentId });
+    setShowCatModal(true);
   }
 
-  function getSpaceColor(spaceId) {
-    return spaces.find((s) => s.id === spaceId)?.color || "#888";
+  function openEditCat(cat) {
+    setEditingCat(cat);
+    setNewCat({ name: cat.name, parent_id: cat.parent_id || "" });
+    setShowCatModal(true);
+  }
+
+  function closeCatModal() {
+    setShowCatModal(false);
+    setEditingCat(null);
+  }
+
+  function toggleCat(id) {
+    setExpandedCats((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  // Get top-level categories
+  function getTopCats() {
+    return categories
+      .filter((c) => !c.parent_id)
+      .sort((a, b) => a.category_order - b.category_order);
+  }
+
+  // Get subcategories of a category
+  function getSubCats(parentId) {
+    return categories
+      .filter((c) => c.parent_id === parentId)
+      .sort((a, b) => a.category_order - b.category_order);
+  }
+
+  // Get articles in a category
+  function getCatArticles(categoryId) {
+    return articles.filter((a) => a.category_id === categoryId);
+  }
+
+  // Get uncategorised articles
+  function getUncategorised() {
+    return articles.filter((a) => !a.category_id);
   }
 
   function formatDate(dateStr) {
@@ -407,245 +444,277 @@ export default function Wiki({ spaces }) {
     });
   }
 
-  const filteredArticles = articles.filter((a) => {
-    if (filterSpace !== "all" && a.space_id !== filterSpace) return false;
-    if (search && !a.title.toLowerCase().includes(search.toLowerCase()))
-      return false;
-    return true;
-  });
+  // Filter for search
+  const searchResults = search.trim()
+    ? articles.filter((a) =>
+        a.title.toLowerCase().includes(search.toLowerCase()),
+      )
+    : null;
 
   return (
-    <div>
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <div className="page-title">Wiki</div>
-          <div className="page-subtitle">
-            {articles.length} article{articles.length !== 1 ? "s" : ""} ·
-            Knowledge base
-          </div>
-        </div>
-        <button className="btn btn-primary" onClick={openNew}>
-          + New article
-        </button>
-      </div>
-
-      {/* Filters */}
+    <div
+      style={{
+        display: "flex",
+        height: "calc(100vh - 0px)",
+        overflow: "hidden",
+      }}
+    >
+      {/* LEFT SIDEBAR — category tree */}
       <div
         style={{
-          display: "flex",
-          gap: 10,
-          padding: "12px 24px",
-          borderBottom: "1px solid #e8e8e8",
+          width: 260,
+          flexShrink: 0,
           background: "#fff",
-          alignItems: "center",
+          borderRight: "1px solid #e8e8e8",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
         }}
       >
-        <div className="search-wrap">
-          <span style={{ color: "#aaa" }}>🔍</span>
-          <input
-            placeholder="Search articles..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          value={filterSpace}
-          onChange={(e) => setFilterSpace(e.target.value)}
-          style={{ fontSize: 13 }}
-        >
-          <option value="all">All spaces</option>
-          {spaces.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Main content */}
-      <div className="content-area">
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: activeArticle
-              ? "280px 1fr"
-              : "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: 16,
-            alignItems: "start",
+            padding: "14px 16px",
+            borderBottom: "1px solid #e8e8e8",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          {/* Article list */}
-          <div
-            style={
-              activeArticle
-                ? {
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                    maxHeight: "calc(100vh - 180px)",
-                    overflowY: "auto",
-                  }
-                : {}
-            }
-          >
-            {filteredArticles.length === 0 ? (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "60px 20px",
-                  color: "#aaa",
-                }}
-              >
-                <div style={{ fontSize: 32, marginBottom: 8 }}>📚</div>
-                <div style={{ fontSize: 14, marginBottom: 4 }}>
-                  No articles yet
-                </div>
-                <div style={{ fontSize: 12 }}>
-                  Click "+ New article" to get started
-                </div>
-              </div>
-            ) : (
-              filteredArticles.map((article) => (
-                <div
-                  key={article.id}
-                  className={`wiki-card ${activeArticle?.id === article.id ? "active" : ""}`}
-                  onClick={() => {
-                    setActiveArticle(
-                      activeArticle?.id === article.id ? null : article,
-                    );
-                    setViewMode("view");
-                  }}
-                  style={activeArticle ? { marginBottom: 0 } : {}}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        background: getSpaceColor(article.space_id),
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div className="wiki-card-space">
-                      {getSpaceName(article.space_id)}
-                    </div>
-                  </div>
-                  <div className="wiki-card-title">{article.title}</div>
-                  <div className="wiki-card-meta">
-                    Updated {formatDate(article.updated_at)}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Article viewer */}
-          {activeArticle && (
-            <div
-              style={{
-                background: "#fff",
-                border: "1px solid #e8e8e8",
-                borderRadius: 8,
-                overflow: "hidden",
-              }}
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Wiki</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              className="btn btn-sm"
+              onClick={() => openNewCat()}
+              title="Add category"
             >
-              {/* Article header */}
+              + Category
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => openNewArticle()}
+              title="New article"
+            >
+              + Page
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div
+          style={{ padding: "10px 12px", borderBottom: "1px solid #e8e8e8" }}
+        >
+          <div className="search-wrap" style={{ width: "100%" }}>
+            <span style={{ color: "#aaa" }}>🔍</span>
+            <input
+              placeholder="Search pages..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+
+        {/* Category tree */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+          {/* Search results */}
+          {searchResults && (
+            <div>
               <div
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "14px 20px",
-                  borderBottom: "1px solid #e8e8e8",
-                  background: "#fafaf9",
+                  fontSize: 11,
+                  color: "#aaa",
+                  padding: "4px 14px 6px",
+                  textTransform: "uppercase",
+                  letterSpacing: ".04em",
                 }}
               >
+                Results ({searchResults.length})
+              </div>
+              {searchResults.map((a) => (
+                <div
+                  key={a.id}
+                  onClick={() => {
+                    setActiveArticle(a);
+                    setSearch("");
+                  }}
+                  style={{
+                    padding: "6px 14px 6px 20px",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    color: activeArticle?.id === a.id ? "#1d4ed8" : "#444",
+                    background:
+                      activeArticle?.id === a.id ? "#eff6ff" : "transparent",
+                  }}
+                >
+                  📄 {a.title}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Normal tree */}
+          {!searchResults && (
+            <>
+              {getTopCats().map((cat) => (
+                <CategoryNode
+                  key={cat.id}
+                  cat={cat}
+                  categories={categories}
+                  articles={articles}
+                  activeArticle={activeArticle}
+                  expandedCats={expandedCats}
+                  onToggle={toggleCat}
+                  onSelectArticle={setActiveArticle}
+                  onNewArticle={openNewArticle}
+                  onNewSubCat={openNewCat}
+                  onEditCat={openEditCat}
+                  onDeleteCat={deleteCategory}
+                  getSubCats={getSubCats}
+                  getCatArticles={getCatArticles}
+                  depth={0}
+                />
+              ))}
+
+              {/* Uncategorised */}
+              {getUncategorised().length > 0 && (
                 <div>
                   <div
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      marginBottom: 2,
+                      fontSize: 11,
+                      color: "#aaa",
+                      padding: "8px 14px 4px",
+                      textTransform: "uppercase",
+                      letterSpacing: ".04em",
                     }}
                   >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        background: getSpaceColor(activeArticle.space_id),
-                      }}
+                    Uncategorised
+                  </div>
+                  {getUncategorised().map((a) => (
+                    <ArticleTreeItem
+                      key={a.id}
+                      article={a}
+                      active={activeArticle?.id === a.id}
+                      onSelect={setActiveArticle}
+                      depth={0}
                     />
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: "#aaa",
-                        textTransform: "uppercase",
-                        letterSpacing: ".05em",
-                      }}
-                    >
-                      {getSpaceName(activeArticle.space_id)}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>
-                    {activeArticle.title}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
-                    Updated {formatDate(activeArticle.updated_at)}
-                  </div>
+                  ))}
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => openEdit(activeArticle)}
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={() => deleteArticle(activeArticle.id)}
-                  >
-                    🗑
-                  </button>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => setActiveArticle(null)}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-
-              {/* Article content */}
-              <div
-                style={{
-                  padding: "20px 24px",
-                  maxHeight: "calc(100vh - 280px)",
-                  overflowY: "auto",
-                }}
-                className="wiki-content"
-                dangerouslySetInnerHTML={{ __html: activeArticle.content }}
-              />
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* NEW / EDIT MODAL */}
-      {showModal && (
+      {/* MAIN CONTENT */}
+      <div
+        style={{
+          flex: 1,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {activeArticle ? (
+          <div
+            style={{
+              flex: 1,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* Article header */}
+            <div
+              style={{
+                padding: "14px 24px",
+                borderBottom: "1px solid #e8e8e8",
+                background: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexShrink: 0,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>
+                  {activeArticle.title}
+                </div>
+                <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>
+                  Updated {formatDate(activeArticle.updated_at)}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => openEditArticle(activeArticle)}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  className="btn btn-sm btn-danger"
+                  onClick={() => deleteArticle(activeArticle.id)}
+                >
+                  🗑 Delete
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setActiveArticle(null)}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Article body */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "24px 32px",
+                background: "#fafaf9",
+              }}
+            >
+              <div
+                className="wiki-content"
+                dangerouslySetInnerHTML={{ __html: activeArticle.content }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "column",
+              gap: 12,
+              color: "#aaa",
+            }}
+          >
+            <div style={{ fontSize: 40 }}>📚</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: "#555" }}>
+              Select a page to view
+            </div>
+            <div style={{ fontSize: 13 }}>
+              or click "+ Page" to create a new one
+            </div>
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: 8 }}
+              onClick={() => openNewArticle()}
+            >
+              + New page
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ARTICLE MODAL */}
+      {showArticleModal && (
         <div
           className="modal-overlay"
-          onClick={(e) => e.target === e.currentTarget && closeModal()}
+          onClick={(e) => e.target === e.currentTarget && closeArticleModal()}
         >
           <div
             className="modal"
@@ -667,9 +736,9 @@ export default function Wiki({ spaces }) {
               }}
             >
               <div className="modal-title" style={{ margin: 0 }}>
-                {editingArticle ? "Edit article" : "New article"}
+                {editingArticle ? "Edit page" : "New page"}
               </div>
-              <button className="btn btn-sm" onClick={closeModal}>
+              <button className="btn btn-sm" onClick={closeArticleModal}>
                 ✕
               </button>
             </div>
@@ -679,7 +748,7 @@ export default function Wiki({ spaces }) {
                 <label className="form-label">Title *</label>
                 <input
                   autoFocus
-                  placeholder="Article title..."
+                  placeholder="Page title..."
                   value={newArticle.title}
                   onChange={(e) =>
                     setNewArticle((prev) => ({
@@ -690,22 +759,25 @@ export default function Wiki({ spaces }) {
                   style={{ width: "100%" }}
                 />
               </div>
-              <div style={{ width: 200 }}>
-                <label className="form-label">Space</label>
+              <div style={{ width: 220 }}>
+                <label className="form-label">Category</label>
                 <select
-                  value={newArticle.space_id}
+                  value={newArticle.category_id}
                   onChange={(e) =>
                     setNewArticle((prev) => ({
                       ...prev,
-                      space_id: e.target.value,
+                      category_id: e.target.value,
                     }))
                   }
                   style={{ width: "100%" }}
                 >
-                  <option value="">General</option>
-                  {spaces.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
+                  <option value="">Uncategorised</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {categories.find((p) => p.id === c.parent_id)
+                        ? "  ↳ "
+                        : ""}
+                      {c.name}
                     </option>
                   ))}
                 </select>
@@ -725,7 +797,7 @@ export default function Wiki({ spaces }) {
             </div>
 
             <div className="modal-actions" style={{ marginTop: 0 }}>
-              <button className="btn" onClick={closeModal}>
+              <button className="btn" onClick={closeArticleModal}>
                 Cancel
               </button>
               <button
@@ -735,12 +807,210 @@ export default function Wiki({ spaces }) {
                   !newArticle.title.trim() || !newArticle.content.trim()
                 }
               >
-                {editingArticle ? "Save changes" : "Create article"}
+                {editingArticle ? "Save changes" : "Create page"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* CATEGORY MODAL */}
+      {showCatModal && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => e.target === e.currentTarget && closeCatModal()}
+        >
+          <div className="modal" style={{ maxWidth: 400 }}>
+            <div className="modal-title">
+              {editingCat ? "Edit category" : "New category"}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Category name</label>
+              <input
+                autoFocus
+                placeholder="e.g. Business Set Up"
+                value={newCat.name}
+                onChange={(e) =>
+                  setNewCat((prev) => ({ ...prev, name: e.target.value }))
+                }
+                onKeyDown={(e) => e.key === "Enter" && saveCategory()}
+                style={{ width: "100%" }}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Parent category (optional)</label>
+              <select
+                value={newCat.parent_id}
+                onChange={(e) =>
+                  setNewCat((prev) => ({ ...prev, parent_id: e.target.value }))
+                }
+                style={{ width: "100%" }}
+              >
+                <option value="">None (top level)</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={closeCatModal}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={saveCategory}>
+                {editingCat ? "Save" : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Category node component (recursive for nested categories)
+function CategoryNode({
+  cat,
+  categories,
+  articles,
+  activeArticle,
+  expandedCats,
+  onToggle,
+  onSelectArticle,
+  onNewArticle,
+  onNewSubCat,
+  onEditCat,
+  onDeleteCat,
+  getSubCats,
+  getCatArticles,
+  depth,
+}) {
+  const isExpanded = expandedCats[cat.id] !== false;
+  const subCats = getSubCats(cat.id);
+  const catArticles = getCatArticles(cat.id);
+  const hasChildren = subCats.length > 0 || catArticles.length > 0;
+
+  return (
+    <div>
+      {/* Category header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          padding: `6px 12px 6px ${14 + depth * 12}px`,
+          cursor: "pointer",
+          gap: 6,
+        }}
+        className="wiki-cat-row"
+        onClick={() => onToggle(cat.id)}
+      >
+        <span style={{ fontSize: 10, color: "#aaa", width: 12, flexShrink: 0 }}>
+          {hasChildren ? (isExpanded ? "▾" : "▸") : ""}
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: "#333" }}>
+          📂 {cat.name}
+        </span>
+        <div className="wiki-cat-actions" style={{ display: "flex", gap: 2 }}>
+          <button
+            className="btn btn-sm"
+            style={{ padding: "1px 6px", fontSize: 11 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewArticle(cat.id);
+            }}
+            title="Add page"
+          >
+            + Page
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{ padding: "1px 6px", fontSize: 11 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewSubCat(cat.id);
+            }}
+            title="Add subcategory"
+          >
+            + Sub
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{ padding: "1px 6px", fontSize: 11 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditCat(cat);
+            }}
+            title="Edit"
+          >
+            ✏️
+          </button>
+          <button
+            className="btn btn-sm btn-danger"
+            style={{ padding: "1px 6px", fontSize: 11 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteCat(cat.id, cat.name);
+            }}
+            title="Delete"
+          >
+            🗑
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {isExpanded && (
+        <div>
+          {subCats.map((sub) => (
+            <CategoryNode
+              key={sub.id}
+              cat={sub}
+              categories={categories}
+              articles={articles}
+              activeArticle={activeArticle}
+              expandedCats={expandedCats}
+              onToggle={onToggle}
+              onSelectArticle={onSelectArticle}
+              onNewArticle={onNewArticle}
+              onNewSubCat={onNewSubCat}
+              onEditCat={onEditCat}
+              onDeleteCat={onDeleteCat}
+              getSubCats={getSubCats}
+              getCatArticles={getCatArticles}
+              depth={depth + 1}
+            />
+          ))}
+          {catArticles.map((a) => (
+            <ArticleTreeItem
+              key={a.id}
+              article={a}
+              active={activeArticle?.id === a.id}
+              onSelect={onSelectArticle}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArticleTreeItem({ article, active, onSelect, depth }) {
+  return (
+    <div
+      onClick={() => onSelect(article)}
+      style={{
+        padding: `5px 12px 5px ${26 + depth * 12}px`,
+        fontSize: 13,
+        cursor: "pointer",
+        color: active ? "#1d4ed8" : "#555",
+        background: active ? "#eff6ff" : "transparent",
+        borderRadius: 4,
+        margin: "1px 6px",
+      }}
+    >
+      📄 {article.title}
     </div>
   );
 }
