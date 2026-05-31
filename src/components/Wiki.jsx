@@ -1,6 +1,314 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import Underline from "@tiptap/extension-underline";
+import TextAlign from "@tiptap/extension-text-align";
+import Link from "@tiptap/extension-link";
+import Placeholder from "@tiptap/extension-placeholder";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
 
+// Toolbar button component
+function ToolbarBtn({ onClick, active, title, children }) {
+  return (
+    <button
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
+      title={title}
+      style={{
+        padding: "4px 8px",
+        borderRadius: 4,
+        border: "none",
+        background: active ? "#dbeafe" : "transparent",
+        color: active ? "#1d4ed8" : "#444",
+        cursor: "pointer",
+        fontSize: 13,
+        fontWeight: active ? 600 : 400,
+        minWidth: 28,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// Rich text editor component
+function RichEditor({ content, onChange }) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Image.configure({ inline: false, allowBase64: true }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Link.configure({ openOnClick: false }),
+      Placeholder.configure({
+        placeholder:
+          "Start writing your article...\n\nTip: Use the toolbar above to format text, add images, tables, and more.",
+      }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+    ],
+    content: content || "",
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
+  });
+
+  const addImage = useCallback(() => {
+    const url = window.prompt("Enter image URL:");
+    if (url && editor) {
+      editor.chain().focus().setImage({ src: url }).run();
+    }
+  }, [editor]);
+
+  const setLink = useCallback(() => {
+    const url = window.prompt("Enter URL:");
+    if (url && editor) {
+      editor.chain().focus().setLink({ href: url }).run();
+    }
+  }, [editor]);
+
+  const addTable = useCallback(() => {
+    if (editor) {
+      editor
+        .chain()
+        .focus()
+        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+        .run();
+    }
+  }, [editor]);
+
+  if (!editor) return null;
+
+  return (
+    <div
+      style={{
+        border: "1px solid #e8e8e8",
+        borderRadius: 8,
+        overflow: "hidden",
+      }}
+    >
+      {/* Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 2,
+          padding: "8px 10px",
+          borderBottom: "1px solid #e8e8e8",
+          background: "#fafaf9",
+          alignItems: "center",
+        }}
+      >
+        {/* Text style */}
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          active={editor.isActive("bold")}
+          title="Bold"
+        >
+          <b>B</b>
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          active={editor.isActive("italic")}
+          title="Italic"
+        >
+          <i>I</i>
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          active={editor.isActive("underline")}
+          title="Underline"
+        >
+          <u>U</u>
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+          active={editor.isActive("strike")}
+          title="Strikethrough"
+        >
+          <s>S</s>
+        </ToolbarBtn>
+
+        <div
+          style={{
+            width: 1,
+            height: 20,
+            background: "#e8e8e8",
+            margin: "0 4px",
+          }}
+        />
+
+        {/* Headings */}
+        <ToolbarBtn
+          onClick={() =>
+            editor.chain().focus().toggleHeading({ level: 1 }).run()
+          }
+          active={editor.isActive("heading", { level: 1 })}
+          title="Heading 1"
+        >
+          H1
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() =>
+            editor.chain().focus().toggleHeading({ level: 2 }).run()
+          }
+          active={editor.isActive("heading", { level: 2 })}
+          title="Heading 2"
+        >
+          H2
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() =>
+            editor.chain().focus().toggleHeading({ level: 3 }).run()
+          }
+          active={editor.isActive("heading", { level: 3 })}
+          title="Heading 3"
+        >
+          H3
+        </ToolbarBtn>
+
+        <div
+          style={{
+            width: 1,
+            height: 20,
+            background: "#e8e8e8",
+            margin: "0 4px",
+          }}
+        />
+
+        {/* Lists */}
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          active={editor.isActive("bulletList")}
+          title="Bullet list"
+        >
+          • List
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          active={editor.isActive("orderedList")}
+          title="Numbered list"
+        >
+          1. List
+        </ToolbarBtn>
+
+        <div
+          style={{
+            width: 1,
+            height: 20,
+            background: "#e8e8e8",
+            margin: "0 4px",
+          }}
+        />
+
+        {/* Alignment */}
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().setTextAlign("left").run()}
+          active={editor.isActive({ textAlign: "left" })}
+          title="Align left"
+        >
+          ⬅
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().setTextAlign("center").run()}
+          active={editor.isActive({ textAlign: "center" })}
+          title="Center"
+        >
+          ↔
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().setTextAlign("right").run()}
+          active={editor.isActive({ textAlign: "right" })}
+          title="Align right"
+        >
+          ➡
+        </ToolbarBtn>
+
+        <div
+          style={{
+            width: 1,
+            height: 20,
+            background: "#e8e8e8",
+            margin: "0 4px",
+          }}
+        />
+
+        {/* Other */}
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          active={editor.isActive("blockquote")}
+          title="Blockquote"
+        >
+          "
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          active={editor.isActive("code")}
+          title="Inline code"
+        >{`</>`}</ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          active={editor.isActive("codeBlock")}
+          title="Code block"
+        >{`{ }`}</ToolbarBtn>
+        <ToolbarBtn
+          onClick={setLink}
+          active={editor.isActive("link")}
+          title="Add link"
+        >
+          🔗
+        </ToolbarBtn>
+        <ToolbarBtn onClick={addImage} active={false} title="Add image">
+          🖼
+        </ToolbarBtn>
+        <ToolbarBtn onClick={addTable} active={false} title="Insert table">
+          ⊞ Table
+        </ToolbarBtn>
+
+        <div
+          style={{
+            width: 1,
+            height: 20,
+            background: "#e8e8e8",
+            margin: "0 4px",
+          }}
+        />
+
+        {/* Undo/Redo */}
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().undo().run()}
+          active={false}
+          title="Undo"
+        >
+          ↩
+        </ToolbarBtn>
+        <ToolbarBtn
+          onClick={() => editor.chain().focus().redo().run()}
+          active={false}
+          title="Redo"
+        >
+          ↪
+        </ToolbarBtn>
+      </div>
+
+      {/* Editor area */}
+      <div style={{ padding: "16px 20px", minHeight: 300, background: "#fff" }}>
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
+}
+
+// Main Wiki component
 export default function Wiki({ spaces }) {
   const [articles, setArticles] = useState([]);
   const [activeArticle, setActiveArticle] = useState(null);
@@ -13,6 +321,7 @@ export default function Wiki({ spaces }) {
     content: "",
     space_id: "",
   });
+  const [viewMode, setViewMode] = useState("view");
 
   useEffect(() => {
     fetchArticles();
@@ -28,23 +337,27 @@ export default function Wiki({ spaces }) {
 
   async function saveArticle() {
     if (!newArticle.title.trim() || !newArticle.content.trim()) return;
-
     const payload = {
       title: newArticle.title.trim(),
-      content: newArticle.content.trim(),
+      content: newArticle.content,
       space_id: newArticle.space_id || null,
       updated_at: new Date().toISOString(),
     };
-
     if (editingArticle) {
       await supabase
         .from("wiki_articles")
         .update(payload)
         .eq("id", editingArticle.id);
+      // Refresh active article
+      setActiveArticle({ ...editingArticle, ...payload });
     } else {
-      await supabase.from("wiki_articles").insert(payload);
+      const { data } = await supabase
+        .from("wiki_articles")
+        .insert(payload)
+        .select()
+        .single();
+      if (data) setActiveArticle(data);
     }
-
     closeModal();
     fetchArticles();
   }
@@ -78,80 +391,19 @@ export default function Wiki({ spaces }) {
   }
 
   function getSpaceName(spaceId) {
-    const space = spaces.find((s) => s.id === spaceId);
-    return space?.name || "General";
+    return spaces.find((s) => s.id === spaceId)?.name || "General";
   }
 
   function getSpaceColor(spaceId) {
-    const space = spaces.find((s) => s.id === spaceId);
-    return space?.color || "#888";
+    return spaces.find((s) => s.id === spaceId)?.color || "#888";
   }
 
   function formatDate(dateStr) {
     if (!dateStr) return "";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-GB", {
+    return new Date(dateStr).toLocaleDateString("en-GB", {
       day: "numeric",
       month: "short",
       year: "numeric",
-    });
-  }
-
-  // Format content — each line starting with - becomes a checklist item
-  function renderContent(content) {
-    if (!content) return null;
-    const lines = content.split("\n");
-    return lines.map((line, i) => {
-      if (line.startsWith("- ")) {
-        return (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              gap: 10,
-              padding: "6px 0",
-              borderBottom: "1px solid #f0f0f0",
-              alignItems: "flex-start",
-            }}
-          >
-            <span style={{ color: "#16a34a", flexShrink: 0, marginTop: 1 }}>
-              ✓
-            </span>
-            <span style={{ fontSize: 14, color: "#333" }}>{line.slice(2)}</span>
-          </div>
-        );
-      }
-      if (line.startsWith("# ")) {
-        return (
-          <div
-            key={i}
-            style={{ fontSize: 16, fontWeight: 600, margin: "16px 0 8px" }}
-          >
-            {line.slice(2)}
-          </div>
-        );
-      }
-      if (line.startsWith("## ")) {
-        return (
-          <div
-            key={i}
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              margin: "12px 0 6px",
-              color: "#555",
-            }}
-          >
-            {line.slice(3)}
-          </div>
-        );
-      }
-      if (line.trim() === "") return <div key={i} style={{ height: 8 }} />;
-      return (
-        <div key={i} style={{ fontSize: 14, color: "#444", lineHeight: 1.7 }}>
-          {line}
-        </div>
-      );
     });
   }
 
@@ -168,7 +420,10 @@ export default function Wiki({ spaces }) {
       <div className="page-header">
         <div>
           <div className="page-title">Wiki</div>
-          <div className="page-subtitle">Knowledge base for your team</div>
+          <div className="page-subtitle">
+            {articles.length} article{articles.length !== 1 ? "s" : ""} ·
+            Knowledge base
+          </div>
         </div>
         <button className="btn btn-primary" onClick={openNew}>
           + New article
@@ -208,16 +463,32 @@ export default function Wiki({ spaces }) {
         </select>
       </div>
 
+      {/* Main content */}
       <div className="content-area">
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: activeArticle ? "1fr 1.6fr" : "1fr",
-            gap: 20,
+            gridTemplateColumns: activeArticle
+              ? "280px 1fr"
+              : "repeat(auto-fill, minmax(220px, 1fr))",
+            gap: 16,
+            alignItems: "start",
           }}
         >
           {/* Article list */}
-          <div>
+          <div
+            style={
+              activeArticle
+                ? {
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    maxHeight: "calc(100vh - 180px)",
+                    overflowY: "auto",
+                  }
+                : {}
+            }
+          >
             {filteredArticles.length === 0 ? (
               <div
                 style={{
@@ -231,92 +502,71 @@ export default function Wiki({ spaces }) {
                   No articles yet
                 </div>
                 <div style={{ fontSize: 12 }}>
-                  Click "+ New article" to create your first wiki page
-                </div>
-                <div style={{ fontSize: 12, marginTop: 8, color: "#bbb" }}>
-                  Tip: use{" "}
-                  <code
-                    style={{
-                      background: "#f5f5f4",
-                      padding: "1px 4px",
-                      borderRadius: 3,
-                    }}
-                  >
-                    - item
-                  </code>{" "}
-                  for checklists,
-                  <code
-                    style={{
-                      background: "#f5f5f4",
-                      padding: "1px 4px",
-                      borderRadius: 3,
-                      marginLeft: 4,
-                    }}
-                  >
-                    # Heading
-                  </code>{" "}
-                  for headings
+                  Click "+ New article" to get started
                 </div>
               </div>
             ) : (
-              <div
-                className="wiki-grid"
-                style={{
-                  gridTemplateColumns: activeArticle
-                    ? "1fr"
-                    : "repeat(auto-fill, minmax(200px, 1fr))",
-                }}
-              >
-                {filteredArticles.map((article) => (
+              filteredArticles.map((article) => (
+                <div
+                  key={article.id}
+                  className={`wiki-card ${activeArticle?.id === article.id ? "active" : ""}`}
+                  onClick={() => {
+                    setActiveArticle(
+                      activeArticle?.id === article.id ? null : article,
+                    );
+                    setViewMode("view");
+                  }}
+                  style={activeArticle ? { marginBottom: 0 } : {}}
+                >
                   <div
-                    key={article.id}
-                    className={`wiki-card ${activeArticle?.id === article.id ? "active" : ""}`}
-                    onClick={() =>
-                      setActiveArticle(
-                        activeArticle?.id === article.id ? null : article,
-                      )
-                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      marginBottom: 4,
+                    }}
                   >
-                    <div
+                    <span
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginBottom: 6,
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: getSpaceColor(article.space_id),
+                        flexShrink: 0,
                       }}
-                    >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: getSpaceColor(article.space_id),
-                          flexShrink: 0,
-                        }}
-                      />
-                      <div className="wiki-card-space">
-                        {getSpaceName(article.space_id)}
-                      </div>
-                    </div>
-                    <div className="wiki-card-title">{article.title}</div>
-                    <div className="wiki-card-meta">
-                      Updated {formatDate(article.updated_at)}
+                    />
+                    <div className="wiki-card-space">
+                      {getSpaceName(article.space_id)}
                     </div>
                   </div>
-                ))}
-              </div>
+                  <div className="wiki-card-title">{article.title}</div>
+                  <div className="wiki-card-meta">
+                    Updated {formatDate(article.updated_at)}
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
           {/* Article viewer */}
           {activeArticle && (
-            <div className="wiki-article">
+            <div
+              style={{
+                background: "#fff",
+                border: "1px solid #e8e8e8",
+                borderRadius: 8,
+                overflow: "hidden",
+              }}
+            >
+              {/* Article header */}
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  marginBottom: 16,
+                  alignItems: "center",
+                  padding: "14px 20px",
+                  borderBottom: "1px solid #e8e8e8",
+                  background: "#fafaf9",
                 }}
               >
                 <div>
@@ -325,7 +575,7 @@ export default function Wiki({ spaces }) {
                       display: "flex",
                       alignItems: "center",
                       gap: 6,
-                      marginBottom: 6,
+                      marginBottom: 2,
                     }}
                   >
                     <span
@@ -347,14 +597,14 @@ export default function Wiki({ spaces }) {
                       {getSpaceName(activeArticle.space_id)}
                     </span>
                   </div>
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>
                     {activeArticle.title}
                   </div>
-                  <div style={{ fontSize: 12, color: "#aaa", marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
                     Updated {formatDate(activeArticle.updated_at)}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                <div style={{ display: "flex", gap: 6 }}>
                   <button
                     className="btn btn-sm"
                     onClick={() => openEdit(activeArticle)}
@@ -376,124 +626,115 @@ export default function Wiki({ spaces }) {
                 </div>
               </div>
 
-              <div style={{ borderTop: "1px solid #e8e8e8", paddingTop: 16 }}>
-                {renderContent(activeArticle.content)}
-              </div>
+              {/* Article content */}
+              <div
+                style={{
+                  padding: "20px 24px",
+                  maxHeight: "calc(100vh - 280px)",
+                  overflowY: "auto",
+                }}
+                className="wiki-content"
+                dangerouslySetInnerHTML={{ __html: activeArticle.content }}
+              />
             </div>
           )}
         </div>
       </div>
 
-      {/* NEW / EDIT ARTICLE MODAL */}
+      {/* NEW / EDIT MODAL */}
       {showModal && (
         <div
           className="modal-overlay"
           onClick={(e) => e.target === e.currentTarget && closeModal()}
         >
-          <div className="modal" style={{ maxWidth: 600 }}>
-            <div className="modal-title">
-              {editingArticle ? "Edit article" : "New article"}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Title *</label>
-              <input
-                autoFocus
-                placeholder="e.g. VAT registration – document checklist"
-                value={newArticle.title}
-                onChange={(e) =>
-                  setNewArticle((prev) => ({ ...prev, title: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Space</label>
-              <select
-                value={newArticle.space_id}
-                onChange={(e) =>
-                  setNewArticle((prev) => ({
-                    ...prev,
-                    space_id: e.target.value,
-                  }))
-                }
-              >
-                <option value="">General (no space)</option>
-                {spaces.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Content *</label>
-              <textarea
-                placeholder={`Write your content here...\n\nTips:\n- Start a line with "- " for a checklist item\n- Start with "# " for a heading\n- Start with "## " for a subheading`}
-                value={newArticle.content}
-                onChange={(e) =>
-                  setNewArticle((prev) => ({
-                    ...prev,
-                    content: e.target.value,
-                  }))
-                }
-                style={{
-                  minHeight: 240,
-                  fontFamily: "monospace",
-                  fontSize: 13,
-                }}
-              />
-            </div>
-
+          <div
+            className="modal"
+            style={{
+              maxWidth: 820,
+              width: "95vw",
+              maxHeight: "90vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <div
               style={{
-                background: "#f5f5f4",
-                borderRadius: 6,
-                padding: "10px 14px",
-                fontSize: 12,
-                color: "#888",
-                marginBottom: 4,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 16,
               }}
             >
-              <strong>Formatting tips:</strong> &nbsp;
-              <code
-                style={{
-                  background: "#e8e8e8",
-                  padding: "1px 4px",
-                  borderRadius: 3,
-                }}
-              >
-                - item
-              </code>{" "}
-              checklist &nbsp;
-              <code
-                style={{
-                  background: "#e8e8e8",
-                  padding: "1px 4px",
-                  borderRadius: 3,
-                }}
-              >
-                # Heading
-              </code>{" "}
-              heading &nbsp;
-              <code
-                style={{
-                  background: "#e8e8e8",
-                  padding: "1px 4px",
-                  borderRadius: 3,
-                }}
-              >
-                ## Sub
-              </code>{" "}
-              subheading
+              <div className="modal-title" style={{ margin: 0 }}>
+                {editingArticle ? "Edit article" : "New article"}
+              </div>
+              <button className="btn btn-sm" onClick={closeModal}>
+                ✕
+              </button>
             </div>
 
-            <div className="modal-actions">
+            <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">Title *</label>
+                <input
+                  autoFocus
+                  placeholder="Article title..."
+                  value={newArticle.title}
+                  onChange={(e) =>
+                    setNewArticle((prev) => ({
+                      ...prev,
+                      title: e.target.value,
+                    }))
+                  }
+                  style={{ width: "100%" }}
+                />
+              </div>
+              <div style={{ width: 200 }}>
+                <label className="form-label">Space</label>
+                <select
+                  value={newArticle.space_id}
+                  onChange={(e) =>
+                    setNewArticle((prev) => ({
+                      ...prev,
+                      space_id: e.target.value,
+                    }))
+                  }
+                  style={{ width: "100%" }}
+                >
+                  <option value="">General</option>
+                  {spaces.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflow: "auto", marginBottom: 14 }}>
+              <label className="form-label" style={{ marginBottom: 6 }}>
+                Content *
+              </label>
+              <RichEditor
+                content={newArticle.content}
+                onChange={(content) =>
+                  setNewArticle((prev) => ({ ...prev, content }))
+                }
+              />
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: 0 }}>
               <button className="btn" onClick={closeModal}>
                 Cancel
               </button>
-              <button className="btn btn-primary" onClick={saveArticle}>
+              <button
+                className="btn btn-primary"
+                onClick={saveArticle}
+                disabled={
+                  !newArticle.title.trim() || !newArticle.content.trim()
+                }
+              >
                 {editingArticle ? "Save changes" : "Create article"}
               </button>
             </div>

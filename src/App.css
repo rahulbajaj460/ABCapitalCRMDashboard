@@ -467,3 +467,194 @@
 .folder-item:hover .space-delete-btn {
   opacity: 1 !important;
 }
+
+/* Wiki rich text content styles */
+.wiki-content h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 20px 0 10px;
+}
+.wiki-content h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 18px 0 8px;
+}
+.wiki-content h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+.wiki-content p {
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 6px 0;
+  color: #333;
+}
+.wiki-content ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+.wiki-content ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+.wiki-content li {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #333;
+}
+.wiki-content strong {
+  font-weight: 600;
+}
+.wiki-content em {
+  font-style: italic;
+}
+.wiki-content u {
+  text-decoration: underline;
+}
+.wiki-content s {
+  text-decoration: line-through;
+}
+.wiki-content blockquote {
+  border-left: 3px solid #1d4ed8;
+  padding: 8px 16px;
+  margin: 12px 0;
+  background: #eff6ff;
+  border-radius: 0 6px 6px 0;
+  color: #1e40af;
+  font-style: italic;
+}
+.wiki-content code {
+  background: #f5f5f4;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 13px;
+}
+.wiki-content pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 14px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.wiki-content pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+.wiki-content img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 10px 0;
+  border: 1px solid #e8e8e8;
+}
+.wiki-content a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+.wiki-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.wiki-content table th {
+  background: #f5f5f4;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  border: 1px solid #e8e8e8;
+}
+.wiki-content table td {
+  padding: 8px 12px;
+  border: 1px solid #e8e8e8;
+}
+.wiki-content table tr:nth-child(even) td {
+  background: #fafaf9;
+}
+
+/* TipTap editor styles */
+.ProseMirror {
+  outline: none;
+  min-height: 280px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #333;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #aaa;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.ProseMirror h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 16px 0 8px;
+}
+.ProseMirror h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+.ProseMirror h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 12px 0 4px;
+}
+.ProseMirror ul {
+  padding-left: 20px;
+}
+.ProseMirror ol {
+  padding-left: 20px;
+}
+.ProseMirror li {
+  line-height: 1.8;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid #1d4ed8;
+  padding: 6px 14px;
+  margin: 10px 0;
+  background: #eff6ff;
+  border-radius: 0 6px 6px 0;
+}
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+}
+.ProseMirror table th,
+.ProseMirror table td {
+  border: 1px solid #e8e8e8;
+  padding: 6px 10px;
+  min-width: 80px;
+}
+.ProseMirror table th {
+  background: #f5f5f4;
+  font-weight: 600;
+}
+.ProseMirror img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+.ProseMirror code {
+  background: #f5f5f4;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+.ProseMirror pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.ProseMirror pre code {
+  background: none;
+  color: inherit;
+}
