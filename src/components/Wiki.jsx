@@ -11,6 +11,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 function ToolbarBtn({ onClick, active, title, children }) {
   return (
@@ -273,6 +274,8 @@ export default function Wiki() {
   const [activeArticle, setActiveArticle] = useState(null);
   const [expandedCats, setExpandedCats] = useState({});
   const [search, setSearch] = useState("");
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const isResizing = useRef(false);
 
   // Modals
   const [showArticleModal, setShowArticleModal] = useState(false);
@@ -337,6 +340,27 @@ export default function Wiki() {
     await supabase.from("wiki_articles").delete().eq("id", id);
     if (activeArticle?.id === id) setActiveArticle(null);
     fetchAll();
+  }
+
+  function startResize(e) {
+    isResizing.current = true;
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", stopResize);
+    e.preventDefault();
+  }
+
+  function onMouseMove(e) {
+    if (!isResizing.current) return;
+    const newWidth = e.clientX - 240; // 240 is main sidebar width
+    if (newWidth >= 180 && newWidth <= 500) {
+      setSidebarWidth(newWidth);
+    }
+  }
+
+  function stopResize() {
+    isResizing.current = false;
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", stopResize);
   }
 
   async function saveCategory() {
@@ -462,7 +486,10 @@ export default function Wiki() {
   return (
     <div className="wiki-layout">
       {/* LEFT SIDEBAR */}
-      <div className="wiki-sidebar">
+      <div
+        className="wiki-sidebar"
+        style={{ width: sidebarWidth, minWidth: sidebarWidth }}
+      >
         <div className="wiki-sidebar-header">
           <span className="wiki-sidebar-title">📚 Knowledge Base</span>
           <div className="wiki-sidebar-actions">
@@ -609,6 +636,22 @@ export default function Wiki() {
           )}
         </div>
       </div>
+
+      {/* RESIZE HANDLE */}
+      <div
+        onMouseDown={startResize}
+        style={{
+          width: 4,
+          flexShrink: 0,
+          background: "transparent",
+          cursor: "col-resize",
+          position: "relative",
+          transition: "background 0.15s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#bfdbfe")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        title="Drag to resize"
+      />
 
       {/* MAIN CONTENT */}
       <div className="wiki-main">
