@@ -347,12 +347,20 @@ export default function Wiki() {
       category_order: categories.length + 1,
     };
     if (editingCat) {
-      await supabase
+      const { error } = await supabase
         .from("wiki_categories")
         .update(payload)
         .eq("id", editingCat.id);
+      if (error) {
+        alert("Error: " + error.message);
+        return;
+      }
     } else {
-      await supabase.from("wiki_categories").insert(payload);
+      const { error } = await supabase.from("wiki_categories").insert(payload);
+      if (error) {
+        alert("Error: " + error.message);
+        return;
+      }
     }
     closeCatModal();
     fetchAll();
@@ -452,115 +460,97 @@ export default function Wiki() {
     : null;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "calc(100vh - 0px)",
-        overflow: "hidden",
-      }}
-    >
-      {/* LEFT SIDEBAR — category tree */}
-      <div
-        style={{
-          width: 260,
-          flexShrink: 0,
-          background: "#fff",
-          borderRight: "1px solid #e8e8e8",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            padding: "14px 16px",
-            borderBottom: "1px solid #e8e8e8",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Wiki</div>
-          <div style={{ display: "flex", gap: 6 }}>
+    <div className="wiki-layout">
+      {/* LEFT SIDEBAR */}
+      <div className="wiki-sidebar">
+        <div className="wiki-sidebar-header">
+          <span className="wiki-sidebar-title">📚 Knowledge Base</span>
+          <div className="wiki-sidebar-actions">
             <button
               className="btn btn-sm"
+              style={{ fontSize: 11, padding: "3px 8px" }}
               onClick={() => openNewCat()}
-              title="Add category"
             >
               + Category
             </button>
             <button
               className="btn btn-primary btn-sm"
+              style={{ fontSize: 11, padding: "3px 8px" }}
               onClick={() => openNewArticle()}
-              title="New article"
             >
               + Page
             </button>
           </div>
         </div>
 
-        {/* Search */}
-        <div
-          style={{ padding: "10px 12px", borderBottom: "1px solid #e8e8e8" }}
-        >
-          <div className="search-wrap" style={{ width: "100%" }}>
-            <span style={{ color: "#aaa" }}>🔍</span>
+        <div className="wiki-search-wrap">
+          <div className="wiki-search-input">
+            <span style={{ color: "#aaa", fontSize: 13 }}>🔍</span>
             <input
               placeholder="Search pages..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "100%" }}
             />
+            {search && (
+              <span
+                style={{ color: "#aaa", cursor: "pointer", fontSize: 13 }}
+                onClick={() => setSearch("")}
+              >
+                ✕
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Category tree */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
-          {/* Search results */}
-          {searchResults && (
+        <div className="wiki-tree">
+          {searchResults ? (
             <div>
               <div
                 style={{
                   fontSize: 11,
                   color: "#aaa",
-                  padding: "4px 14px 6px",
+                  padding: "6px 12px 4px",
                   textTransform: "uppercase",
-                  letterSpacing: ".04em",
+                  letterSpacing: ".05em",
                 }}
               >
-                Results ({searchResults.length})
+                {searchResults.length} result
+                {searchResults.length !== 1 ? "s" : ""}
               </div>
-              {searchResults.map((a) => (
+              {searchResults.length === 0 ? (
                 <div
-                  key={a.id}
-                  onClick={() => {
-                    setActiveArticle(a);
-                    setSearch("");
-                  }}
                   style={{
-                    padding: "6px 14px 6px 20px",
-                    fontSize: 13,
-                    cursor: "pointer",
-                    color: activeArticle?.id === a.id ? "#1d4ed8" : "#444",
-                    background:
-                      activeArticle?.id === a.id ? "#eff6ff" : "transparent",
+                    fontSize: 12,
+                    color: "#ccc",
+                    padding: "12px",
+                    textAlign: "center",
                   }}
                 >
-                  📄 {a.title}
+                  No pages found
                 </div>
-              ))}
+              ) : (
+                searchResults.map((a) => (
+                  <div
+                    key={a.id}
+                    className={`wiki-page-row ${activeArticle?.id === a.id ? "active" : ""}`}
+                    style={{ paddingLeft: 12 }}
+                    onClick={() => {
+                      setActiveArticle(a);
+                      setSearch("");
+                    }}
+                  >
+                    <span className="wiki-page-icon">📄</span>
+                    <span className="wiki-page-name">{a.title}</span>
+                  </div>
+                ))
+              )}
             </div>
-          )}
-
-          {/* Normal tree */}
-          {!searchResults && (
+          ) : (
             <>
               {getTopCats().map((cat) => (
                 <CategoryNode
                   key={cat.id}
                   cat={cat}
-                  categories={categories}
-                  articles={articles}
                   activeArticle={activeArticle}
                   expandedCats={expandedCats}
                   onToggle={toggleCat}
@@ -575,16 +565,15 @@ export default function Wiki() {
                 />
               ))}
 
-              {/* Uncategorised */}
               {getUncategorised().length > 0 && (
                 <div>
                   <div
                     style={{
-                      fontSize: 11,
-                      color: "#aaa",
-                      padding: "8px 14px 4px",
+                      fontSize: 10,
+                      color: "#bbb",
+                      padding: "8px 12px 4px",
                       textTransform: "uppercase",
-                      letterSpacing: ".04em",
+                      letterSpacing: ".06em",
                     }}
                   >
                     Uncategorised
@@ -600,50 +589,39 @@ export default function Wiki() {
                   ))}
                 </div>
               )}
+
+              {categories.length === 0 && articles.length === 0 && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "30px 16px",
+                    color: "#ccc",
+                  }}
+                >
+                  <div style={{ fontSize: 24, marginBottom: 6 }}>📂</div>
+                  <div style={{ fontSize: 12 }}>No categories yet</div>
+                  <div style={{ fontSize: 11, marginTop: 4 }}>
+                    Click "+ Category" to get started
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
 
       {/* MAIN CONTENT */}
-      <div
-        style={{
-          flex: 1,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+      <div className="wiki-main">
         {activeArticle ? (
-          <div
-            style={{
-              flex: 1,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {/* Article header */}
-            <div
-              style={{
-                padding: "14px 24px",
-                borderBottom: "1px solid #e8e8e8",
-                background: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexShrink: 0,
-              }}
-            >
+          <>
+            <div className="wiki-article-header">
               <div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>
-                  {activeArticle.title}
-                </div>
-                <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>
+                <div className="wiki-article-title">{activeArticle.title}</div>
+                <div className="wiki-article-meta">
                   Updated {formatDate(activeArticle.updated_at)}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                 <button
                   className="btn btn-sm"
                   onClick={() => openEditArticle(activeArticle)}
@@ -664,44 +642,25 @@ export default function Wiki() {
                 </button>
               </div>
             </div>
-
-            {/* Article body */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "24px 32px",
-                background: "#fafaf9",
-              }}
-            >
+            <div className="wiki-article-body">
               <div
                 className="wiki-content"
                 dangerouslySetInnerHTML={{ __html: activeArticle.content }}
               />
             </div>
-          </div>
+          </>
         ) : (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexDirection: "column",
-              gap: 12,
-              color: "#aaa",
-            }}
-          >
-            <div style={{ fontSize: 40 }}>📚</div>
-            <div style={{ fontSize: 15, fontWeight: 500, color: "#555" }}>
+          <div className="wiki-empty-state">
+            <div style={{ fontSize: 48 }}>📄</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#555" }}>
               Select a page to view
             </div>
             <div style={{ fontSize: 13 }}>
-              or click "+ Page" to create a new one
+              or create a new one from the sidebar
             </div>
             <button
               className="btn btn-primary"
-              style={{ marginTop: 8 }}
+              style={{ marginTop: 12 }}
               onClick={() => openNewArticle()}
             >
               + New page
@@ -742,7 +701,6 @@ export default function Wiki() {
                 ✕
               </button>
             </div>
-
             <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
               <div style={{ flex: 1 }}>
                 <label className="form-label">Title *</label>
@@ -774,16 +732,13 @@ export default function Wiki() {
                   <option value="">Uncategorised</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {categories.find((p) => p.id === c.parent_id)
-                        ? "  ↳ "
-                        : ""}
+                      {c.parent_id ? "  ↳ " : ""}
                       {c.name}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
-
             <div style={{ flex: 1, overflow: "auto", marginBottom: 14 }}>
               <label className="form-label" style={{ marginBottom: 6 }}>
                 Content *
@@ -795,7 +750,6 @@ export default function Wiki() {
                 }
               />
             </div>
-
             <div className="modal-actions" style={{ marginTop: 0 }}>
               <button className="btn" onClick={closeArticleModal}>
                 Cancel
@@ -872,8 +826,6 @@ export default function Wiki() {
 // Category node component (recursive for nested categories)
 function CategoryNode({
   cat,
-  categories,
-  articles,
   activeArticle,
   expandedCats,
   onToggle,
@@ -890,31 +842,23 @@ function CategoryNode({
   const subCats = getSubCats(cat.id);
   const catArticles = getCatArticles(cat.id);
   const hasChildren = subCats.length > 0 || catArticles.length > 0;
+  const indent = depth * 14;
 
   return (
     <div>
-      {/* Category header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: `6px 12px 6px ${14 + depth * 12}px`,
-          cursor: "pointer",
-          gap: 6,
-        }}
-        className="wiki-cat-row"
-        onClick={() => onToggle(cat.id)}
-      >
-        <span style={{ fontSize: 10, color: "#aaa", width: 12, flexShrink: 0 }}>
+      <div className="wiki-cat-row" style={{ paddingLeft: 8 + indent }}>
+        <span className="wiki-cat-toggle" onClick={() => onToggle(cat.id)}>
           {hasChildren ? (isExpanded ? "▾" : "▸") : ""}
         </span>
-        <span style={{ fontSize: 13, fontWeight: 500, flex: 1, color: "#333" }}>
-          📂 {cat.name}
+        <span className="wiki-cat-icon" onClick={() => onToggle(cat.id)}>
+          📂
         </span>
-        <div className="wiki-cat-actions" style={{ display: "flex", gap: 2 }}>
+        <span className="wiki-cat-name" onClick={() => onToggle(cat.id)}>
+          {cat.name}
+        </span>
+        <div className="wiki-cat-actions">
           <button
-            className="btn btn-sm"
-            style={{ padding: "1px 6px", fontSize: 11 }}
+            className="wiki-cat-action-btn"
             onClick={(e) => {
               e.stopPropagation();
               onNewArticle(cat.id);
@@ -924,8 +868,7 @@ function CategoryNode({
             + Page
           </button>
           <button
-            className="btn btn-sm"
-            style={{ padding: "1px 6px", fontSize: 11 }}
+            className="wiki-cat-action-btn"
             onClick={(e) => {
               e.stopPropagation();
               onNewSubCat(cat.id);
@@ -935,19 +878,17 @@ function CategoryNode({
             + Sub
           </button>
           <button
-            className="btn btn-sm"
-            style={{ padding: "1px 6px", fontSize: 11 }}
+            className="wiki-cat-action-btn"
             onClick={(e) => {
               e.stopPropagation();
               onEditCat(cat);
             }}
-            title="Edit"
+            title="Rename"
           >
             ✏️
           </button>
           <button
-            className="btn btn-sm btn-danger"
-            style={{ padding: "1px 6px", fontSize: 11 }}
+            className="wiki-cat-action-btn danger"
             onClick={(e) => {
               e.stopPropagation();
               onDeleteCat(cat.id, cat.name);
@@ -959,15 +900,12 @@ function CategoryNode({
         </div>
       </div>
 
-      {/* Expanded content */}
       {isExpanded && (
         <div>
           {subCats.map((sub) => (
             <CategoryNode
               key={sub.id}
               cat={sub}
-              categories={categories}
-              articles={articles}
               activeArticle={activeArticle}
               expandedCats={expandedCats}
               onToggle={onToggle}
@@ -997,20 +935,16 @@ function CategoryNode({
 }
 
 function ArticleTreeItem({ article, active, onSelect, depth }) {
+  const indent = 8 + depth * 14;
   return (
     <div
+      className={`wiki-page-row ${active ? "active" : ""}`}
+      style={{ paddingLeft: 8 + indent }}
       onClick={() => onSelect(article)}
-      style={{
-        padding: `5px 12px 5px ${26 + depth * 12}px`,
-        fontSize: 13,
-        cursor: "pointer",
-        color: active ? "#1d4ed8" : "#555",
-        background: active ? "#eff6ff" : "transparent",
-        borderRadius: 4,
-        margin: "1px 6px",
-      }}
     >
-      📄 {article.title}
+      <span style={{ width: 16, flexShrink: 0 }} />
+      <span className="wiki-page-icon">📄</span>
+      <span className="wiki-page-name">{article.title}</span>
     </div>
   );
 }
