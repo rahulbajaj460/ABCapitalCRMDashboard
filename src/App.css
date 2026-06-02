@@ -902,3 +902,50 @@
   border-radius: 3px;
   padding: 1px 2px;
 }
+
+/* Inline link preview style — like ClickUp */
+.wiki-content a.wiki-inline-link,
+.ProseMirror a.wiki-inline-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f5f5f4;
+  border: 1px solid #e8e8e8;
+  border-radius: 5px;
+  padding: 1px 8px 1px 4px;
+  text-decoration: none;
+  color: #1d4ed8;
+  font-size: 13px;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.wiki-content a.wiki-inline-link:hover,
+.ProseMirror a.wiki-inline-link:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.wiki-link-favicon {
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  max-width: 14px !important;
+  border: none !important;
+  margin: 0 !important;
+  border-radius: 2px !important;
+  object-fit: contain;
+  display: inline-block !important;
+  vertical-align: middle;
+}
+
+.wiki-link-domain {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1d4ed8;
+}
+
+.wiki-link-url {
+  display: none;
+}

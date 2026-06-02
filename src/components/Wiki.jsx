@@ -44,7 +44,12 @@ function RichEditor({ content, onChange }) {
       Underline,
       Image.configure({ inline: false, allowBase64: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Link.configure({ openOnClick: false }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: "wiki-inline-link",
+        },
+      }),
       Placeholder.configure({ placeholder: "Start writing your article..." }),
       Table.configure({ resizable: true }),
       TableRow,
@@ -53,6 +58,37 @@ function RichEditor({ content, onChange }) {
     ],
     content: content || "",
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    editorProps: {
+      handlePaste(view, event) {
+        const text = event.clipboardData?.getData("text/plain") || "";
+        const urlRegex = /^https?:\/\/[^\s]+$/;
+        if (urlRegex.test(text.trim())) {
+          event.preventDefault();
+          const url = text.trim();
+          let hostname = "";
+          try {
+            hostname = new URL(url).hostname.replace("www.", "");
+          } catch {
+            hostname = url;
+          }
+          const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=16`;
+          const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="wiki-inline-link"><img src="${faviconUrl}" class="wiki-link-favicon" alt="" /><span class="wiki-link-domain">${hostname}</span><span class="wiki-link-url">${url}</span></a>`;
+          view.dispatch(
+            view.state.tr
+              .insertText("")
+              .replaceSelectionWith(view.state.schema.text(" ")),
+          );
+          const { state, dispatch } = view;
+          const { tr } = state;
+          const node = state.schema.text(url, [
+            state.schema.marks.link.create({ href: url }),
+          ]);
+          dispatch(tr.replaceSelectionWith(node, false));
+          return true;
+        }
+        return false;
+      },
+    },
   });
 
   const addImage = useCallback(() => {
