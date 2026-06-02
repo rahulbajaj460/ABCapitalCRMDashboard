@@ -276,13 +276,17 @@ export default function Wiki() {
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const isResizing = useRef(false);
 
-  // Modals
   const [showArticleModal, setShowArticleModal] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
   const [editingArticle, setEditingArticle] = useState(null);
   const [editingCat, setEditingCat] = useState(null);
+  const [linkTooltip, setLinkTooltip] = useState({
+    visible: false,
+    url: "",
+    x: 0,
+    y: 0,
+  });
 
-  // Forms
   const [newArticle, setNewArticle] = useState({
     title: "",
     content: "",
@@ -350,7 +354,7 @@ export default function Wiki() {
 
   function onMouseMove(e) {
     if (!isResizing.current) return;
-    const newWidth = e.clientX - 240; // 240 is main sidebar width
+    const newWidth = e.clientX - 240;
     if (newWidth >= 180 && newWidth <= 500) {
       setSidebarWidth(newWidth);
     }
@@ -442,26 +446,22 @@ export default function Wiki() {
     setExpandedCats((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  // Get top-level categories
   function getTopCats() {
     return categories
       .filter((c) => !c.parent_id)
       .sort((a, b) => a.category_order - b.category_order);
   }
 
-  // Get subcategories of a category
   function getSubCats(parentId) {
     return categories
       .filter((c) => c.parent_id === parentId)
       .sort((a, b) => a.category_order - b.category_order);
   }
 
-  // Get articles in a category
   function getCatArticles(categoryId) {
     return articles.filter((a) => a.category_id === categoryId);
   }
 
-  // Get uncategorised articles
   function getUncategorised() {
     return articles.filter((a) => !a.category_id);
   }
@@ -475,7 +475,26 @@ export default function Wiki() {
     });
   }
 
-  // Filter for search
+  function handleContentMouseOver(e) {
+    const link = e.target.closest("a");
+    if (link && link.href) {
+      const rect = link.getBoundingClientRect();
+      setLinkTooltip({
+        visible: true,
+        url: link.href,
+        x: rect.left,
+        y: rect.bottom + 6,
+      });
+    }
+  }
+
+  function handleContentMouseOut(e) {
+    const link = e.target.closest("a");
+    if (link) {
+      setLinkTooltip({ visible: false, url: "", x: 0, y: 0 });
+    }
+  }
+
   const searchResults = search.trim()
     ? articles.filter((a) =>
         a.title.toLowerCase().includes(search.toLowerCase()),
@@ -688,6 +707,8 @@ export default function Wiki() {
               <div
                 className="wiki-content"
                 dangerouslySetInnerHTML={{ __html: activeArticle.content }}
+                onMouseOver={handleContentMouseOver}
+                onMouseOut={handleContentMouseOut}
               />
             </div>
           </>
@@ -710,6 +731,79 @@ export default function Wiki() {
           </div>
         )}
       </div>
+
+      {/* LINK TOOLTIP */}
+      {linkTooltip.visible && (
+        <div
+          style={{
+            position: "fixed",
+            left: linkTooltip.x,
+            top: linkTooltip.y,
+            background: "#fff",
+            border: "1px solid #e8e8e8",
+            borderRadius: 8,
+            padding: "8px 12px",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            maxWidth: 380,
+            pointerEvents: "none",
+          }}
+        >
+          <img
+            src={`https://www.google.com/s2/favicons?domain=${
+              new URL(linkTooltip.url).hostname
+            }&sz=16`}
+            style={{ width: 16, height: 16, borderRadius: 3, flexShrink: 0 }}
+            onError={(e) => (e.target.style.display = "none")}
+          />
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: "#1a1a1a",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {new URL(linkTooltip.url).hostname.replace("www.", "")}
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: "#888",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {linkTooltip.url}
+            </div>
+          </div>
+          <a
+            href={linkTooltip.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 11,
+              color: "#1d4ed8",
+              whiteSpace: "nowrap",
+              pointerEvents: "all",
+              textDecoration: "none",
+              background: "#eff6ff",
+              padding: "3px 8px",
+              borderRadius: 4,
+              flexShrink: 0,
+            }}
+          >
+            Open ↗
+          </a>
+        </div>
+      )}
 
       {/* ARTICLE MODAL */}
       {showArticleModal && (
@@ -838,7 +932,10 @@ export default function Wiki() {
               <select
                 value={newCat.parent_id}
                 onChange={(e) =>
-                  setNewCat((prev) => ({ ...prev, parent_id: e.target.value }))
+                  setNewCat((prev) => ({
+                    ...prev,
+                    parent_id: e.target.value,
+                  }))
                 }
                 style={{ width: "100%" }}
               >

@@ -890,3 +890,15 @@
   color: #aaa;
   background: #fafaf9;
 }
+
+/* Wiki link hover styles */
+.wiki-content a {
+  color: #1d4ed8;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.wiki-content a:hover {
+  background: #eff6ff;
+  border-radius: 3px;
+  padding: 1px 2px;
+}
