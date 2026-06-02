@@ -949,3 +949,42 @@
 .wiki-link-url {
   display: none;
 }
+
+/* ClickUp-style inline link pill */
+.wiki-content a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f0f0ef;
+  border-radius: 4px;
+  padding: 1px 6px 1px 4px;
+  text-decoration: none;
+  color: #1d4ed8;
+  font-size: 13px;
+  vertical-align: middle;
+  border: none;
+  font-weight: 400;
+  transition: background 0.1s;
+  cursor: pointer;
+}
+
+.wiki-content a:hover {
+  background: #e8e8e6;
+  color: #1e40af;
+}
+
+/* Favicon inside link */
+.wiki-content a img {
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  max-width: 14px !important;
+  border: none !important;
+  border-radius: 2px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: inline-block !important;
+  vertical-align: middle;
+  object-fit: contain;
+  flex-shrink: 0;
+}
