@@ -377,14 +377,7 @@
   font-weight: 500;
 }
 
-/* Wiki */
-.wiki-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
+/* Wiki cards (old grid style — kept for fallback) */
 .wiki-card {
   background: #fff;
   border: 1px solid #e8e8e8;
@@ -414,13 +407,6 @@
 .wiki-card-meta {
   font-size: 11px;
   color: #aaa;
-}
-
-.wiki-article {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  padding: 24px;
 }
 
 /* Status group header */
@@ -455,19 +441,19 @@
   width: 200px;
 }
 
+/* Space / folder delete buttons */
 .space-item:hover .space-delete-btn {
   opacity: 1 !important;
 }
-
 .space-delete-btn:hover {
   background: #fee2e2;
   color: #b91c1c !important;
 }
-
 .folder-item:hover .space-delete-btn {
   opacity: 1 !important;
 }
-/* Wiki rich text content styles */
+
+/* ─── Wiki rich text content ─── */
 .wiki-content h1 {
   font-size: 22px;
   font-weight: 700;
@@ -543,16 +529,6 @@
   color: inherit;
   padding: 0;
 }
-.wiki-content img {
-  max-width: 100%;
-  border-radius: 6px;
-  margin: 10px 0;
-  border: 1px solid #e8e8e8;
-}
-.wiki-content a {
-  color: #1d4ed8;
-  text-decoration: underline;
-}
 .wiki-content table {
   width: 100%;
   border-collapse: collapse;
@@ -574,7 +550,62 @@
   background: #fafaf9;
 }
 
-/* TipTap editor */
+/* Wiki images — capped height */
+.wiki-content img {
+  max-width: 100%;
+  max-height: 400px;
+  width: auto;
+  height: auto;
+  border-radius: 6px;
+  margin: 10px 0;
+  border: 1px solid #e8e8e8;
+  object-fit: contain;
+}
+
+/* Wiki links — ClickUp-style inline pill */
+.wiki-content a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f0f0ef;
+  border-radius: 4px;
+  padding: 2px 8px 2px 5px;
+  text-decoration: none;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 500;
+  vertical-align: middle;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wiki-content a:hover {
+  background: #e0e9ff;
+  color: #1e40af;
+}
+
+/* Favicon inside wiki link pill */
+.wiki-content a img {
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  max-width: 14px !important;
+  max-height: 14px !important;
+  border: none !important;
+  border-radius: 2px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: inline-block !important;
+  vertical-align: middle;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* ─── TipTap editor ─── */
 .ProseMirror {
   outline: none;
   min-height: 280px;
@@ -635,8 +666,10 @@
 }
 .ProseMirror img {
   max-width: 100%;
+  max-height: 400px;
   border-radius: 6px;
   margin: 8px 0;
+  object-fit: contain;
 }
 .ProseMirror code {
   background: #f5f5f4;
@@ -656,15 +689,35 @@
   color: inherit;
 }
 
-/* Wiki sidebar */
+/* TipTap link style in editor */
+.ProseMirror a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f0f0ef;
+  border-radius: 4px;
+  padding: 2px 8px 2px 5px;
+  text-decoration: none;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 500;
+  vertical-align: middle;
+  border: none;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ProseMirror a:hover {
+  background: #e0e9ff;
+}
+
+/* ─── Wiki layout ─── */
 .wiki-layout {
   display: flex;
-  height: calc(100vh - 0px);
+  height: 100vh;
   overflow: hidden;
 }
 
 .wiki-sidebar {
-  width: 260px;
   flex-shrink: 0;
   background: #fff;
   border-right: 1px solid #e8e8e8;
@@ -709,7 +762,6 @@
   border-radius: 6px;
   padding: 0 10px;
 }
-
 .wiki-search-input input {
   border: none;
   background: transparent;
@@ -840,7 +892,7 @@
   font-weight: 500;
 }
 
-/* Main content area */
+/* Wiki main content */
 .wiki-main {
   flex: 1;
   overflow: hidden;
@@ -891,100 +943,10 @@
   background: #fafaf9;
 }
 
-/* Wiki link hover styles */
-.wiki-content a {
-  color: #1d4ed8;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.wiki-content a:hover {
-  background: #eff6ff;
-  border-radius: 3px;
-  padding: 1px 2px;
-}
-
-/* Inline link preview style — like ClickUp */
-.wiki-content a.wiki-inline-link,
-.ProseMirror a.wiki-inline-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: #f5f5f4;
-  border: 1px solid #e8e8e8;
-  border-radius: 5px;
-  padding: 1px 8px 1px 4px;
-  text-decoration: none;
-  color: #1d4ed8;
-  font-size: 13px;
-  vertical-align: middle;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.wiki-content a.wiki-inline-link:hover,
-.ProseMirror a.wiki-inline-link:hover {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-}
-
-.wiki-link-favicon {
-  width: 14px !important;
-  height: 14px !important;
-  min-width: 14px !important;
-  max-width: 14px !important;
-  border: none !important;
-  margin: 0 !important;
-  border-radius: 2px !important;
-  object-fit: contain;
-  display: inline-block !important;
-  vertical-align: middle;
-}
-
-.wiki-link-domain {
-  font-size: 12px;
-  font-weight: 500;
-  color: #1d4ed8;
-}
-
-.wiki-link-url {
-  display: none;
-}
-
-/* ClickUp-style inline link pill */
-.wiki-content a {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+/* Wiki category sidebar hover actions */
+.wiki-cat-row:hover {
   background: #f0f0ef;
-  border-radius: 4px;
-  padding: 1px 6px 1px 4px;
-  text-decoration: none;
-  color: #1d4ed8;
-  font-size: 13px;
-  vertical-align: middle;
-  border: none;
-  font-weight: 400;
-  transition: background 0.1s;
-  cursor: pointer;
 }
-
-.wiki-content a:hover {
-  background: #e8e8e6;
-  color: #1e40af;
-}
-
-/* Favicon inside link */
-.wiki-content a img {
-  width: 14px !important;
-  height: 14px !important;
-  min-width: 14px !important;
-  max-width: 14px !important;
-  border: none !important;
-  border-radius: 2px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  display: inline-block !important;
-  vertical-align: middle;
-  object-fit: contain;
-  flex-shrink: 0;
+.wiki-page-row:hover {
+  background: #f0f0ef;
 }
