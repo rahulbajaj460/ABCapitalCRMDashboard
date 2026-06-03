@@ -298,12 +298,7 @@ export default function Wiki() {
   const [showCatModal, setShowCatModal] = useState(false);
   const [editingArticle, setEditingArticle] = useState(null);
   const [editingCat, setEditingCat] = useState(null);
-  const [linkTooltip, setLinkTooltip] = useState({
-    visible: false,
-    url: "",
-    x: 0,
-    y: 0,
-  });
+  const tooltipRef = useRef(null);
 
   const [newArticle, setNewArticle] = useState({
     title: "",
@@ -567,22 +562,43 @@ export default function Wiki() {
 
   function handleContentMouseOver(e) {
     const link = e.target.closest("a");
-    if (link && link.href) {
+    if (link && link.href && tooltipRef.current) {
       const rect = link.getBoundingClientRect();
-      setLinkTooltip({
-        visible: true,
-        url: link.href,
-        x: rect.left,
-        y: rect.bottom + 6,
-      });
+      try {
+        const url = new URL(link.href);
+        const domain = url.hostname.replace("www.", "");
+        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+        tooltipRef.current.style.display = "flex";
+        tooltipRef.current.style.left = rect.left + "px";
+        tooltipRef.current.style.top = rect.bottom + 6 + "px";
+        tooltipRef.current.innerHTML = `
+        <img
+          src="${faviconUrl}"
+          style="width:16px;height:16px;min-width:16px;border:none;margin:0;border-radius:3px;object-fit:contain;flex-shrink:0;"
+          onerror="this.style.display='none'"
+        />
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:500;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${domain}</div>
+          <div style="font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">${link.href}</div>
+        </div>
+        <a href="${link.href}" target="_blank" rel="noopener noreferrer"
+          style="font-size:11px;color:#1d4ed8;white-space:nowrap;text-decoration:none;background:#eff6ff;padding:3px 8px;border-radius:4px;flex-shrink:0;pointer-events:all;">
+          Open ↗
+        </a>
+      `;
+      } catch {
+        // invalid URL
+      }
     }
   }
 
   function handleContentMouseOut(e) {
     const relatedTarget = e.relatedTarget;
-    // Only hide if we're not moving to another element within the same link
-    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
-      setLinkTooltip({ visible: false, url: "", x: 0, y: 0 });
+    if (
+      tooltipRef.current &&
+      (!relatedTarget || !tooltipRef.current.contains(relatedTarget))
+    ) {
+      tooltipRef.current.style.display = "none";
     }
   }
 
@@ -827,93 +843,24 @@ export default function Wiki() {
       </div>
 
       {/* LINK TOOLTIP */}
-      {linkTooltip.visible && (
-        <div
-          style={{
-            position: "fixed",
-            left: linkTooltip.x,
-            top: linkTooltip.y,
-            background: "#fff",
-            border: "1px solid #e8e8e8",
-            borderRadius: 8,
-            padding: "8px 12px",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            maxWidth: 380,
-            pointerEvents: "none",
-          }}
-        >
-          <img
-            src={`https://www.google.com/s2/favicons?domain=${
-              new URL(linkTooltip.url).hostname
-            }&sz=16`}
-            alt=""
-            width={16}
-            height={16}
-            style={{
-              width: 16,
-              height: 16,
-              minWidth: 16,
-              maxWidth: 16,
-              maxHeight: 16,
-              borderRadius: 3,
-              flexShrink: 0,
-              objectFit: "contain",
-              display: "block",
-              border: "none",
-              margin: 0,
-              padding: 0,
-            }}
-            onError={(e) => (e.target.style.display = "none")}
-          />
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                color: "#1a1a1a",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {new URL(linkTooltip.url).hostname.replace("www.", "")}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "#888",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {linkTooltip.url}
-            </div>
-          </div>
-          <a
-            href={linkTooltip.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: 11,
-              color: "#1d4ed8",
-              whiteSpace: "nowrap",
-              pointerEvents: "all",
-              textDecoration: "none",
-              background: "#eff6ff",
-              padding: "3px 8px",
-              borderRadius: 4,
-              flexShrink: 0,
-            }}
-          >
-            Open ↗
-          </a>
-        </div>
-      )}
+      {/* LINK TOOLTIP — ref-based, no re-render */}
+      <div
+        ref={tooltipRef}
+        style={{
+          display: "none",
+          position: "fixed",
+          background: "#fff",
+          border: "1px solid #e8e8e8",
+          borderRadius: 8,
+          padding: "8px 12px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+          zIndex: 9999,
+          alignItems: "center",
+          gap: 8,
+          maxWidth: 380,
+          pointerEvents: "none",
+        }}
+      />
 
       {/* ARTICLE MODAL */}
       {showArticleModal && (
