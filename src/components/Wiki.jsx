@@ -324,43 +324,44 @@ export default function Wiki() {
       if (!container) return;
       container.querySelectorAll("a").forEach((link) => {
         try {
+          // Skip already transformed links
+          if (link.dataset.transformed === "true") return;
           const url = new URL(link.href);
           const domain = url.hostname.replace("www.", "");
           const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
-          const text = link.textContent || "";
-          if (text.startsWith("http://") || text.startsWith("https://")) {
-            link.innerHTML = `<img
-              src="${faviconUrl}"
-              style="width:14px;height:14px;min-width:14px;max-width:14px;max-height:14px;border:none;margin:0;padding:0;border-radius:2px;object-fit:contain;flex-shrink:0;vertical-align:middle;"
-              onerror="this.style.display='none'"
-            /><span style="vertical-align:middle;">${domain}</span>`;
-            link.style.cssText = `
-              display: inline-flex;
-              align-items: center;
-              gap: 4px;
-              background: #f0f0ef;
-              border-radius: 4px;
-              padding: 2px 8px 2px 5px;
-              text-decoration: none;
-              color: #1d4ed8;
-              font-size: 13px;
-              font-weight: 500;
-              cursor: pointer;
-              border: none;
-              vertical-align: middle;
-              max-width: 320px;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              white-space: nowrap;
-            `;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-          }
+          // Transform ALL links — not just raw URL ones
+          link.innerHTML = `<img
+          src="${faviconUrl}"
+          style="width:14px;height:14px;min-width:14px;max-width:14px;max-height:14px;border:none;margin:0;padding:0;border-radius:2px;object-fit:contain;flex-shrink:0;display:inline-block;vertical-align:middle;"
+          onerror="this.style.display='none'"
+        /><span style="vertical-align:middle;margin-left:2px;">${domain}</span>`;
+          link.dataset.transformed = "true";
+          link.style.cssText = `
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 4px !important;
+          background: #f0f0ef !important;
+          border-radius: 4px !important;
+          padding: 2px 8px 2px 5px !important;
+          text-decoration: none !important;
+          color: #1d4ed8 !important;
+          font-size: 13px !important;
+          font-weight: 500 !important;
+          cursor: pointer !important;
+          border: none !important;
+          vertical-align: middle !important;
+          max-width: 320px !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        `;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
         } catch {
           // not a valid URL, skip
         }
       });
-    }, 100);
+    }, 150);
   }, [activeArticle]);
 
   async function fetchAll() {
