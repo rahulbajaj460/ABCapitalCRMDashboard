@@ -950,3 +950,93 @@
 .wiki-page-row:hover {
   background: #f0f0ef;
 }
+
+/* Ensure wiki links stay inline within list items */
+.wiki-content li a,
+.wiki-content p a {
+  display: inline-flex !important;
+  vertical-align: middle !important;
+}
+
+/* Nested list styles matching ClickUp */
+.wiki-content ol {
+  list-style-type: decimal;
+  padding-left: 24px;
+  margin: 6px 0;
+}
+
+.wiki-content ol ol {
+  list-style-type: lower-alpha;
+  padding-left: 24px;
+  margin: 4px 0;
+}
+
+.wiki-content ol ol ol {
+  list-style-type: lower-roman;
+  padding-left: 24px;
+  margin: 4px 0;
+}
+
+.wiki-content ul {
+  list-style-type: disc;
+  padding-left: 24px;
+  margin: 6px 0;
+}
+
+.wiki-content ul ul {
+  list-style-type: circle;
+  padding-left: 24px;
+  margin: 4px 0;
+}
+
+.wiki-content ul ul ul {
+  list-style-type: square;
+  padding-left: 24px;
+  margin: 4px 0;
+}
+
+/* TipTap editor nested lists */
+.ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 24px;
+}
+.ProseMirror ol ol {
+  list-style-type: lower-alpha;
+  padding-left: 24px;
+}
+.ProseMirror ol ol ol {
+  list-style-type: lower-roman;
+  padding-left: 24px;
+}
+.ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 24px;
+}
+.ProseMirror ul ul {
+  list-style-type: circle;
+  padding-left: 24px;
+}
+.ProseMirror ul ul ul {
+  list-style-type: square;
+  padding-left: 24px;
+}
+
+.wiki-content blockquote {
+  border-left: 3px solid #d0d0d0;
+  padding: 4px 16px;
+  margin: 6px 0 6px 16px;
+  background: transparent;
+  border-radius: 0;
+  color: #333;
+  font-style: normal;
+}
+
+.ProseMirror blockquote {
+  border-left: 3px solid #d0d0d0;
+  padding: 4px 16px;
+  margin: 6px 0 6px 16px;
+  background: transparent;
+  border-radius: 0;
+  color: #333;
+  font-style: normal;
+}
