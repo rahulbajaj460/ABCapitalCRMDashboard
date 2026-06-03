@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import ImportTasks from "./ImportTasks";
 
 export default function Tasks({
   spaces,
@@ -31,9 +32,11 @@ export default function Tasks({
     priority: "Medium",
     assignee: "",
     assignee_id: "",
+    assignees: [],
     due_date: "",
   });
   const [taskFieldValues, setTaskFieldValues] = useState({});
+  const [showImport, setShowImport] = useState(false);
   const [modalSpaceStatuses, setModalSpaceStatuses] = useState([]);
   const [statusActionMsg, setStatusActionMsg] = useState("");
   const [statusLoading, setStatusLoading] = useState(false);
@@ -90,8 +93,9 @@ export default function Tasks({
       folder_id: newTask.folder_id || null,
       status: newTask.status || "To Do",
       priority: newTask.priority || "Medium",
-      assignee: newTask.assignee,
+      assignee: newTask.assignees.length > 0 ? newTask.assignees[0] : "",
       assignee_id: newTask.assignee_id || null,
+      assignees: newTask.assignees,
       due_date: newTask.due_date || null,
     };
 
@@ -302,6 +306,7 @@ export default function Tasks({
       priority: "Medium",
       assignee: "",
       assignee_id: "",
+      assignees: [],
       due_date: "",
     });
     setShowTaskModal(true);
@@ -325,6 +330,7 @@ export default function Tasks({
       priority: task.priority,
       assignee: task.assignee || "",
       assignee_id: task.assignee_id || "",
+      assignees: task.assignees || [],
       due_date: task.due_date || "",
     });
     setShowTaskModal(true);
@@ -415,6 +421,18 @@ export default function Tasks({
       ? activeSpace.name
       : "All Tasks";
 
+  if (showImport) {
+    return (
+      <ImportTasks
+        spaces={spaces}
+        onDone={() => {
+          setShowImport(false);
+          fetchTasks();
+        }}
+      />
+    );
+  }
+
   return (
     <div>
       {/* Header */}
@@ -451,6 +469,9 @@ export default function Tasks({
               </button>
             </>
           )}
+          <button className="btn btn-sm" onClick={() => setShowImport(true)}>
+            ⬆ Import CSV
+          </button>
           <button className="btn btn-primary" onClick={openNewTask}>
             + New Task
           </button>
@@ -600,8 +621,38 @@ export default function Tasks({
                                   {task.priority}
                                 </span>
                               </td>
-                              <td style={{ fontSize: 13, color: "#555" }}>
-                                {task.assignee || "—"}
+                              <td>
+                                {((task.assignees &&
+                                  task.assignees.length > 0) ||
+                                  task.assignee) && (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: 3,
+                                      marginTop: 4,
+                                    }}
+                                  >
+                                    {(task.assignees &&
+                                    task.assignees.length > 0
+                                      ? task.assignees
+                                      : [task.assignee]
+                                    ).map((name) => (
+                                      <span
+                                        key={name}
+                                        style={{
+                                          background: "#f0f0ef",
+                                          borderRadius: 20,
+                                          padding: "1px 6px",
+                                          fontSize: 10,
+                                          color: "#333",
+                                        }}
+                                      >
+                                        {name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </td>
                               <td
                                 style={{
@@ -891,26 +942,95 @@ export default function Tasks({
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Assignee</label>
-                <select
-                  value={newTask.assignee_id || ""}
-                  onChange={(e) => {
-                    const member = members.find((m) => m.id === e.target.value);
-                    setNewTask((prev) => ({
-                      ...prev,
-                      assignee_id: e.target.value,
-                      assignee: member?.full_name || "",
-                    }));
+              <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+                <label className="form-label">Assignees</label>
+                <div
+                  style={{
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    background: "#fff",
+                    minHeight: 38,
                   }}
                 >
-                  <option value="">Unassigned</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.full_name}
-                    </option>
-                  ))}
-                </select>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 4,
+                      marginBottom: newTask.assignees.length > 0 ? 6 : 0,
+                    }}
+                  >
+                    {newTask.assignees.map((name) => (
+                      <span
+                        key={name}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          borderRadius: 20,
+                          padding: "2px 8px",
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {name}
+                        <span
+                          style={{
+                            cursor: "pointer",
+                            fontSize: 14,
+                            lineHeight: 1,
+                          }}
+                          onClick={() =>
+                            setNewTask((prev) => ({
+                              ...prev,
+                              assignees: prev.assignees.filter(
+                                (a) => a !== name,
+                              ),
+                            }))
+                          }
+                        >
+                          ×
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      if (name && !newTask.assignees.includes(name)) {
+                        const member = members.find(
+                          (m) => m.full_name === name,
+                        );
+                        setNewTask((prev) => ({
+                          ...prev,
+                          assignees: [...prev.assignees, name],
+                          assignee_id: prev.assignee_id || member?.id || "",
+                        }));
+                      }
+                    }}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      fontSize: 13,
+                      padding: "2px 0",
+                      width: "100%",
+                      outline: "none",
+                    }}
+                  >
+                    <option value="">+ Add assignee...</option>
+                    {members
+                      .filter((m) => !newTask.assignees.includes(m.full_name))
+                      .map((m) => (
+                        <option key={m.id} value={m.full_name}>
+                          {m.full_name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               <div className="form-group">
