@@ -319,49 +319,73 @@ export default function Wiki() {
   // Transform raw URL links into favicon pill style when article is viewed
   useEffect(() => {
     if (!activeArticle) return;
-    setTimeout(() => {
+
+    const transform = () => {
       const container = document.querySelector(".wiki-content");
       if (!container) return;
-      container.querySelectorAll("a").forEach((link) => {
+
+      container.querySelectorAll("a[href]").forEach((link) => {
+        if (link.dataset.transformed === "true") return;
+
+        let url;
         try {
-          // Skip already transformed links
-          if (link.dataset.transformed === "true") return;
-          const url = new URL(link.href);
-          const domain = url.hostname.replace("www.", "");
-          const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
-          // Transform ALL links — not just raw URL ones
-          link.innerHTML = `<img
-          src="${faviconUrl}"
-          style="width:14px;height:14px;min-width:14px;max-width:14px;max-height:14px;border:none;margin:0;padding:0;border-radius:2px;object-fit:contain;flex-shrink:0;display:inline-block;vertical-align:middle;"
-          onerror="this.style.display='none'"
-        /><span style="vertical-align:middle;margin-left:2px;">${domain}</span>`;
-          link.dataset.transformed = "true";
-          link.style.cssText = `
-          display: inline-flex !important;
-          align-items: center !important;
-          gap: 4px !important;
-          background: #f0f0ef !important;
-          border-radius: 4px !important;
-          padding: 2px 8px 2px 5px !important;
-          text-decoration: none !important;
-          color: #1d4ed8 !important;
-          font-size: 13px !important;
-          font-weight: 500 !important;
-          cursor: pointer !important;
-          border: none !important;
-          vertical-align: middle !important;
-          max-width: 320px !important;
-          overflow: hidden !important;
-          text-overflow: ellipsis !important;
-          white-space: nowrap !important;
-        `;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
+          url = new URL(link.href);
         } catch {
-          // not a valid URL, skip
+          return;
         }
+
+        const domain = url.hostname.replace("www.", "");
+        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+
+        link.dataset.transformed = "true";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        // Replace inner content with favicon + domain
+        link.textContent = "";
+        const img = document.createElement("img");
+        img.src = faviconUrl;
+        img.onerror = () => (img.style.display = "none");
+        img.style.cssText =
+          "width:14px;height:14px;min-width:14px;max-width:14px;max-height:14px;border:none;margin:0;padding:0;border-radius:2px;object-fit:contain;flex-shrink:0;display:inline-block;vertical-align:middle;";
+
+        const span = document.createElement("span");
+        span.textContent = domain;
+        span.style.cssText = "vertical-align:middle;margin-left:2px;";
+
+        link.appendChild(img);
+        link.appendChild(span);
+
+        link.style.cssText = `
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        background: #f0f0ef !important;
+        border-radius: 4px !important;
+        padding: 2px 8px 2px 5px !important;
+        text-decoration: none !important;
+        color: #1d4ed8 !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        cursor: pointer !important;
+        border: none !important;
+        vertical-align: middle !important;
+        max-width: 320px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+      `;
       });
-    }, 150);
+    };
+
+    // Try at 100ms and again at 500ms in case of slow render
+    const t1 = setTimeout(transform, 100);
+    const t2 = setTimeout(transform, 500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [activeArticle]);
 
   async function fetchAll() {
@@ -555,8 +579,9 @@ export default function Wiki() {
   }
 
   function handleContentMouseOut(e) {
-    const link = e.target.closest("a");
-    if (link) {
+    const relatedTarget = e.relatedTarget;
+    // Only hide if we're not moving to another element within the same link
+    if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
       setLinkTooltip({ visible: false, url: "", x: 0, y: 0 });
     }
   }
@@ -775,6 +800,9 @@ export default function Wiki() {
                 dangerouslySetInnerHTML={{ __html: activeArticle.content }}
                 onMouseOver={handleContentMouseOver}
                 onMouseOut={handleContentMouseOut}
+                onClick={() =>
+                  setLinkTooltip({ visible: false, url: "", x: 0, y: 0 })
+                }
               />
             </div>
           </>
