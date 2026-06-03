@@ -88,7 +88,7 @@ function RichEditor({ content, onChange }) {
       editor
         .chain()
         .focus()
-        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+        .insertTable({ rows: 4, cols: 3, withHeaderRow: true })
         .run();
   }, [editor]);
 
@@ -252,9 +252,63 @@ function RichEditor({ content, onChange }) {
         <ToolbarBtn onClick={addImage} active={false} title="Image">
           🖼
         </ToolbarBtn>
-        <ToolbarBtn onClick={addTable} active={false} title="Table">
-          ⊞
+        <ToolbarBtn onClick={addTable} active={false} title="Insert table">
+          ⊞ Table
         </ToolbarBtn>
+        {editor.isActive("table") && (
+          <>
+            <div
+              style={{
+                width: 1,
+                height: 20,
+                background: "#e8e8e8",
+                margin: "0 4px",
+              }}
+            />
+            <ToolbarBtn
+              onClick={() => editor.chain().focus().addRowAfter().run()}
+              active={false}
+              title="Add row below"
+            >
+              + Row
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => editor.chain().focus().addColumnAfter().run()}
+              active={false}
+              title="Add column right"
+            >
+              + Col
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => editor.chain().focus().deleteRow().run()}
+              active={false}
+              title="Delete row"
+            >
+              − Row
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => editor.chain().focus().deleteColumn().run()}
+              active={false}
+              title="Delete column"
+            >
+              − Col
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              active={false}
+              title="Delete table"
+            >
+              🗑 Table
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+              active={false}
+              title="Toggle header row"
+            >
+              Header
+            </ToolbarBtn>
+          </>
+        )}
         <div
           style={{
             width: 1,
