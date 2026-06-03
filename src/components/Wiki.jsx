@@ -44,12 +44,7 @@ function RichEditor({ content, onChange }) {
       Underline,
       Image.configure({ inline: false, allowBase64: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: "wiki-inline-link",
-        },
-      }),
+      Link.configure({ openOnClick: false }),
       Placeholder.configure({ placeholder: "Start writing your article..." }),
       Table.configure({ resizable: true }),
       TableRow,
@@ -65,19 +60,6 @@ function RichEditor({ content, onChange }) {
         if (urlRegex.test(text.trim())) {
           event.preventDefault();
           const url = text.trim();
-          let hostname = "";
-          try {
-            hostname = new URL(url).hostname.replace("www.", "");
-          } catch {
-            hostname = url;
-          }
-          const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=16`;
-          const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="wiki-inline-link"><img src="${faviconUrl}" class="wiki-link-favicon" alt="" /><span class="wiki-link-domain">${hostname}</span><span class="wiki-link-url">${url}</span></a>`;
-          view.dispatch(
-            view.state.tr
-              .insertText("")
-              .replaceSelectionWith(view.state.schema.text(" ")),
-          );
           const { state, dispatch } = view;
           const { tr } = state;
           const node = state.schema.text(url, [
@@ -333,6 +315,53 @@ export default function Wiki() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  // Transform raw URL links into favicon pill style when article is viewed
+  useEffect(() => {
+    if (!activeArticle) return;
+    setTimeout(() => {
+      const container = document.querySelector(".wiki-content");
+      if (!container) return;
+      container.querySelectorAll("a").forEach((link) => {
+        try {
+          const url = new URL(link.href);
+          const domain = url.hostname.replace("www.", "");
+          const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+          const text = link.textContent || "";
+          if (text.startsWith("http://") || text.startsWith("https://")) {
+            link.innerHTML = `<img
+              src="${faviconUrl}"
+              style="width:14px;height:14px;min-width:14px;max-width:14px;max-height:14px;border:none;margin:0;padding:0;border-radius:2px;object-fit:contain;flex-shrink:0;vertical-align:middle;"
+              onerror="this.style.display='none'"
+            /><span style="vertical-align:middle;">${domain}</span>`;
+            link.style.cssText = `
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+              background: #f0f0ef;
+              border-radius: 4px;
+              padding: 2px 8px 2px 5px;
+              text-decoration: none;
+              color: #1d4ed8;
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              border: none;
+              vertical-align: middle;
+              max-width: 320px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            `;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+          }
+        } catch {
+          // not a valid URL, skip
+        }
+      });
+    }, 100);
+  }, [activeArticle]);
 
   async function fetchAll() {
     const [catsRes, artsRes] = await Promise.all([
@@ -792,7 +821,23 @@ export default function Wiki() {
             src={`https://www.google.com/s2/favicons?domain=${
               new URL(linkTooltip.url).hostname
             }&sz=16`}
-            style={{ width: 16, height: 16, borderRadius: 3, flexShrink: 0 }}
+            alt=""
+            width={16}
+            height={16}
+            style={{
+              width: 16,
+              height: 16,
+              minWidth: 16,
+              maxWidth: 16,
+              maxHeight: 16,
+              borderRadius: 3,
+              flexShrink: 0,
+              objectFit: "contain",
+              display: "block",
+              border: "none",
+              margin: 0,
+              padding: 0,
+            }}
             onError={(e) => (e.target.style.display = "none")}
           />
           <div style={{ minWidth: 0 }}>
@@ -998,7 +1043,6 @@ export default function Wiki() {
   );
 }
 
-// Category node component (recursive for nested categories)
 function CategoryNode({
   cat,
   activeArticle,
