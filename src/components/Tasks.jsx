@@ -70,9 +70,15 @@ export default function Tasks({
       .order("created_at", { ascending: false });
 
     if (activeFolder) {
+      // Folder level — fetch only this folder's tasks
       query = query.eq("folder_id", activeFolder.id);
     } else if (activeSpace) {
+      // Space level — fetch ALL tasks in this space (for counts)
       query = query.eq("space_id", activeSpace.id);
+    }
+
+    if (profile?.role === "member") {
+      query = query.eq("assignee_id", profile.id);
     }
 
     const { data } = await query;
@@ -596,276 +602,723 @@ export default function Tasks({
         {/* LIST VIEW */}
         {viewMode === "list" && (
           <div>
-            {Object.entries(getGroupedTasks()).map(
-              ([groupName, groupTasks]) => {
-                const isExpanded = expandedGroups[groupName] !== false;
+            {/* SPACE LEVEL — show folders as sections */}
+            {activeSpace && !activeFolder ? (
+              <div>
+                {(activeSpace.folders || []).map((folder) => {
+                  const folderTasks = tasks.filter(
+                    (t) => t.folder_id === folder.id,
+                  );
+                  const isExpanded = expandedGroups[folder.id] !== false;
+                  const statusGroups = getStatuses().reduce((acc, status) => {
+                    acc[status] = folderTasks.filter(
+                      (t) => t.status === status,
+                    );
+                    return acc;
+                  }, {});
 
-                // Get group header color
-                let headerColor = "#888";
-                if (groupBy === "status")
-                  headerColor = getStatusColor(groupName);
-                if (groupBy === "priority") {
-                  headerColor =
-                    groupName === "High"
-                      ? "#b91c1c"
-                      : groupName === "Low"
-                        ? "#15803d"
-                        : "#854d0e";
-                }
-
-                return (
-                  <div key={groupName} style={{ marginBottom: 16 }}>
+                  return (
                     <div
-                      className="status-group-header"
-                      onClick={() =>
-                        setExpandedGroups((prev) => ({
-                          ...prev,
-                          [groupName]: !isExpanded,
-                        }))
-                      }
+                      key={folder.id}
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #e8e8e8",
+                        borderRadius: 8,
+                        marginBottom: 16,
+                        overflow: "hidden",
+                      }}
                     >
-                      <span style={{ fontSize: 10 }}>
-                        {isExpanded ? "▾" : "▸"}
-                      </span>
-                      <span
-                        style={{
-                          background:
-                            groupBy === "status" ? headerColor : "#f0f0ef",
-                          color: groupBy === "status" ? "#fff" : "#333",
-                          padding: "2px 10px",
-                          borderRadius: 20,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          border:
-                            groupBy !== "status" ? "1px solid #e8e8e8" : "none",
-                        }}
-                      >
-                        {groupName}
-                      </span>
-                      <span style={{ fontSize: 12, color: "#aaa" }}>
-                        {groupTasks.length}
-                      </span>
-                    </div>
-
-                    {isExpanded && groupTasks.length > 0 && (
+                      {/* Folder header */}
                       <div
                         style={{
-                          background: "#fff",
-                          border: "1px solid #e8e8e8",
-                          borderRadius: 8,
-                          overflow: "hidden",
-                          marginTop: 4,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "12px 16px",
+                          borderBottom: isExpanded
+                            ? "1px solid #e8e8e8"
+                            : "none",
+                          cursor: "pointer",
+                          background: "#fafaf9",
                         }}
+                        onClick={() =>
+                          setExpandedGroups((prev) => ({
+                            ...prev,
+                            [folder.id]: !isExpanded,
+                          }))
+                        }
                       >
-                        <table className="task-table">
-                          <thead>
-                            <tr>
-                              <th>Name</th>
-                              {groupBy !== "status" && <th>Status</th>}
-                              <th>Priority</th>
-                              <th>Assignees</th>
-                              <th>Due date</th>
-                              {getFields().map((f) => (
-                                <th key={f.id}>{f.field_name}</th>
-                              ))}
-                              <th></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {groupTasks.map((task) => (
-                              <tr key={task.id}>
-                                <td>
-                                  <span
-                                    style={{
-                                      fontWeight: 500,
-                                      cursor: "pointer",
-                                    }}
-                                    onClick={() => openEditTask(task)}
-                                  >
-                                    {task.title}
-                                  </span>
-                                  {task.description && (
-                                    <div
-                                      style={{
-                                        fontSize: 11,
-                                        color: "#aaa",
-                                        marginTop: 2,
-                                      }}
-                                    >
-                                      {task.description.slice(0, 60)}
-                                      {task.description.length > 60
-                                        ? "..."
-                                        : ""}
-                                    </div>
-                                  )}
-                                </td>
-                                {groupBy !== "status" && (
-                                  <td>
-                                    <span
-                                      className="badge"
-                                      style={{
-                                        background:
-                                          getStatusColor(task.status) + "22",
-                                        color: getStatusColor(task.status),
-                                        border: `1px solid ${getStatusColor(task.status)}44`,
-                                      }}
-                                    >
-                                      {task.status}
-                                    </span>
-                                  </td>
-                                )}
-                                <td>
-                                  <span
-                                    className="badge"
-                                    style={getPriorityStyle(task.priority)}
-                                  >
-                                    {task.priority}
-                                  </span>
-                                </td>
-                                <td>
-                                  {task.assignees &&
-                                  task.assignees.length > 0 ? (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        flexWrap: "wrap",
-                                        gap: 3,
-                                      }}
-                                    >
-                                      {task.assignees.map((name) => (
-                                        <span
-                                          key={name}
-                                          style={{
-                                            background: "#f0f0ef",
-                                            borderRadius: 20,
-                                            padding: "1px 7px",
-                                            fontSize: 11,
-                                            fontWeight: 500,
-                                            color: "#333",
-                                          }}
-                                        >
-                                          {name}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  ) : task.assignee ? (
-                                    <span
-                                      style={{
-                                        background: "#f0f0ef",
-                                        borderRadius: 20,
-                                        padding: "1px 7px",
-                                        fontSize: 11,
-                                        fontWeight: 500,
-                                        color: "#333",
-                                      }}
-                                    >
-                                      {task.assignee}
-                                    </span>
-                                  ) : (
-                                    "—"
-                                  )}
-                                </td>
-                                <td
-                                  style={{
-                                    fontSize: 12,
-                                    color:
-                                      task.due_date &&
-                                      new Date(task.due_date) < new Date() &&
-                                      task.status !== "Done"
-                                        ? "#b91c1c"
-                                        : "#555",
-                                    fontWeight:
-                                      task.due_date &&
-                                      new Date(task.due_date) < new Date() &&
-                                      task.status !== "Done"
-                                        ? 600
-                                        : 400,
-                                  }}
+                        <span style={{ fontSize: 12, color: "#aaa" }}>
+                          {isExpanded ? "▾" : "▸"}
+                        </span>
+                        <span
+                          style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
+                        >
+                          📁 {folder.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: "#888",
+                            background: "#f0f0ef",
+                            borderRadius: 20,
+                            padding: "1px 8px",
+                          }}
+                        >
+                          {folderTasks.length} tasks
+                        </span>
+                      </div>
+
+                      {/* Folder tasks grouped by selected groupBy */}
+                      {isExpanded && (
+                        <div style={{ padding: "8px 0" }}>
+                          {folderTasks.length === 0 ? (
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: "#ccc",
+                                padding: "12px 16px",
+                              }}
+                            >
+                              No tasks in this folder
+                            </div>
+                          ) : (
+                            Object.entries(
+                              groupBy === "status"
+                                ? statusGroups
+                                : groupBy === "priority"
+                                  ? ["High", "Medium", "Low"].reduce(
+                                      (acc, p) => {
+                                        acc[p] = folderTasks.filter(
+                                          (t) => t.priority === p,
+                                        );
+                                        return acc;
+                                      },
+                                      {},
+                                    )
+                                  : groupBy === "assignee"
+                                    ? folderTasks.reduce((acc, task) => {
+                                        const names =
+                                          task.assignees?.length > 0
+                                            ? task.assignees
+                                            : task.assignee
+                                              ? [task.assignee]
+                                              : ["Unassigned"];
+                                        names.forEach((n) => {
+                                          if (!acc[n]) acc[n] = [];
+                                          acc[n].push(task);
+                                        });
+                                        return acc;
+                                      }, {})
+                                    : statusGroups,
+                            ).map(([groupName, groupTasks]) => {
+                              if (groupTasks.length === 0) return null;
+                              const groupKey = `${folder.id}_${groupName}`;
+                              const groupExpanded =
+                                expandedGroups[groupKey] !== false;
+                              return (
+                                <div
+                                  key={groupName}
+                                  style={{ marginBottom: 4 }}
                                 >
-                                  {task.due_date
-                                    ? new Date(task.due_date) < new Date() &&
-                                      task.status !== "Done"
-                                      ? `⚠️ ${task.due_date}`
-                                      : task.due_date
-                                    : "—"}
-                                </td>
-                                {getFields().map((f) => {
-                                  const fv = task.task_field_values?.find(
-                                    (v) => v.field_id === f.id,
-                                  );
-                                  return (
-                                    <td
-                                      key={f.id}
-                                      style={{ fontSize: 12, color: "#555" }}
-                                    >
-                                      {fv?.value || "—"}
-                                    </td>
-                                  );
-                                })}
-                                <td>
                                   <div
                                     style={{
                                       display: "flex",
                                       alignItems: "center",
-                                      gap: 4,
+                                      gap: 8,
+                                      padding: "6px 16px",
+                                      cursor: "pointer",
                                     }}
+                                    onClick={() =>
+                                      setExpandedGroups((prev) => ({
+                                        ...prev,
+                                        [groupKey]: !groupExpanded,
+                                      }))
+                                    }
                                   >
-                                    <select
-                                      value={task.status}
-                                      onChange={(e) =>
-                                        updateTaskStatus(
-                                          task.id,
-                                          e.target.value,
-                                        )
-                                      }
+                                    <span
+                                      style={{ fontSize: 10, color: "#aaa" }}
+                                    >
+                                      {groupExpanded ? "▾" : "▸"}
+                                    </span>
+                                    <span
                                       style={{
+                                        background:
+                                          groupBy === "status"
+                                            ? getStatusColor(groupName)
+                                            : "#f0f0ef",
+                                        color:
+                                          groupBy === "status"
+                                            ? "#fff"
+                                            : "#333",
+                                        padding: "2px 10px",
+                                        borderRadius: 20,
                                         fontSize: 11,
-                                        padding: "3px 6px",
+                                        fontWeight: 600,
                                       }}
                                     >
-                                      {getStatuses().map((s) => (
-                                        <option key={s} value={s}>
-                                          {s}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <div className="task-row-actions">
-                                      <button
-                                        className="btn btn-sm"
-                                        onClick={() => openEditTask(task)}
-                                      >
-                                        ✏️
-                                      </button>
-                                      <button
-                                        className="btn btn-sm btn-danger"
-                                        onClick={() => deleteTask(task.id)}
-                                      >
-                                        🗑
-                                      </button>
-                                    </div>
+                                      {groupName}
+                                    </span>
+                                    <span
+                                      style={{ fontSize: 12, color: "#aaa" }}
+                                    >
+                                      {groupTasks.length}
+                                    </span>
                                   </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
 
-                    {isExpanded && groupTasks.length === 0 && (
+                                  {groupExpanded && (
+                                    <table
+                                      className="task-table"
+                                      style={{ marginBottom: 4 }}
+                                    >
+                                      <thead>
+                                        <tr>
+                                          <th style={{ paddingLeft: 32 }}>
+                                            Name
+                                          </th>
+                                          {groupBy !== "status" && (
+                                            <th>Status</th>
+                                          )}
+                                          <th>Priority</th>
+                                          <th>Assignees</th>
+                                          <th>Due date</th>
+                                          {getFields().map((f) => (
+                                            <th key={f.id}>{f.field_name}</th>
+                                          ))}
+                                          <th></th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {groupTasks.map((task) => (
+                                          <tr key={task.id}>
+                                            <td style={{ paddingLeft: 32 }}>
+                                              <span
+                                                style={{
+                                                  fontWeight: 500,
+                                                  cursor: "pointer",
+                                                }}
+                                                onClick={() =>
+                                                  openEditTask(task)
+                                                }
+                                              >
+                                                {task.title}
+                                              </span>
+                                            </td>
+                                            {groupBy !== "status" && (
+                                              <td>
+                                                <span
+                                                  className="badge"
+                                                  style={{
+                                                    background:
+                                                      getStatusColor(
+                                                        task.status,
+                                                      ) + "22",
+                                                    color: getStatusColor(
+                                                      task.status,
+                                                    ),
+                                                  }}
+                                                >
+                                                  {task.status}
+                                                </span>
+                                              </td>
+                                            )}
+                                            <td>
+                                              <span
+                                                className="badge"
+                                                style={getPriorityStyle(
+                                                  task.priority,
+                                                )}
+                                              >
+                                                {task.priority}
+                                              </span>
+                                            </td>
+                                            <td>
+                                              <div
+                                                style={{
+                                                  display: "flex",
+                                                  flexWrap: "wrap",
+                                                  gap: 3,
+                                                }}
+                                              >
+                                                {(task.assignees?.length > 0
+                                                  ? task.assignees
+                                                  : task.assignee
+                                                    ? [task.assignee]
+                                                    : []
+                                                ).map((name) => (
+                                                  <span
+                                                    key={name}
+                                                    style={{
+                                                      background: "#f0f0ef",
+                                                      borderRadius: 20,
+                                                      padding: "1px 7px",
+                                                      fontSize: 11,
+                                                      fontWeight: 500,
+                                                    }}
+                                                  >
+                                                    {name}
+                                                  </span>
+                                                ))}
+                                                {!task.assignees?.length &&
+                                                  !task.assignee &&
+                                                  "—"}
+                                              </div>
+                                            </td>
+                                            <td
+                                              style={{
+                                                fontSize: 12,
+                                                color: "#555",
+                                              }}
+                                            >
+                                              {task.due_date || "—"}
+                                            </td>
+                                            {getFields().map((f) => {
+                                              const fv =
+                                                task.task_field_values?.find(
+                                                  (v) => v.field_id === f.id,
+                                                );
+                                              return (
+                                                <td
+                                                  key={f.id}
+                                                  style={{
+                                                    fontSize: 12,
+                                                    color: "#555",
+                                                  }}
+                                                >
+                                                  {fv?.value || "—"}
+                                                </td>
+                                              );
+                                            })}
+                                            <td>
+                                              <div
+                                                style={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: 4,
+                                                }}
+                                              >
+                                                <select
+                                                  value={task.status}
+                                                  onChange={(e) =>
+                                                    updateTaskStatus(
+                                                      task.id,
+                                                      e.target.value,
+                                                    )
+                                                  }
+                                                  style={{
+                                                    fontSize: 11,
+                                                    padding: "3px 6px",
+                                                  }}
+                                                >
+                                                  {getStatuses().map((s) => (
+                                                    <option key={s} value={s}>
+                                                      {s}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                                <div className="task-row-actions">
+                                                  <button
+                                                    className="btn btn-sm"
+                                                    onClick={() =>
+                                                      openEditTask(task)
+                                                    }
+                                                  >
+                                                    ✏️
+                                                  </button>
+                                                  <button
+                                                    className="btn btn-sm btn-danger"
+                                                    onClick={() =>
+                                                      deleteTask(task.id)
+                                                    }
+                                                  >
+                                                    🗑
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Tasks not in any folder */}
+                {(() => {
+                  const noFolderTasks = tasks.filter((t) => !t.folder_id);
+                  if (noFolderTasks.length === 0) return null;
+                  return (
+                    <div
+                      style={{
+                        background: "#fff",
+                        border: "1px solid #e8e8e8",
+                        borderRadius: 8,
+                        marginBottom: 16,
+                        overflow: "hidden",
+                      }}
+                    >
                       <div
                         style={{
-                          fontSize: 12,
-                          color: "#ccc",
-                          padding: "8px 12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "12px 16px",
+                          background: "#fafaf9",
+                          borderBottom: "1px solid #e8e8e8",
                         }}
                       >
-                        No tasks
+                        <span
+                          style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
+                        >
+                          📋 No folder
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: "#888",
+                            background: "#f0f0ef",
+                            borderRadius: 20,
+                            padding: "1px 8px",
+                          }}
+                        >
+                          {noFolderTasks.length} tasks
+                        </span>
                       </div>
-                    )}
-                  </div>
-                );
-              },
+                      <table className="task-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            <th>Assignees</th>
+                            <th>Due date</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {noFolderTasks.map((task) => (
+                            <tr key={task.id}>
+                              <td style={{ fontWeight: 500 }}>{task.title}</td>
+                              <td>
+                                <span
+                                  className="badge"
+                                  style={{
+                                    background:
+                                      getStatusColor(task.status) + "22",
+                                    color: getStatusColor(task.status),
+                                  }}
+                                >
+                                  {task.status}
+                                </span>
+                              </td>
+                              <td>
+                                <span
+                                  className="badge"
+                                  style={getPriorityStyle(task.priority)}
+                                >
+                                  {task.priority}
+                                </span>
+                              </td>
+                              <td style={{ fontSize: 12 }}>
+                                {(task.assignees?.length > 0
+                                  ? task.assignees
+                                  : task.assignee
+                                    ? [task.assignee]
+                                    : ["—"]
+                                ).join(", ")}
+                              </td>
+                              <td style={{ fontSize: 12 }}>
+                                {task.due_date || "—"}
+                              </td>
+                              <td>
+                                <div className="task-row-actions">
+                                  <button
+                                    className="btn btn-sm"
+                                    onClick={() => openEditTask(task)}
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-danger"
+                                    onClick={() => deleteTask(task.id)}
+                                  >
+                                    🗑
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+
+                {(activeSpace.folders || []).length === 0 &&
+                  tasks.length === 0 && (
+                    <div
+                      style={{
+                        textAlign: "center",
+                        padding: "60px 20px",
+                        color: "#aaa",
+                      }}
+                    >
+                      <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                      <div style={{ fontSize: 14, marginBottom: 4 }}>
+                        No folders yet
+                      </div>
+                      <div style={{ fontSize: 12 }}>
+                        Add a folder from the sidebar to organise your tasks
+                      </div>
+                    </div>
+                  )}
+              </div>
+            ) : (
+              /* FOLDER LEVEL — show tasks grouped by selected groupBy */
+              <div>
+                {Object.entries(getGroupedTasks()).map(
+                  ([groupName, groupTasks]) => {
+                    const isExpanded = expandedGroups[groupName] !== false;
+                    return (
+                      <div key={groupName} style={{ marginBottom: 16 }}>
+                        <div
+                          className="status-group-header"
+                          onClick={() =>
+                            setExpandedGroups((prev) => ({
+                              ...prev,
+                              [groupName]: !isExpanded,
+                            }))
+                          }
+                        >
+                          <span style={{ fontSize: 10 }}>
+                            {isExpanded ? "▾" : "▸"}
+                          </span>
+                          <span
+                            style={{
+                              background:
+                                groupBy === "status"
+                                  ? getStatusColor(groupName)
+                                  : "#f0f0ef",
+                              color: groupBy === "status" ? "#fff" : "#333",
+                              padding: "2px 10px",
+                              borderRadius: 20,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              border:
+                                groupBy !== "status"
+                                  ? "1px solid #e8e8e8"
+                                  : "none",
+                            }}
+                          >
+                            {groupName}
+                          </span>
+                          <span style={{ fontSize: 12, color: "#aaa" }}>
+                            {groupTasks.length}
+                          </span>
+                        </div>
+
+                        {isExpanded && groupTasks.length > 0 && (
+                          <div
+                            style={{
+                              background: "#fff",
+                              border: "1px solid #e8e8e8",
+                              borderRadius: 8,
+                              overflow: "hidden",
+                              marginTop: 4,
+                            }}
+                          >
+                            <table className="task-table">
+                              <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  {groupBy !== "status" && <th>Status</th>}
+                                  <th>Priority</th>
+                                  <th>Assignees</th>
+                                  <th>Due date</th>
+                                  {getFields().map((f) => (
+                                    <th key={f.id}>{f.field_name}</th>
+                                  ))}
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {groupTasks.map((task) => (
+                                  <tr key={task.id}>
+                                    <td>
+                                      <span
+                                        style={{
+                                          fontWeight: 500,
+                                          cursor: "pointer",
+                                        }}
+                                        onClick={() => openEditTask(task)}
+                                      >
+                                        {task.title}
+                                      </span>
+                                    </td>
+                                    {groupBy !== "status" && (
+                                      <td>
+                                        <span
+                                          className="badge"
+                                          style={{
+                                            background:
+                                              getStatusColor(task.status) +
+                                              "22",
+                                            color: getStatusColor(task.status),
+                                          }}
+                                        >
+                                          {task.status}
+                                        </span>
+                                      </td>
+                                    )}
+                                    <td>
+                                      <span
+                                        className="badge"
+                                        style={getPriorityStyle(task.priority)}
+                                      >
+                                        {task.priority}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          flexWrap: "wrap",
+                                          gap: 3,
+                                        }}
+                                      >
+                                        {(task.assignees?.length > 0
+                                          ? task.assignees
+                                          : task.assignee
+                                            ? [task.assignee]
+                                            : []
+                                        ).map((name) => (
+                                          <span
+                                            key={name}
+                                            style={{
+                                              background: "#f0f0ef",
+                                              borderRadius: 20,
+                                              padding: "1px 7px",
+                                              fontSize: 11,
+                                              fontWeight: 500,
+                                            }}
+                                          >
+                                            {name}
+                                          </span>
+                                        ))}
+                                        {!task.assignees?.length &&
+                                          !task.assignee &&
+                                          "—"}
+                                      </div>
+                                    </td>
+                                    <td
+                                      style={{
+                                        fontSize: 12,
+                                        color:
+                                          task.due_date &&
+                                          new Date(task.due_date) <
+                                            new Date() &&
+                                          task.status !== "Done"
+                                            ? "#b91c1c"
+                                            : "#555",
+                                      }}
+                                    >
+                                      {task.due_date
+                                        ? new Date(task.due_date) <
+                                            new Date() && task.status !== "Done"
+                                          ? `⚠️ ${task.due_date}`
+                                          : task.due_date
+                                        : "—"}
+                                    </td>
+                                    {getFields().map((f) => {
+                                      const fv = task.task_field_values?.find(
+                                        (v) => v.field_id === f.id,
+                                      );
+                                      return (
+                                        <td
+                                          key={f.id}
+                                          style={{
+                                            fontSize: 12,
+                                            color: "#555",
+                                          }}
+                                        >
+                                          {fv?.value || "—"}
+                                        </td>
+                                      );
+                                    })}
+                                    <td>
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 4,
+                                        }}
+                                      >
+                                        <select
+                                          value={task.status}
+                                          onChange={(e) =>
+                                            updateTaskStatus(
+                                              task.id,
+                                              e.target.value,
+                                            )
+                                          }
+                                          style={{
+                                            fontSize: 11,
+                                            padding: "3px 6px",
+                                          }}
+                                        >
+                                          {getStatuses().map((s) => (
+                                            <option key={s} value={s}>
+                                              {s}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <div className="task-row-actions">
+                                          <button
+                                            className="btn btn-sm"
+                                            onClick={() => openEditTask(task)}
+                                          >
+                                            ✏️
+                                          </button>
+                                          <button
+                                            className="btn btn-sm btn-danger"
+                                            onClick={() => deleteTask(task.id)}
+                                          >
+                                            🗑
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {isExpanded && groupTasks.length === 0 && (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#ccc",
+                              padding: "8px 12px",
+                            }}
+                          >
+                            No tasks
+                          </div>
+                        )}
+                      </div>
+                    );
+                  },
+                )}
+              </div>
             )}
           </div>
         )}
