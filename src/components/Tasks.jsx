@@ -85,6 +85,38 @@ export default function Tasks({
     if (data) setTasks(data);
   }
 
+  function getUniqueStatuses() {
+    // At folder level — use folder's own statuses
+    if (activeFolder) {
+      return getStatuses();
+    }
+    // At space level — collect all unique statuses across all folders + space level
+    const allStatuses = new Set();
+
+    // Add space-level statuses
+    const spaceStatuses = activeSpace?.space_statuses || [];
+    spaceStatuses
+      .filter((s) => !s.folder_id)
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => allStatuses.add(s.name));
+
+    // Add folder-level statuses
+    const folders = activeSpace?.folders || [];
+    folders.forEach((folder) => {
+      const folderStatuses = folder.space_statuses || [];
+      folderStatuses
+        .sort((a, b) => a.status_order - b.status_order)
+        .forEach((s) => allStatuses.add(s.name));
+    });
+
+    // If nothing found, use defaults
+    if (allStatuses.size === 0) {
+      return ["To Do", "In Progress", "In Review", "Done"];
+    }
+
+    return [...allStatuses];
+  }
+
   async function saveTask() {
     if (!newTask.title.trim()) return;
     if (!newTask.space_id) {
@@ -690,7 +722,7 @@ export default function Tasks({
             style={{ fontSize: 13 }}
           >
             <option value="all">All statuses</option>
-            {getStatuses().map((s) => (
+            {getUniqueStatuses().map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
