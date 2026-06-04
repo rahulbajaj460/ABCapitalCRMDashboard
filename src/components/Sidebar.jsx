@@ -12,6 +12,7 @@ export default function Sidebar({
   onSpaceCreated,
   profile,
   onLogout,
+  taskCounts = {},
 }) {
   const [expandedSpaces, setExpandedSpaces] = useState({});
   const [showAddSpace, setShowAddSpace] = useState(false);
@@ -135,6 +136,20 @@ export default function Sidebar({
             </span>
             <span className="space-dot" style={{ background: space.color }} />
             <span style={{ flex: 1, fontSize: 13 }}>{space.name}</span>
+            {taskCounts[space.id] > 0 && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "#aaa",
+                  background: "#f0f0ef",
+                  borderRadius: 20,
+                  padding: "0px 6px",
+                  flexShrink: 0,
+                }}
+              >
+                {taskCounts[space.id]}
+              </span>
+            )}
             <span
               onClick={(e) => deleteSpace(space.id, e)}
               style={{
@@ -162,6 +177,20 @@ export default function Sidebar({
                 >
                   <span style={{ fontSize: 12 }}>📁</span>
                   <span style={{ flex: 1 }}>{folder.name}</span>
+                  {taskCounts[folder.id] > 0 && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "#aaa",
+                        background: "#f0f0ef",
+                        borderRadius: 20,
+                        padding: "0px 6px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {taskCounts[folder.id]}
+                    </span>
+                  )}
                   <span
                     onClick={(e) => deleteFolder(folder.id, e)}
                     className="space-delete-btn"

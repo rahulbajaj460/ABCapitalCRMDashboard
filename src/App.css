@@ -1123,3 +1123,14 @@
 .ProseMirror .resize-cursor {
   cursor: col-resize;
 }
+
+/* Hide task action buttons, show on row hover */
+.task-row-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.task-table tr:hover .task-row-actions {
+  opacity: 1;
+}

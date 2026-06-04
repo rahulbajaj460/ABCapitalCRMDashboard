@@ -692,7 +692,13 @@ export default function Tasks({
                                 );
                               })}
                               <td>
-                                <div style={{ display: "flex", gap: 4 }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                  }}
+                                >
                                   <select
                                     value={task.status}
                                     onChange={(e) =>
@@ -706,18 +712,20 @@ export default function Tasks({
                                       </option>
                                     ))}
                                   </select>
-                                  <button
-                                    className="btn btn-sm"
-                                    onClick={() => openEditTask(task)}
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-danger"
-                                    onClick={() => deleteTask(task.id)}
-                                  >
-                                    🗑
-                                  </button>
+                                  <div className="task-row-actions">
+                                    <button
+                                      className="btn btn-sm"
+                                      onClick={() => openEditTask(task)}
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      className="btn btn-sm btn-danger"
+                                      onClick={() => deleteTask(task.id)}
+                                    >
+                                      🗑
+                                    </button>
+                                  </div>
                                 </div>
                               </td>
                             </tr>

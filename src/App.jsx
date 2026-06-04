@@ -69,6 +69,25 @@ export default function App() {
     }
   }
 
+  const [taskCounts, setTaskCounts] = useState({});
+
+  useEffect(() => {
+    if (user) fetchTaskCounts();
+  }, [user, spaces]);
+
+  async function fetchTaskCounts() {
+    const { data } = await supabase.from("tasks").select("space_id, folder_id");
+    if (!data) return;
+    const counts = {};
+    data.forEach((t) => {
+      counts[t.space_id] = (counts[t.space_id] || 0) + 1;
+      if (t.folder_id) {
+        counts[t.folder_id] = (counts[t.folder_id] || 0) + 1;
+      }
+    });
+    setTaskCounts(counts);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     setUser(null);
@@ -121,6 +140,7 @@ export default function App() {
         onNavigate={setView}
         onSpaceSelect={handleSpaceSelect}
         onFolderSelect={handleFolderSelect}
+        taskCounts={taskCounts}
         onSpaceCreated={fetchSpaces}
         onLogout={handleLogout}
       />
