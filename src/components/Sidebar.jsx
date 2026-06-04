@@ -82,7 +82,21 @@ export default function Sidebar({
 
   async function deleteFolder(folderId, e) {
     e.stopPropagation();
-    if (!confirm("Delete this folder and all its tasks?")) return;
+
+    // Get task count first
+    const { count } = await supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("folder_id", folderId);
+
+    const taskCount = count || 0;
+    const message =
+      taskCount > 0
+        ? `Delete this folder and all ${taskCount} tasks inside it? This cannot be undone.`
+        : "Delete this folder?";
+
+    if (!confirm(message)) return;
+
     await supabase.from("folders").delete().eq("id", folderId);
     onSpaceCreated();
   }
