@@ -39,13 +39,13 @@ export default function Sidebar({
         {
           space_id: data.id,
           name: "In Progress",
-          color: "#d97706",
+          color: "#7c3aed",
           status_order: 2,
         },
         {
           space_id: data.id,
           name: "In Review",
-          color: "#7c3aed",
+          color: "#d97706",
           status_order: 3,
         },
         { space_id: data.id, name: "Done", color: "#16a34a", status_order: 4 },

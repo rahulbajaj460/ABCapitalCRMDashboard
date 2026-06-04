@@ -190,8 +190,8 @@ export default function Tasks({
 
     const defaults = [
       { name: "To Do", color: "#888780", status_order: 1 },
-      { name: "In Progress", color: "#d97706", status_order: 2 },
-      { name: "In Review", color: "#7c3aed", status_order: 3 },
+      { name: "In Progress", color: "#7c3aed", status_order: 2 },
+      { name: "In Review", color: "#d97706", status_order: 3 },
       { name: "Done", color: "#16a34a", status_order: 4 },
     ];
 
