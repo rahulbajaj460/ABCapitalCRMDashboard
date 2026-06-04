@@ -6,6 +6,7 @@ export default function Tasks({
   spaces,
   activeSpace,
   activeFolder,
+  profile,
   onRefreshSpaces,
 }) {
   const [tasks, setTasks] = useState([]);
