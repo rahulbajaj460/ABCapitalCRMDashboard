@@ -308,20 +308,41 @@ export default function Tasks({
 
   async function fetchModalStatuses() {
     if (!activeSpace) return;
-    let query = supabase
-      .from("space_statuses")
-      .select("*")
-      .order("status_order");
 
     if (activeFolder) {
-      query = query.eq("folder_id", activeFolder.id);
-    } else {
-      query = query.eq("space_id", activeSpace.id).is("folder_id", null);
-    }
+      // First check if folder has its own statuses
+      const { data: folderStatuses } = await supabase
+        .from("space_statuses")
+        .select("*")
+        .eq("folder_id", activeFolder.id)
+        .order("status_order");
 
-    const { data } = await query;
-    setModalSpaceStatuses(data || []);
-    return data || [];
+      if (folderStatuses && folderStatuses.length > 0) {
+        // Folder has its own statuses — show those
+        setModalSpaceStatuses(folderStatuses);
+        return folderStatuses;
+      } else {
+        // Folder has no statuses yet — show space-level statuses as starting point
+        const { data: spaceStatuses } = await supabase
+          .from("space_statuses")
+          .select("*")
+          .eq("space_id", activeSpace.id)
+          .is("folder_id", null)
+          .order("status_order");
+        setModalSpaceStatuses(spaceStatuses || []);
+        return spaceStatuses || [];
+      }
+    } else {
+      // Space level — fetch space statuses only
+      const { data } = await supabase
+        .from("space_statuses")
+        .select("*")
+        .eq("space_id", activeSpace.id)
+        .is("folder_id", null)
+        .order("status_order");
+      setModalSpaceStatuses(data || []);
+      return data || [];
+    }
   }
 
   function openNewTask() {
@@ -373,7 +394,6 @@ export default function Tasks({
   }
 
   function getStatuses() {
-    // If at folder level, use folder statuses first
     if (activeFolder) {
       const folderStatuses = activeFolder.space_statuses || [];
       if (folderStatuses.length > 0) {
@@ -1964,9 +1984,10 @@ export default function Tasks({
                 marginBottom: 8,
               }}
             >
-              Current statuses ({modalSpaceStatuses.length})
+              {activeFolder && !(activeFolder.space_statuses?.length > 0)
+                ? `Inherited from space (${modalSpaceStatuses.length})`
+                : `Current statuses (${modalSpaceStatuses.length})`}
             </div>
-
             {statusLoading ? (
               <div style={{ fontSize: 13, color: "#aaa", padding: "12px 0" }}>
                 Loading...
