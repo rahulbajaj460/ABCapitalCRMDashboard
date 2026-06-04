@@ -70,10 +70,8 @@ export default function Tasks({
       .order("created_at", { ascending: false });
 
     if (activeFolder) {
-      // Folder level — fetch only this folder's tasks
       query = query.eq("folder_id", activeFolder.id);
     } else if (activeSpace) {
-      // Space level — fetch ALL tasks in this space (for counts)
       query = query.eq("space_id", activeSpace.id);
     }
 
