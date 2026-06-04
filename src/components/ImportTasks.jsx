@@ -2,10 +2,23 @@ import { useState, useRef } from "react";
 import { supabase } from "../supabase";
 import Papa from "papaparse";
 
+const FIELD_TYPES = ["text", "number", "date", "email", "phone", "url"];
+
+const CORE_FIELDS = [
+  { key: "title", label: "Task Name *", required: true },
+  { key: "status", label: "Status", required: false },
+  { key: "priority", label: "Priority", required: false },
+  { key: "assignee", label: "Assignee", required: false },
+  { key: "due_date", label: "Due Date", required: false },
+  { key: "description", label: "Description", required: false },
+];
+
 export default function ImportTasks({ spaces, onDone }) {
   const [step, setStep] = useState(1);
   const [rows, setRows] = useState([]);
   const [headers, setHeaders] = useState([]);
+
+  // Core field mapping
   const [mapping, setMapping] = useState({
     title: "Task Name",
     status: "Status",
@@ -14,6 +27,10 @@ export default function ImportTasks({ spaces, onDone }) {
     due_date: "Start Date",
     description: "Task Content",
   });
+
+  // Custom field mappings: { csvColumn: { fieldName, fieldType, action: 'existing'|'new'|'skip', existingFieldId } }
+  const [customFieldMappings, setCustomFieldMappings] = useState({});
+
   const [selectedSpace, setSelectedSpace] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
   const [statusMap, setStatusMap] = useState({});
@@ -29,6 +46,22 @@ export default function ImportTasks({ spaces, onDone }) {
 
   const spaceFolders =
     spaces.find((s) => s.id === selectedSpace)?.folders || [];
+
+  // Columns not mapped to core fields
+  const unmappedColumns = headers.filter(
+    (h) => !Object.values(mapping).includes(h),
+  );
+
+  // Existing custom fields for selected space/folder
+  const existingFields = (() => {
+    const space = spaces.find((s) => s.id === selectedSpace);
+    if (!space) return [];
+    if (selectedFolder) {
+      const folder = space.folders?.find((f) => f.id === selectedFolder);
+      return folder?.space_fields || space.space_fields || [];
+    }
+    return space.space_fields || [];
+  })();
 
   function handleFile(e) {
     const file = e.target.files[0];
@@ -88,8 +121,47 @@ export default function ImportTasks({ spaces, onDone }) {
       .filter(Boolean);
   }
 
+  function updateCustomFieldMapping(col, updates) {
+    setCustomFieldMappings((prev) => ({
+      ...prev,
+      [col]: {
+        ...(prev[col] || { action: "skip", fieldName: col, fieldType: "text" }),
+        ...updates,
+      },
+    }));
+  }
+
+  function getCustomFieldAction(col) {
+    return customFieldMappings[col]?.action || "skip";
+  }
+
+  async function createNewFields() {
+    const toCreate = Object.entries(customFieldMappings).filter(
+      ([, v]) => v.action === "new" && v.fieldName?.trim(),
+    );
+    const created = {};
+    for (const [col, cfg] of toCreate) {
+      const { data, error } = await supabase
+        .from("space_fields")
+        .insert({
+          space_id: selectedSpace,
+          folder_id: selectedFolder || null,
+          field_name: cfg.fieldName.trim(),
+          field_type: cfg.fieldType || "text",
+          field_order:
+            (existingFields.length || 0) + Object.keys(created).length + 1,
+        })
+        .select()
+        .single();
+      if (!error && data) {
+        created[col] = data.id;
+      }
+    }
+    return created;
+  }
+
   function buildPreview() {
-    return rows.slice(0, 8).map((row) => ({
+    return rows.slice(0, 6).map((row) => ({
       title: row[mapping.title] || "",
       status: normalizeStatus(row[mapping.status]),
       priority: normalizePriority(row[mapping.priority]),
@@ -107,6 +179,19 @@ export default function ImportTasks({ spaces, onDone }) {
     setProgress(0);
     setErrors([]);
 
+    // Create new custom fields first
+    const newFieldIds = await createNewFields();
+
+    // Build field ID map: csv column -> field id
+    const fieldIdMap = {};
+    for (const [col, cfg] of Object.entries(customFieldMappings)) {
+      if (cfg.action === "new" && newFieldIds[col]) {
+        fieldIdMap[col] = newFieldIds[col];
+      } else if (cfg.action === "existing" && cfg.existingFieldId) {
+        fieldIdMap[col] = cfg.existingFieldId;
+      }
+    }
+
     let imported = 0;
     let skipped = 0;
     const errs = [];
@@ -118,7 +203,7 @@ export default function ImportTasks({ spaces, onDone }) {
         status: normalizeStatus(row[mapping.status]),
         priority: normalizePriority(row[mapping.priority]),
         assignee: assignees[0] || "",
-        assignees: assignees,
+        assignees,
         due_date: normalizeDate(row[mapping.due_date]),
         description: (row[mapping.description] || "").trim(),
         space_id: selectedSpace,
@@ -132,12 +217,38 @@ export default function ImportTasks({ spaces, onDone }) {
     const batchSize = 20;
     for (let i = 0; i < valid.length; i += batchSize) {
       const batch = valid.slice(i, i + batchSize);
-      const { error } = await supabase.from("tasks").insert(batch);
+      const { data: inserted, error } = await supabase
+        .from("tasks")
+        .insert(batch)
+        .select("id");
+
       if (error) {
         errs.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
-      } else {
+      } else if (inserted && Object.keys(fieldIdMap).length > 0) {
+        // Insert custom field values
+        const fieldValues = [];
+        inserted.forEach((task, idx) => {
+          const row = rows[i + idx];
+          if (!row) return;
+          for (const [col, fieldId] of Object.entries(fieldIdMap)) {
+            const value = row[col];
+            if (value && value.trim()) {
+              fieldValues.push({
+                task_id: task.id,
+                field_id: fieldId,
+                value: value.trim(),
+              });
+            }
+          }
+        });
+        if (fieldValues.length > 0) {
+          await supabase.from("task_field_values").insert(fieldValues);
+        }
+        imported += batch.length;
+      } else if (inserted) {
         imported += batch.length;
       }
+
       setProgress(Math.round(((i + batch.length) / valid.length) * 100));
     }
 
@@ -155,7 +266,7 @@ export default function ImportTasks({ spaces, onDone }) {
         <div>
           <div className="page-title">Import tasks from ClickUp</div>
           <div className="page-subtitle">
-            Upload a ClickUp CSV export and map it to your spaces
+            Upload a ClickUp CSV and map columns to your task fields
           </div>
         </div>
         <button className="btn" onClick={onDone}>
@@ -163,7 +274,7 @@ export default function ImportTasks({ spaces, onDone }) {
         </button>
       </div>
 
-      {/* Steps indicator */}
+      {/* Steps */}
       <div
         style={{
           display: "flex",
@@ -254,9 +365,10 @@ export default function ImportTasks({ spaces, onDone }) {
           </div>
         )}
 
-        {/* STEP 2 — Map columns */}
+        {/* STEP 2 — Map */}
         {step === 2 && (
-          <div style={{ maxWidth: 700 }}>
+          <div style={{ maxWidth: 760 }}>
+            {/* Core field mapping */}
             <div
               style={{
                 background: "#fff",
@@ -267,26 +379,21 @@ export default function ImportTasks({ spaces, onDone }) {
               }}
             >
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                {rows.length} tasks found · Map CSV columns to task fields
+                {rows.length} tasks found · Map core fields
               </div>
               <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-                Auto-detected from your ClickUp export — adjust if needed
+                Match your CSV columns to the standard task fields
               </div>
               <div className="form-grid">
-                {Object.entries(mapping).map(([field, csvCol]) => (
-                  <div className="form-group" key={field}>
-                    <label className="form-label">
-                      {field === "due_date"
-                        ? "Due date"
-                        : field.charAt(0).toUpperCase() +
-                          field.slice(1).replace("_", " ")}
-                    </label>
+                {CORE_FIELDS.map(({ key, label }) => (
+                  <div className="form-group" key={key}>
+                    <label className="form-label">{label}</label>
                     <select
-                      value={csvCol}
+                      value={mapping[key]}
                       onChange={(e) =>
                         setMapping((prev) => ({
                           ...prev,
-                          [field]: e.target.value,
+                          [key]: e.target.value,
                         }))
                       }
                     >
@@ -302,6 +409,7 @@ export default function ImportTasks({ spaces, onDone }) {
               </div>
             </div>
 
+            {/* Destination */}
             <div
               style={{
                 background: "#fff",
@@ -350,6 +458,180 @@ export default function ImportTasks({ spaces, onDone }) {
               </div>
             </div>
 
+            {/* Unmapped columns — custom fields */}
+            {unmappedColumns.length > 0 && (
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #e8e8e8",
+                  borderRadius: 8,
+                  padding: 20,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                  Extra columns ({unmappedColumns.length})
+                </div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+                  These CSV columns weren't mapped above. Choose what to do with
+                  each one.
+                </div>
+
+                {unmappedColumns.map((col) => {
+                  const action = getCustomFieldAction(col);
+                  const cfg = customFieldMappings[col] || {
+                    action: "skip",
+                    fieldName: col,
+                    fieldType: "text",
+                  };
+                  const sampleValue = rows.find((r) => r[col])?.[col] || "";
+
+                  return (
+                    <div
+                      key={col}
+                      style={{
+                        border: "1px solid #e8e8e8",
+                        borderRadius: 8,
+                        padding: "12px 14px",
+                        marginBottom: 10,
+                        background: action === "skip" ? "#fafaf9" : "#f0f9ff",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 12,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {/* Column name + sample */}
+                        <div style={{ minWidth: 180, flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: "#333",
+                            }}
+                          >
+                            {col}
+                          </div>
+                          {sampleValue && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#aaa",
+                                marginTop: 2,
+                              }}
+                            >
+                              Sample: {sampleValue.slice(0, 40)}
+                              {sampleValue.length > 40 ? "..." : ""}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action selector */}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <select
+                            value={action}
+                            onChange={(e) =>
+                              updateCustomFieldMapping(col, {
+                                action: e.target.value,
+                              })
+                            }
+                            style={{ fontSize: 12, padding: "4px 8px" }}
+                          >
+                            <option value="skip">Skip this column</option>
+                            <option value="new">Create new custom field</option>
+                            {existingFields.length > 0 && (
+                              <option value="existing">
+                                Map to existing field
+                              </option>
+                            )}
+                          </select>
+
+                          {/* New field options */}
+                          {action === "new" && (
+                            <>
+                              <input
+                                placeholder="Field name"
+                                value={cfg.fieldName || col}
+                                onChange={(e) =>
+                                  updateCustomFieldMapping(col, {
+                                    fieldName: e.target.value,
+                                  })
+                                }
+                                style={{
+                                  fontSize: 12,
+                                  padding: "4px 8px",
+                                  width: 150,
+                                }}
+                              />
+                              <select
+                                value={cfg.fieldType || "text"}
+                                onChange={(e) =>
+                                  updateCustomFieldMapping(col, {
+                                    fieldType: e.target.value,
+                                  })
+                                }
+                                style={{ fontSize: 12, padding: "4px 8px" }}
+                              >
+                                {FIELD_TYPES.map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))}
+                              </select>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  background: "#dbeafe",
+                                  color: "#1d4ed8",
+                                  borderRadius: 20,
+                                  padding: "2px 8px",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Will be created
+                              </span>
+                            </>
+                          )}
+
+                          {/* Map to existing field */}
+                          {action === "existing" && (
+                            <select
+                              value={cfg.existingFieldId || ""}
+                              onChange={(e) =>
+                                updateCustomFieldMapping(col, {
+                                  existingFieldId: e.target.value,
+                                })
+                              }
+                              style={{ fontSize: 12, padding: "4px 8px" }}
+                            >
+                              <option value="">Select field...</option>
+                              {existingFields.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                  {f.field_name} ({f.field_type})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Status mapping */}
             {csvStatuses.length > 0 && (
               <div
                 style={{
@@ -361,7 +643,7 @@ export default function ImportTasks({ spaces, onDone }) {
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  Map ClickUp statuses
+                  Map statuses
                 </div>
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>
                   Auto-mapped — adjust if needed
@@ -379,7 +661,7 @@ export default function ImportTasks({ spaces, onDone }) {
                     <span
                       style={{
                         fontSize: 13,
-                        width: 160,
+                        width: 180,
                         color: "#555",
                         flexShrink: 0,
                       }}
@@ -443,8 +725,96 @@ export default function ImportTasks({ spaces, onDone }) {
               </strong>
               {selectedFolder &&
                 ` / ${spaceFolders.find((f) => f.id === selectedFolder)?.name}`}
-              . Showing first 8 as preview.
+              {Object.values(customFieldMappings).filter(
+                (v) => v.action === "new",
+              ).length > 0 && (
+                <span style={{ marginLeft: 8 }}>
+                  ·{" "}
+                  <strong>
+                    {
+                      Object.values(customFieldMappings).filter(
+                        (v) => v.action === "new",
+                      ).length
+                    }{" "}
+                    new custom fields
+                  </strong>{" "}
+                  will be created
+                </span>
+              )}
             </div>
+
+            {/* New fields summary */}
+            {Object.entries(customFieldMappings).filter(
+              ([, v]) => v.action !== "skip",
+            ).length > 0 && (
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #e8e8e8",
+                  borderRadius: 8,
+                  padding: 16,
+                  marginBottom: 16,
+                }}
+              >
+                <div
+                  style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}
+                >
+                  Custom field mapping
+                </div>
+                {Object.entries(customFieldMappings)
+                  .filter(([, v]) => v.action !== "skip")
+                  .map(([col, cfg]) => (
+                    <div
+                      key={col}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontSize: 13,
+                        marginBottom: 6,
+                      }}
+                    >
+                      <span style={{ color: "#555", minWidth: 200 }}>
+                        {col}
+                      </span>
+                      <span style={{ color: "#aaa" }}>→</span>
+                      {cfg.action === "new" ? (
+                        <span
+                          style={{
+                            background: "#dbeafe",
+                            color: "#1d4ed8",
+                            borderRadius: 20,
+                            padding: "1px 10px",
+                            fontSize: 12,
+                          }}
+                        >
+                          New field: <strong>{cfg.fieldName}</strong> (
+                          {cfg.fieldType})
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            background: "#dcfce7",
+                            color: "#15803d",
+                            borderRadius: 20,
+                            padding: "1px 10px",
+                            fontSize: 12,
+                          }}
+                        >
+                          Existing:{" "}
+                          <strong>
+                            {
+                              existingFields.find(
+                                (f) => f.id === cfg.existingFieldId,
+                              )?.field_name
+                            }
+                          </strong>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
 
             <div
               style={{
@@ -596,7 +966,7 @@ export default function ImportTasks({ spaces, onDone }) {
               </span>
               {result.skipped > 0 && (
                 <span style={{ color: "#888", marginLeft: 8 }}>
-                  · {result.skipped} skipped (empty titles)
+                  · {result.skipped} skipped
                 </span>
               )}
             </div>
@@ -626,6 +996,7 @@ export default function ImportTasks({ spaces, onDone }) {
                   setRows([]);
                   setHeaders([]);
                   setStatusMap({});
+                  setCustomFieldMappings({});
                 }}
               >
                 Import another file
