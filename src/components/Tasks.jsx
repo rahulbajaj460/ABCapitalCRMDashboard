@@ -627,10 +627,12 @@ export default function Tasks({
     return (
       <ImportTasks
         spaces={spaces}
-        onDone={() => {
+        onDone={async () => {
+          await onRefreshSpaces();
           setShowImport(false);
           fetchTasks();
         }}
+        onRefreshSpaces={onRefreshSpaces}
       />
     );
   }

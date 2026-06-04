@@ -13,7 +13,7 @@ const CORE_FIELDS = [
   { key: "description", label: "Description", required: false },
 ];
 
-export default function ImportTasks({ spaces, onDone }) {
+export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   const [step, setStep] = useState(1);
   const [rows, setRows] = useState([]);
   const [headers, setHeaders] = useState([]);
@@ -255,6 +255,8 @@ export default function ImportTasks({ spaces, onDone }) {
     setResult({ imported, skipped });
     setErrors(errs);
     setImporting(false);
+    // Refresh spaces so new custom fields appear in the UI
+    if (onRefreshSpaces) await onRefreshSpaces();
     setStep(4);
   }
 
