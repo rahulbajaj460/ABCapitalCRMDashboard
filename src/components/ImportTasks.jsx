@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import Papa from "papaparse";
 
@@ -18,7 +18,6 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   const [rows, setRows] = useState([]);
   const [headers, setHeaders] = useState([]);
 
-  // Core field mapping
   const [mapping, setMapping] = useState({
     title: "Task Name",
     status: "Status",
@@ -28,12 +27,20 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     description: "Task Content",
   });
 
-  // Custom field mappings: { csvColumn: { fieldName, fieldType, action: 'existing'|'new'|'skip', existingFieldId } }
   const [customFieldMappings, setCustomFieldMappings] = useState({});
-
   const [selectedSpace, setSelectedSpace] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
   const [statusMap, setStatusMap] = useState({});
+
+  // Status review state
+  const [statusReview, setStatusReview] = useState({
+    newStatuses: [], // in CSV but not in portal
+    emptyStatuses: [], // in portal but 0 tasks
+  });
+  const [newStatusActions, setNewStatusActions] = useState({}); // { statusName: { action: 'create'|'map', mapTo: '', color: '#...' } }
+  const [emptyStatusActions, setEmptyStatusActions] = useState({}); // { statusId: 'keep'|'delete' }
+  const [loadingReview, setLoadingReview] = useState(false);
+
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState({ imported: 0, skipped: 0 });
@@ -43,16 +50,13 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   const csvStatuses = [
     ...new Set(rows.map((r) => r[mapping.status]).filter(Boolean)),
   ];
-
   const spaceFolders =
     spaces.find((s) => s.id === selectedSpace)?.folders || [];
 
-  // Columns not mapped to core fields
   const unmappedColumns = headers.filter(
     (h) => !Object.values(mapping).includes(h),
   );
 
-  // Existing custom fields for selected space/folder
   const existingFields = (() => {
     const space = spaces.find((s) => s.id === selectedSpace);
     if (!space) return [];
@@ -62,6 +66,78 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     }
     return space.space_fields || [];
   })();
+
+  // Get portal statuses for selected space/folder
+  function getPortalStatuses() {
+    const space = spaces.find((s) => s.id === selectedSpace);
+    if (!space) return [];
+    if (selectedFolder) {
+      const folder = space.folders?.find((f) => f.id === selectedFolder);
+      const folderStatuses = folder?.space_statuses || [];
+      if (folderStatuses.length > 0) return folderStatuses;
+    }
+    return (space.space_statuses || []).filter((s) => !s.folder_id);
+  }
+
+  async function buildStatusReview() {
+    setLoadingReview(true);
+    const portalStatuses = getPortalStatuses();
+    const portalStatusNames = portalStatuses.map((s) =>
+      s.name.toLowerCase().trim(),
+    );
+
+    // Normalize CSV statuses
+    const csvStatusesNormalized = csvStatuses.map((s) => normalizeStatus(s));
+    const uniqueCsvStatuses = [...new Set(csvStatusesNormalized)];
+
+    // Find statuses in CSV but not in portal
+    const newStatuses = uniqueCsvStatuses.filter(
+      (s) => !portalStatusNames.includes(s.toLowerCase().trim()),
+    );
+
+    // Find portal statuses with 0 tasks
+    const emptyStatuses = [];
+    for (const ps of portalStatuses) {
+      let query = supabase
+        .from("tasks")
+        .select("id", { count: "exact", head: true })
+        .eq("status", ps.name)
+        .eq("space_id", selectedSpace);
+
+      if (selectedFolder) {
+        query = query.eq("folder_id", selectedFolder);
+      }
+
+      const { count } = await query;
+      if ((count || 0) === 0) {
+        emptyStatuses.push(ps);
+      }
+    }
+
+    setStatusReview({ newStatuses, emptyStatuses });
+
+    // Set default actions
+    const newActions = {};
+    newStatuses.forEach((s) => {
+      newActions[s] = { action: "create", mapTo: "", color: "#378ADD" };
+    });
+    setNewStatusActions(newActions);
+
+    const emptyActions = {};
+    emptyStatuses.forEach((s) => {
+      emptyActions[s.id] = "keep";
+    });
+    setEmptyStatusActions(emptyActions);
+
+    setLoadingReview(false);
+
+    // If nothing to review, skip to preview
+    if (newStatuses.length === 0 && emptyStatuses.length === 0) {
+      setStep(3);
+    } else {
+      setStep(25); // step 2.5
+    }
+  }
 
   function handleFile(e) {
     const file = e.target.files[0];
@@ -86,7 +162,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     if (s === "in review") return "In Review";
     if (s === "client cancelled" || s === "cancelled")
       return "Client Cancelled";
-    return "To Do";
+    // Return as-is with title case for unknown statuses
+    return csvStatus.trim().replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   function normalizePriority(p) {
@@ -131,8 +208,33 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     }));
   }
 
-  function getCustomFieldAction(col) {
-    return customFieldMappings[col]?.action || "skip";
+  async function applyStatusChanges() {
+    const portalStatuses = getPortalStatuses();
+
+    // Create new statuses
+    for (const [statusName, cfg] of Object.entries(newStatusActions)) {
+      if (cfg.action === "create") {
+        await supabase.from("space_statuses").insert({
+          space_id: selectedSpace,
+          folder_id: selectedFolder || null,
+          name: statusName,
+          color: cfg.color,
+          status_order: portalStatuses.length + 1,
+        });
+      } else if (cfg.action === "map" && cfg.mapTo) {
+        // Update statusMap so CSV tasks with this status get mapped
+        setStatusMap((prev) => ({ ...prev, [statusName]: cfg.mapTo }));
+      }
+    }
+
+    // Delete empty statuses marked for deletion
+    for (const [statusId, action] of Object.entries(emptyStatusActions)) {
+      if (action === "delete") {
+        await supabase.from("space_statuses").delete().eq("id", statusId);
+      }
+    }
+
+    await onRefreshSpaces?.();
   }
 
   async function createNewFields() {
@@ -153,9 +255,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         })
         .select()
         .single();
-      if (!error && data) {
-        created[col] = data.id;
-      }
+      if (!error && data) created[col] = data.id;
     }
     return created;
   }
@@ -179,17 +279,18 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     setProgress(0);
     setErrors([]);
 
-    // Create new custom fields first
+    // Apply status changes first
+    await applyStatusChanges();
+
+    // Create new custom fields
     const newFieldIds = await createNewFields();
 
-    // Build field ID map: csv column -> field id
     const fieldIdMap = {};
     for (const [col, cfg] of Object.entries(customFieldMappings)) {
-      if (cfg.action === "new" && newFieldIds[col]) {
+      if (cfg.action === "new" && newFieldIds[col])
         fieldIdMap[col] = newFieldIds[col];
-      } else if (cfg.action === "existing" && cfg.existingFieldId) {
+      else if (cfg.action === "existing" && cfg.existingFieldId)
         fieldIdMap[col] = cfg.existingFieldId;
-      }
     }
 
     let imported = 0;
@@ -224,43 +325,48 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
 
       if (error) {
         errs.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
-      } else if (inserted && Object.keys(fieldIdMap).length > 0) {
-        // Insert custom field values
-        const fieldValues = [];
-        inserted.forEach((task, idx) => {
-          const row = rows[i + idx];
-          if (!row) return;
-          for (const [col, fieldId] of Object.entries(fieldIdMap)) {
-            const value = row[col];
-            if (value && value.trim()) {
-              fieldValues.push({
-                task_id: task.id,
-                field_id: fieldId,
-                value: value.trim(),
-              });
+      } else {
+        if (inserted && Object.keys(fieldIdMap).length > 0) {
+          const fieldValues = [];
+          inserted.forEach((task, idx) => {
+            const row = rows[i + idx];
+            if (!row) return;
+            for (const [col, fieldId] of Object.entries(fieldIdMap)) {
+              const value = row[col];
+              if (value && value.trim()) {
+                fieldValues.push({
+                  task_id: task.id,
+                  field_id: fieldId,
+                  value: value.trim(),
+                });
+              }
             }
+          });
+          if (fieldValues.length > 0) {
+            await supabase.from("task_field_values").insert(fieldValues);
           }
-        });
-        if (fieldValues.length > 0) {
-          await supabase.from("task_field_values").insert(fieldValues);
         }
         imported += batch.length;
-      } else if (inserted) {
-        imported += batch.length;
       }
-
       setProgress(Math.round(((i + batch.length) / valid.length) * 100));
     }
 
     setResult({ imported, skipped });
     setErrors(errs);
     setImporting(false);
-    // Refresh spaces so new custom fields appear in the UI
     if (onRefreshSpaces) await onRefreshSpaces();
     setStep(4);
   }
 
-  const stepLabels = ["Upload CSV", "Map columns", "Preview & import", "Done"];
+  const stepLabels = [
+    "Upload CSV",
+    "Map columns",
+    "Review statuses",
+    "Preview & import",
+    "Done",
+  ];
+  const stepNumbers = { 1: 1, 2: 2, 25: 3, 3: 4, 4: 5 };
+  const currentStepNum = stepNumbers[step] || 1;
 
   return (
     <div>
@@ -293,7 +399,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
               display: "flex",
               alignItems: "center",
               gap: 6,
-              marginRight: 20,
+              marginRight: 16,
             }}
           >
             <div
@@ -302,12 +408,12 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                 height: 22,
                 borderRadius: "50%",
                 background:
-                  step > i + 1
+                  currentStepNum > i + 1
                     ? "#16a34a"
-                    : step === i + 1
+                    : currentStepNum === i + 1
                       ? "#1d4ed8"
                       : "#e8e8e8",
-                color: step >= i + 1 ? "#fff" : "#aaa",
+                color: currentStepNum >= i + 1 ? "#fff" : "#aaa",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -316,18 +422,20 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                 flexShrink: 0,
               }}
             >
-              {step > i + 1 ? "✓" : i + 1}
+              {currentStepNum > i + 1 ? "✓" : i + 1}
             </div>
             <span
               style={{
                 fontSize: 12,
-                color: step === i + 1 ? "#1d4ed8" : "#888",
-                fontWeight: step === i + 1 ? 500 : 400,
+                color: currentStepNum === i + 1 ? "#1d4ed8" : "#888",
+                fontWeight: currentStepNum === i + 1 ? 500 : 400,
               }}
             >
               {label}
             </span>
-            {i < 3 && <span style={{ color: "#ddd", marginLeft: 14 }}>›</span>}
+            {i < stepLabels.length - 1 && (
+              <span style={{ color: "#ddd", marginLeft: 12 }}>›</span>
+            )}
           </div>
         ))}
       </div>
@@ -367,10 +475,10 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
           </div>
         )}
 
-        {/* STEP 2 — Map */}
+        {/* STEP 2 — Map columns */}
         {step === 2 && (
           <div style={{ maxWidth: 760 }}>
-            {/* Core field mapping */}
+            {/* Core fields */}
             <div
               style={{
                 background: "#fff",
@@ -384,7 +492,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                 {rows.length} tasks found · Map core fields
               </div>
               <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-                Match your CSV columns to the standard task fields
+                Match CSV columns to standard task fields
               </div>
               <div className="form-grid">
                 {CORE_FIELDS.map(({ key, label }) => (
@@ -460,7 +568,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
               </div>
             </div>
 
-            {/* Unmapped columns — custom fields */}
+            {/* Extra columns */}
             {unmappedColumns.length > 0 && (
               <div
                 style={{
@@ -475,19 +583,16 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                   Extra columns ({unmappedColumns.length})
                 </div>
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-                  These CSV columns weren't mapped above. Choose what to do with
-                  each one.
+                  Choose what to do with unmapped columns
                 </div>
-
                 {unmappedColumns.map((col) => {
-                  const action = getCustomFieldAction(col);
+                  const action = customFieldMappings[col]?.action || "skip";
                   const cfg = customFieldMappings[col] || {
                     action: "skip",
                     fieldName: col,
                     fieldType: "text",
                   };
                   const sampleValue = rows.find((r) => r[col])?.[col] || "";
-
                   return (
                     <div
                       key={col}
@@ -507,7 +612,6 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                           flexWrap: "wrap",
                         }}
                       >
-                        {/* Column name + sample */}
                         <div style={{ minWidth: 180, flex: 1 }}>
                           <div
                             style={{
@@ -531,8 +635,6 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                             </div>
                           )}
                         </div>
-
-                        {/* Action selector */}
                         <div
                           style={{
                             display: "flex",
@@ -558,8 +660,6 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                               </option>
                             )}
                           </select>
-
-                          {/* New field options */}
                           {action === "new" && (
                             <>
                               <input
@@ -598,15 +698,12 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                                   color: "#1d4ed8",
                                   borderRadius: 20,
                                   padding: "2px 8px",
-                                  whiteSpace: "nowrap",
                                 }}
                               >
                                 Will be created
                               </span>
                             </>
                           )}
-
-                          {/* Map to existing field */}
                           {action === "existing" && (
                             <select
                               value={cfg.existingFieldId || ""}
@@ -633,8 +730,26 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
               </div>
             )}
 
-            {/* Status mapping */}
-            {csvStatuses.length > 0 && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" onClick={() => setStep(1)}>
+                Back
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={buildStatusReview}
+                disabled={!selectedSpace || loadingReview}
+              >
+                {loadingReview ? "Analysing statuses..." : "Review statuses →"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2.5 — Status review */}
+        {step === 25 && (
+          <div style={{ maxWidth: 700 }}>
+            {/* New statuses from CSV */}
+            {statusReview.newStatuses.length > 0 && (
               <div
                 style={{
                   background: "#fff",
@@ -645,62 +760,331 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  Map statuses
+                  🆕 New statuses found in CSV (
+                  {statusReview.newStatuses.length})
                 </div>
-                <div style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>
-                  Auto-mapped — adjust if needed
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+                  These statuses exist in your CSV but are not in your portal.
+                  Choose what to do with each.
                 </div>
-                {csvStatuses.map((s) => (
-                  <div
-                    key={s}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <span
+                {statusReview.newStatuses.map((statusName) => {
+                  const cfg = newStatusActions[statusName] || {
+                    action: "create",
+                    color: "#378ADD",
+                    mapTo: "",
+                  };
+                  const portalStatuses = getPortalStatuses();
+                  return (
+                    <div
+                      key={statusName}
                       style={{
-                        fontSize: 13,
-                        width: 180,
-                        color: "#555",
-                        flexShrink: 0,
+                        border: "1px solid #e8e8e8",
+                        borderRadius: 8,
+                        padding: "12px 14px",
+                        marginBottom: 10,
+                        background:
+                          cfg.action === "create" ? "#f0fdf4" : "#eff6ff",
                       }}
                     >
-                      {s || "(empty)"}
-                    </span>
-                    <span style={{ color: "#aaa" }}>→</span>
-                    <select
-                      value={statusMap[s] || normalizeStatus(s)}
-                      onChange={(e) =>
-                        setStatusMap((prev) => ({
-                          ...prev,
-                          [s]: e.target.value,
-                        }))
-                      }
-                      style={{ flex: 1 }}
-                    >
-                      <option>To Do</option>
-                      <option>In Progress</option>
-                      <option>In Review</option>
-                      <option>Done</option>
-                      <option>Client Cancelled</option>
-                    </select>
-                  </div>
-                ))}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <span
+                            style={{
+                              background:
+                                cfg.action === "create"
+                                  ? cfg.color || "#378ADD"
+                                  : "#f0f0ef",
+                              color: cfg.action === "create" ? "#fff" : "#333",
+                              borderRadius: 20,
+                              padding: "2px 10px",
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {statusName}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#aaa",
+                              marginLeft: 8,
+                            }}
+                          >
+                            {
+                              rows.filter(
+                                (r) =>
+                                  normalizeStatus(r[mapping.status]) ===
+                                  statusName,
+                              ).length
+                            }{" "}
+                            tasks
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <select
+                            value={cfg.action}
+                            onChange={(e) =>
+                              setNewStatusActions((prev) => ({
+                                ...prev,
+                                [statusName]: {
+                                  ...cfg,
+                                  action: e.target.value,
+                                },
+                              }))
+                            }
+                            style={{ fontSize: 12, padding: "4px 8px" }}
+                          >
+                            <option value="create">Create this status</option>
+                            <option value="map">Map to existing status</option>
+                          </select>
+                          {cfg.action === "create" && (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <label style={{ fontSize: 11, color: "#888" }}>
+                                Color:
+                              </label>
+                              <input
+                                type="color"
+                                value={cfg.color || "#378ADD"}
+                                onChange={(e) =>
+                                  setNewStatusActions((prev) => ({
+                                    ...prev,
+                                    [statusName]: {
+                                      ...cfg,
+                                      color: e.target.value,
+                                    },
+                                  }))
+                                }
+                                style={{
+                                  width: 36,
+                                  height: 28,
+                                  padding: 2,
+                                  cursor: "pointer",
+                                }}
+                              />
+                            </div>
+                          )}
+                          {cfg.action === "map" && (
+                            <select
+                              value={cfg.mapTo || ""}
+                              onChange={(e) =>
+                                setNewStatusActions((prev) => ({
+                                  ...prev,
+                                  [statusName]: {
+                                    ...cfg,
+                                    mapTo: e.target.value,
+                                  },
+                                }))
+                              }
+                              style={{ fontSize: 12, padding: "4px 8px" }}
+                            >
+                              <option value="">Map to...</option>
+                              {portalStatuses.map((s) => (
+                                <option key={s.id} value={s.name}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
+            {/* Empty statuses in portal */}
+            {statusReview.emptyStatuses.length > 0 && (
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid #e8e8e8",
+                  borderRadius: 8,
+                  padding: 20,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                  🗑 Empty statuses in portal (
+                  {statusReview.emptyStatuses.length})
+                </div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+                  These statuses have 0 tasks. Keep them or delete them?
+                </div>
+                {statusReview.emptyStatuses.map((status) => {
+                  const action = emptyStatusActions[status.id] || "keep";
+                  return (
+                    <div
+                      key={status.id}
+                      style={{
+                        border: "1px solid #e8e8e8",
+                        borderRadius: 8,
+                        padding: "12px 14px",
+                        marginBottom: 10,
+                        background: action === "delete" ? "#fef2f2" : "#fafaf9",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: "50%",
+                            background: status.color,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span
+                          style={{ flex: 1, fontSize: 13, fontWeight: 500 }}
+                        >
+                          {status.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#aaa",
+                            marginRight: 8,
+                          }}
+                        >
+                          0 tasks
+                        </span>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            onClick={() =>
+                              setEmptyStatusActions((prev) => ({
+                                ...prev,
+                                [status.id]: "keep",
+                              }))
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              fontSize: 12,
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              border: "1px solid #e8e8e8",
+                              background:
+                                action === "keep" ? "#1d4ed8" : "#fff",
+                              color: action === "keep" ? "#fff" : "#333",
+                              fontWeight: action === "keep" ? 600 : 400,
+                            }}
+                          >
+                            Keep
+                          </button>
+                          <button
+                            onClick={() =>
+                              setEmptyStatusActions((prev) => ({
+                                ...prev,
+                                [status.id]: "delete",
+                              }))
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              fontSize: 12,
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              border: "1px solid #fca5a5",
+                              background:
+                                action === "delete" ? "#fee2e2" : "#fff",
+                              color: action === "delete" ? "#b91c1c" : "#333",
+                              fontWeight: action === "delete" ? 600 : 400,
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Summary */}
+            <div
+              style={{
+                background: "#f5f5f4",
+                borderRadius: 8,
+                padding: "12px 16px",
+                marginBottom: 16,
+                fontSize: 12,
+                color: "#555",
+              }}
+            >
+              <strong>Summary: </strong>
+              {Object.values(newStatusActions).filter(
+                (v) => v.action === "create",
+              ).length > 0 && (
+                <span style={{ color: "#16a34a", marginRight: 12 }}>
+                  ✅{" "}
+                  {
+                    Object.values(newStatusActions).filter(
+                      (v) => v.action === "create",
+                    ).length
+                  }{" "}
+                  statuses will be created
+                </span>
+              )}
+              {Object.values(newStatusActions).filter((v) => v.action === "map")
+                .length > 0 && (
+                <span style={{ color: "#1d4ed8", marginRight: 12 }}>
+                  🔄{" "}
+                  {
+                    Object.values(newStatusActions).filter(
+                      (v) => v.action === "map",
+                    ).length
+                  }{" "}
+                  statuses will be mapped
+                </span>
+              )}
+              {Object.values(emptyStatusActions).filter((v) => v === "delete")
+                .length > 0 && (
+                <span style={{ color: "#b91c1c" }}>
+                  🗑{" "}
+                  {
+                    Object.values(emptyStatusActions).filter(
+                      (v) => v === "delete",
+                    ).length
+                  }{" "}
+                  empty statuses will be deleted
+                </span>
+              )}
+              {Object.values(newStatusActions).length === 0 &&
+                Object.values(emptyStatusActions).filter((v) => v === "delete")
+                  .length === 0 && (
+                  <span style={{ color: "#888" }}>No changes to statuses</span>
+                )}
+            </div>
+
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" onClick={() => setStep(1)}>
+              <button className="btn" onClick={() => setStep(2)}>
                 Back
               </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => setStep(3)}
-                disabled={!selectedSpace}
-              >
+              <button className="btn btn-primary" onClick={() => setStep(3)}>
                 Preview import →
               </button>
             </div>
@@ -744,79 +1128,6 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                 </span>
               )}
             </div>
-
-            {/* New fields summary */}
-            {Object.entries(customFieldMappings).filter(
-              ([, v]) => v.action !== "skip",
-            ).length > 0 && (
-              <div
-                style={{
-                  background: "#fff",
-                  border: "1px solid #e8e8e8",
-                  borderRadius: 8,
-                  padding: 16,
-                  marginBottom: 16,
-                }}
-              >
-                <div
-                  style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}
-                >
-                  Custom field mapping
-                </div>
-                {Object.entries(customFieldMappings)
-                  .filter(([, v]) => v.action !== "skip")
-                  .map(([col, cfg]) => (
-                    <div
-                      key={col}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        fontSize: 13,
-                        marginBottom: 6,
-                      }}
-                    >
-                      <span style={{ color: "#555", minWidth: 200 }}>
-                        {col}
-                      </span>
-                      <span style={{ color: "#aaa" }}>→</span>
-                      {cfg.action === "new" ? (
-                        <span
-                          style={{
-                            background: "#dbeafe",
-                            color: "#1d4ed8",
-                            borderRadius: 20,
-                            padding: "1px 10px",
-                            fontSize: 12,
-                          }}
-                        >
-                          New field: <strong>{cfg.fieldName}</strong> (
-                          {cfg.fieldType})
-                        </span>
-                      ) : (
-                        <span
-                          style={{
-                            background: "#dcfce7",
-                            color: "#15803d",
-                            borderRadius: 20,
-                            padding: "1px 10px",
-                            fontSize: 12,
-                          }}
-                        >
-                          Existing:{" "}
-                          <strong>
-                            {
-                              existingFields.find(
-                                (f) => f.id === cfg.existingFieldId,
-                              )?.field_name
-                            }
-                          </strong>
-                        </span>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            )}
 
             <div
               style={{
@@ -926,7 +1237,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 className="btn"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(25)}
                 disabled={importing}
               >
                 Back
@@ -999,6 +1310,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                   setHeaders([]);
                   setStatusMap({});
                   setCustomFieldMappings({});
+                  setStatusReview({ newStatuses: [], emptyStatuses: [] });
                 }}
               >
                 Import another file
