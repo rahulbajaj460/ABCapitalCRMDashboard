@@ -24,6 +24,21 @@ export default function Tasks({
     field_type: "text",
   });
   const [members, setMembers] = useState([]);
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    try {
+      const saved = localStorage.getItem("abc_visible_columns");
+      return saved ? JSON.parse(saved) : ["priority", "assignees", "due_date"];
+    } catch {
+      return ["priority", "assignees", "due_date"];
+    }
+  });
+
+  function updateVisibleColumns(cols) {
+    setVisibleColumns(cols);
+    localStorage.setItem("abc_visible_columns", JSON.stringify(cols));
+  }
+
   const [newStatus, setNewStatus] = useState({ name: "", color: "#378ADD" });
   const [newTask, setNewTask] = useState({
     title: "",
@@ -49,6 +64,16 @@ export default function Tasks({
   useEffect(() => {
     fetchMembers();
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (showColumnPicker && !e.target.closest(".column-picker-wrap")) {
+        setShowColumnPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showColumnPicker]);
 
   async function fetchMembers() {
     const { data } = await supabase
@@ -718,6 +743,111 @@ export default function Tasks({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <div style={{ position: "relative" }} className="column-picker-wrap">
+            <button
+              className="btn btn-sm"
+              onClick={() => setShowColumnPicker((prev) => !prev)}
+              style={{ display: "flex", alignItems: "center", gap: 4 }}
+            >
+              ⊞ Columns
+            </button>
+
+            {showColumnPicker && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "110%",
+                  background: "#fff",
+                  border: "1px solid #e8e8e8",
+                  borderRadius: 8,
+                  padding: "12px 14px",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                  zIndex: 100,
+                  minWidth: 200,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#888",
+                    marginBottom: 10,
+                    textTransform: "uppercase",
+                    letterSpacing: ".04em",
+                  }}
+                >
+                  Visible columns
+                </div>
+                {[
+                  { key: "priority", label: "Priority" },
+                  { key: "assignees", label: "Assignees" },
+                  { key: "due_date", label: "Due date" },
+                  { key: "status", label: "Status (when grouped)" },
+                  ...getFields().map((f) => ({
+                    key: `field_${f.id}`,
+                    label: f.field_name,
+                  })),
+                ].map((col) => (
+                  <label
+                    key={col.key}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "5px 0",
+                      cursor: "pointer",
+                      fontSize: 13,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns.includes(col.key)}
+                      onChange={(e) => {
+                        updateVisibleColumns((prev) =>
+                          e.target.checked
+                            ? [...prev, col.key]
+                            : prev.filter((c) => c !== col.key),
+                        );
+                      }}
+                      style={{ width: 14, height: 14, cursor: "pointer" }}
+                    />
+                    {col.label}
+                  </label>
+                ))}
+                <div
+                  style={{
+                    borderTop: "1px solid #e8e8e8",
+                    marginTop: 8,
+                    paddingTop: 8,
+                    display: "flex",
+                    gap: 6,
+                  }}
+                >
+                  <button
+                    className="btn btn-sm"
+                    style={{ fontSize: 11 }}
+                    onClick={() =>
+                      updateVisibleColumns([
+                        "priority",
+                        "assignees",
+                        "due_date",
+                      ])
+                    }
+                  >
+                    Reset
+                  </button>
+                  <button
+                    className="btn btn-sm btn-primary"
+                    style={{ fontSize: 11 }}
+                    onClick={() => setShowColumnPicker(false)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -936,7 +1066,7 @@ export default function Tasks({
                                       <tbody>
                                         {groupTasks.map((task) => (
                                           <tr key={task.id}>
-                                            <td style={{ paddingLeft: 32 }}>
+                                            <td>
                                               <span
                                                 style={{
                                                   fontWeight: 500,
@@ -949,91 +1079,124 @@ export default function Tasks({
                                                 {task.title}
                                               </span>
                                             </td>
-                                            {groupBy !== "status" && (
+                                            {groupBy !== "status" &&
+                                              visibleColumns.includes(
+                                                "status",
+                                              ) && (
+                                                <td>
+                                                  <span
+                                                    className="badge"
+                                                    style={{
+                                                      background:
+                                                        getStatusColor(
+                                                          task.status,
+                                                        ) + "22",
+                                                      color: getStatusColor(
+                                                        task.status,
+                                                      ),
+                                                    }}
+                                                  >
+                                                    {task.status}
+                                                  </span>
+                                                </td>
+                                              )}
+                                            {visibleColumns.includes(
+                                              "priority",
+                                            ) && (
                                               <td>
                                                 <span
                                                   className="badge"
-                                                  style={{
-                                                    background:
-                                                      getStatusColor(
-                                                        task.status,
-                                                      ) + "22",
-                                                    color: getStatusColor(
-                                                      task.status,
-                                                    ),
-                                                  }}
+                                                  style={getPriorityStyle(
+                                                    task.priority,
+                                                  )}
                                                 >
-                                                  {task.status}
+                                                  {task.priority}
                                                 </span>
                                               </td>
                                             )}
-                                            <td>
-                                              <span
-                                                className="badge"
-                                                style={getPriorityStyle(
-                                                  task.priority,
-                                                )}
-                                              >
-                                                {task.priority}
-                                              </span>
-                                            </td>
-                                            <td>
-                                              <div
-                                                style={{
-                                                  display: "flex",
-                                                  flexWrap: "wrap",
-                                                  gap: 3,
-                                                }}
-                                              >
-                                                {(task.assignees?.length > 0
-                                                  ? task.assignees
-                                                  : task.assignee
-                                                    ? [task.assignee]
-                                                    : []
-                                                ).map((name) => (
-                                                  <span
-                                                    key={name}
-                                                    style={{
-                                                      background: "#f0f0ef",
-                                                      borderRadius: 20,
-                                                      padding: "1px 7px",
-                                                      fontSize: 11,
-                                                      fontWeight: 500,
-                                                    }}
-                                                  >
-                                                    {name}
-                                                  </span>
-                                                ))}
-                                                {!task.assignees?.length &&
-                                                  !task.assignee &&
-                                                  "—"}
-                                              </div>
-                                            </td>
-                                            <td
-                                              style={{
-                                                fontSize: 12,
-                                                color: "#555",
-                                              }}
-                                            >
-                                              {task.due_date || "—"}
-                                            </td>
-                                            {getFields().map((f) => {
-                                              const fv =
-                                                task.task_field_values?.find(
-                                                  (v) => v.field_id === f.id,
-                                                );
-                                              return (
-                                                <td
-                                                  key={f.id}
+                                            {visibleColumns.includes(
+                                              "assignees",
+                                            ) && (
+                                              <td>
+                                                <div
                                                   style={{
-                                                    fontSize: 12,
-                                                    color: "#555",
+                                                    display: "flex",
+                                                    flexWrap: "wrap",
+                                                    gap: 3,
                                                   }}
                                                 >
-                                                  {fv?.value || "—"}
-                                                </td>
-                                              );
-                                            })}
+                                                  {(task.assignees?.length > 0
+                                                    ? task.assignees
+                                                    : task.assignee
+                                                      ? [task.assignee]
+                                                      : []
+                                                  ).map((name) => (
+                                                    <span
+                                                      key={name}
+                                                      style={{
+                                                        background: "#f0f0ef",
+                                                        borderRadius: 20,
+                                                        padding: "1px 7px",
+                                                        fontSize: 11,
+                                                        fontWeight: 500,
+                                                      }}
+                                                    >
+                                                      {name}
+                                                    </span>
+                                                  ))}
+                                                  {!task.assignees?.length &&
+                                                    !task.assignee &&
+                                                    "—"}
+                                                </div>
+                                              </td>
+                                            )}
+                                            {visibleColumns.includes(
+                                              "due_date",
+                                            ) && (
+                                              <td
+                                                style={{
+                                                  fontSize: 12,
+                                                  color:
+                                                    task.due_date &&
+                                                    new Date(task.due_date) <
+                                                      new Date() &&
+                                                    task.status !== "Done"
+                                                      ? "#b91c1c"
+                                                      : "#555",
+                                                }}
+                                              >
+                                                {task.due_date
+                                                  ? new Date(task.due_date) <
+                                                      new Date() &&
+                                                    task.status !== "Done"
+                                                    ? `⚠️ ${task.due_date}`
+                                                    : task.due_date
+                                                  : "—"}
+                                              </td>
+                                            )}
+                                            {getFields()
+                                              .filter((f) =>
+                                                visibleColumns.includes(
+                                                  `field_${f.id}`,
+                                                ),
+                                              )
+                                              .map((f) => {
+                                                const fv =
+                                                  task.task_field_values?.find(
+                                                    (v) => v.field_id === f.id,
+                                                  );
+                                                return (
+                                                  <td
+                                                    key={f.id}
+                                                    style={{
+                                                      fontSize: 12,
+                                                      color: "#555",
+                                                    }}
+                                                  >
+                                                    {fv?.value || "—"}
+                                                  </td>
+                                                );
+                                              })}
                                             <td>
                                               <div
                                                 style={{
@@ -1284,13 +1447,26 @@ export default function Tasks({
                               <thead>
                                 <tr>
                                   <th>Name</th>
-                                  {groupBy !== "status" && <th>Status</th>}
-                                  <th>Priority</th>
-                                  <th>Assignees</th>
-                                  <th>Due date</th>
-                                  {getFields().map((f) => (
-                                    <th key={f.id}>{f.field_name}</th>
-                                  ))}
+                                  {groupBy !== "status" &&
+                                    visibleColumns.includes("status") && (
+                                      <th>Status</th>
+                                    )}
+                                  {visibleColumns.includes("priority") && (
+                                    <th>Priority</th>
+                                  )}
+                                  {visibleColumns.includes("assignees") && (
+                                    <th>Assignees</th>
+                                  )}
+                                  {visibleColumns.includes("due_date") && (
+                                    <th>Due date</th>
+                                  )}
+                                  {getFields()
+                                    .filter((f) =>
+                                      visibleColumns.includes(`field_${f.id}`),
+                                    )
+                                    .map((f) => (
+                                      <th key={f.id}>{f.field_name}</th>
+                                    ))}
                                   <th></th>
                                 </tr>
                               </thead>
@@ -1308,96 +1484,114 @@ export default function Tasks({
                                         {task.title}
                                       </span>
                                     </td>
-                                    {groupBy !== "status" && (
+                                    {groupBy !== "status" &&
+                                      visibleColumns.includes("status") && (
+                                        <td>
+                                          <span
+                                            className="badge"
+                                            style={{
+                                              background:
+                                                getStatusColor(task.status) +
+                                                "22",
+                                              color: getStatusColor(
+                                                task.status,
+                                              ),
+                                            }}
+                                          >
+                                            {task.status}
+                                          </span>
+                                        </td>
+                                      )}
+                                    {visibleColumns.includes("priority") && (
                                       <td>
                                         <span
                                           className="badge"
-                                          style={{
-                                            background:
-                                              getStatusColor(task.status) +
-                                              "22",
-                                            color: getStatusColor(task.status),
-                                          }}
+                                          style={getPriorityStyle(
+                                            task.priority,
+                                          )}
                                         >
-                                          {task.status}
+                                          {task.priority}
                                         </span>
                                       </td>
                                     )}
-                                    <td>
-                                      <span
-                                        className="badge"
-                                        style={getPriorityStyle(task.priority)}
-                                      >
-                                        {task.priority}
-                                      </span>
-                                    </td>
-                                    <td>
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          flexWrap: "wrap",
-                                          gap: 3,
-                                        }}
-                                      >
-                                        {(task.assignees?.length > 0
-                                          ? task.assignees
-                                          : task.assignee
-                                            ? [task.assignee]
-                                            : []
-                                        ).map((name) => (
-                                          <span
-                                            key={name}
-                                            style={{
-                                              background: "#f0f0ef",
-                                              borderRadius: 20,
-                                              padding: "1px 7px",
-                                              fontSize: 11,
-                                              fontWeight: 500,
-                                            }}
-                                          >
-                                            {name}
-                                          </span>
-                                        ))}
-                                        {!task.assignees?.length &&
-                                          !task.assignee &&
-                                          "—"}
-                                      </div>
-                                    </td>
-                                    <td
-                                      style={{
-                                        fontSize: 12,
-                                        color:
-                                          task.due_date &&
-                                          new Date(task.due_date) <
-                                            new Date() &&
-                                          task.status !== "Done"
-                                            ? "#b91c1c"
-                                            : "#555",
-                                      }}
-                                    >
-                                      {task.due_date
-                                        ? new Date(task.due_date) <
-                                            new Date() && task.status !== "Done"
-                                          ? `⚠️ ${task.due_date}`
-                                          : task.due_date
-                                        : "—"}
-                                    </td>
-                                    {getFields().map((f) => {
-                                      const fv = task.task_field_values?.find(
-                                        (v) => v.field_id === f.id,
-                                      );
-                                      return (
-                                        <td
-                                          key={f.id}
+                                    {visibleColumns.includes("assignees") && (
+                                      <td>
+                                        <div
                                           style={{
-                                            fontSize: 12,
-                                            color: "#555",
+                                            display: "flex",
+                                            flexWrap: "wrap",
+                                            gap: 3,
                                           }}
                                         >
-                                          {fv?.value || "—"}
-                                        </td>
-                                      );
-                                    })}
+                                          {(task.assignees?.length > 0
+                                            ? task.assignees
+                                            : task.assignee
+                                              ? [task.assignee]
+                                              : []
+                                          ).map((name) => (
+                                            <span
+                                              key={name}
+                                              style={{
+                                                background: "#f0f0ef",
+                                                borderRadius: 20,
+                                                padding: "1px 7px",
+                                                fontSize: 11,
+                                                fontWeight: 500,
+                                              }}
+                                            >
+                                              {name}
+                                            </span>
+                                          ))}
+                                          {!task.assignees?.length &&
+                                            !task.assignee &&
+                                            "—"}
+                                        </div>
+                                      </td>
+                                    )}
+                                    {visibleColumns.includes("due_date") && (
+                                      <td
+                                        style={{
+                                          fontSize: 12,
+                                          color:
+                                            task.due_date &&
+                                            new Date(task.due_date) <
+                                              new Date() &&
+                                            task.status !== "Done"
+                                              ? "#b91c1c"
+                                              : "#555",
+                                        }}
+                                      >
+                                        {task.due_date
+                                          ? new Date(task.due_date) <
+                                              new Date() &&
+                                            task.status !== "Done"
+                                            ? `⚠️ ${task.due_date}`
+                                            : task.due_date
+                                          : "—"}
+                                      </td>
+                                    )}
+                                    {getFields()
+                                      .filter((f) =>
+                                        visibleColumns.includes(
+                                          `field_${f.id}`,
+                                        ),
+                                      )
+                                      .map((f) => {
+                                        const fv = task.task_field_values?.find(
+                                          (v) => v.field_id === f.id,
+                                        );
+                                        return (
+                                          <td
+                                            key={f.id}
+                                            style={{
+                                              fontSize: 12,
+                                              color: "#555",
+                                            }}
+                                          >
+                                            {fv?.value || "—"}
+                                          </td>
+                                        );
+                                      })}
                                     <td>
                                       <div
                                         style={{
