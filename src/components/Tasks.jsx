@@ -17,6 +17,7 @@ export default function Tasks({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [groupBy, setGroupBy] = useState("status");
   const [newField, setNewField] = useState({
     field_name: "",
     field_type: "text",
@@ -410,10 +411,62 @@ export default function Tasks({
     return true;
   });
 
-  const groupedTasks = getStatuses().reduce((acc, status) => {
-    acc[status] = filteredTasks.filter((t) => t.status === status);
-    return acc;
-  }, {});
+  function getGroupedTasks() {
+    const tasks = filteredTasks;
+
+    if (groupBy === "status") {
+      return getStatuses().reduce((acc, status) => {
+        acc[status] = tasks.filter((t) => t.status === status);
+        return acc;
+      }, {});
+    }
+
+    if (groupBy === "folder") {
+      // When at space level — group by folder
+      const groups = {};
+      // First add folder groups
+      if (activeSpace) {
+        const spaceFolders = activeSpace.folders || [];
+        spaceFolders.forEach((f) => {
+          groups[f.name] = tasks.filter((t) => t.folder_id === f.id);
+        });
+      }
+      // Add ungrouped tasks (no folder)
+      const ungrouped = tasks.filter((t) => !t.folder_id);
+      if (ungrouped.length > 0) groups["No folder"] = ungrouped;
+      return groups;
+    }
+
+    if (groupBy === "assignee") {
+      const groups = {};
+      tasks.forEach((task) => {
+        const assignees =
+          task.assignees && task.assignees.length > 0
+            ? task.assignees
+            : task.assignee
+              ? [task.assignee]
+              : ["Unassigned"];
+        assignees.forEach((name) => {
+          if (!groups[name]) groups[name] = [];
+          groups[name].push(task);
+        });
+      });
+      // Sort by name
+      return Object.fromEntries(
+        Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)),
+      );
+    }
+
+    if (groupBy === "priority") {
+      const order = ["High", "Medium", "Low"];
+      return order.reduce((acc, p) => {
+        acc[p] = tasks.filter((t) => t.priority === p);
+        return acc;
+      }, {});
+    }
+
+    return { "All tasks": tasks };
+  }
 
   const pageTitle = activeFolder
     ? activeFolder.name
@@ -526,6 +579,16 @@ export default function Tasks({
               </option>
             ))}
           </select>
+          <select
+            value={groupBy}
+            onChange={(e) => setGroupBy(e.target.value)}
+            style={{ fontSize: 13 }}
+          >
+            <option value="status">Group by: Status</option>
+            <option value="folder">Group by: Folder</option>
+            <option value="assignee">Group by: Assignee</option>
+            <option value="priority">Group by: Priority</option>
+          </select>
         </div>
       </div>
 
@@ -533,249 +596,306 @@ export default function Tasks({
         {/* LIST VIEW */}
         {viewMode === "list" && (
           <div>
-            {getStatuses().map((status) => {
-              const statusTasks = groupedTasks[status] || [];
-              const isExpanded = expandedGroups[status] !== false;
-              return (
-                <div key={status} style={{ marginBottom: 16 }}>
-                  <div
-                    className="status-group-header"
-                    onClick={() =>
-                      setExpandedGroups((prev) => ({
-                        ...prev,
-                        [status]: !isExpanded,
-                      }))
-                    }
-                  >
-                    <span style={{ fontSize: 10 }}>
-                      {isExpanded ? "▾" : "▸"}
-                    </span>
-                    <span
-                      style={{
-                        background: getStatusColor(status),
-                        color: "#fff",
-                        padding: "2px 10px",
-                        borderRadius: 20,
-                        fontSize: 11,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {status}
-                    </span>
-                    <span style={{ fontSize: 12, color: "#aaa" }}>
-                      {statusTasks.length}
-                    </span>
-                  </div>
+            {Object.entries(getGroupedTasks()).map(
+              ([groupName, groupTasks]) => {
+                const isExpanded = expandedGroups[groupName] !== false;
 
-                  {isExpanded && statusTasks.length > 0 && (
+                // Get group header color
+                let headerColor = "#888";
+                if (groupBy === "status")
+                  headerColor = getStatusColor(groupName);
+                if (groupBy === "priority") {
+                  headerColor =
+                    groupName === "High"
+                      ? "#b91c1c"
+                      : groupName === "Low"
+                        ? "#15803d"
+                        : "#854d0e";
+                }
+
+                return (
+                  <div key={groupName} style={{ marginBottom: 16 }}>
                     <div
-                      style={{
-                        background: "#fff",
-                        border: "1px solid #e8e8e8",
-                        borderRadius: 8,
-                        overflow: "hidden",
-                        marginTop: 4,
-                      }}
+                      className="status-group-header"
+                      onClick={() =>
+                        setExpandedGroups((prev) => ({
+                          ...prev,
+                          [groupName]: !isExpanded,
+                        }))
+                      }
                     >
-                      <table className="task-table">
-                        <thead>
-                          <tr>
-                            <th>Name</th>
-                            <th>Priority</th>
-                            <th>Assignee</th>
-                            <th>Due date</th>
-                            {getFields().map((f) => (
-                              <th key={f.id}>{f.field_name}</th>
-                            ))}
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {statusTasks.map((task) => (
-                            <tr key={task.id}>
-                              <td>
-                                <span
-                                  style={{ fontWeight: 500, cursor: "pointer" }}
-                                  onClick={() => openEditTask(task)}
-                                >
-                                  {task.title}
-                                </span>
-                                {task.description && (
-                                  <div
+                      <span style={{ fontSize: 10 }}>
+                        {isExpanded ? "▾" : "▸"}
+                      </span>
+                      <span
+                        style={{
+                          background:
+                            groupBy === "status" ? headerColor : "#f0f0ef",
+                          color: groupBy === "status" ? "#fff" : "#333",
+                          padding: "2px 10px",
+                          borderRadius: 20,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border:
+                            groupBy !== "status" ? "1px solid #e8e8e8" : "none",
+                        }}
+                      >
+                        {groupName}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#aaa" }}>
+                        {groupTasks.length}
+                      </span>
+                    </div>
+
+                    {isExpanded && groupTasks.length > 0 && (
+                      <div
+                        style={{
+                          background: "#fff",
+                          border: "1px solid #e8e8e8",
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          marginTop: 4,
+                        }}
+                      >
+                        <table className="task-table">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              {groupBy !== "status" && <th>Status</th>}
+                              <th>Priority</th>
+                              <th>Assignees</th>
+                              <th>Due date</th>
+                              {getFields().map((f) => (
+                                <th key={f.id}>{f.field_name}</th>
+                              ))}
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {groupTasks.map((task) => (
+                              <tr key={task.id}>
+                                <td>
+                                  <span
                                     style={{
-                                      fontSize: 11,
-                                      color: "#aaa",
-                                      marginTop: 2,
+                                      fontWeight: 500,
+                                      cursor: "pointer",
                                     }}
+                                    onClick={() => openEditTask(task)}
                                   >
-                                    {task.description.slice(0, 60)}
-                                    {task.description.length > 60 ? "..." : ""}
-                                  </div>
+                                    {task.title}
+                                  </span>
+                                  {task.description && (
+                                    <div
+                                      style={{
+                                        fontSize: 11,
+                                        color: "#aaa",
+                                        marginTop: 2,
+                                      }}
+                                    >
+                                      {task.description.slice(0, 60)}
+                                      {task.description.length > 60
+                                        ? "..."
+                                        : ""}
+                                    </div>
+                                  )}
+                                </td>
+                                {groupBy !== "status" && (
+                                  <td>
+                                    <span
+                                      className="badge"
+                                      style={{
+                                        background:
+                                          getStatusColor(task.status) + "22",
+                                        color: getStatusColor(task.status),
+                                        border: `1px solid ${getStatusColor(task.status)}44`,
+                                      }}
+                                    >
+                                      {task.status}
+                                    </span>
+                                  </td>
                                 )}
-                              </td>
-                              <td>
-                                <span
-                                  className="badge"
-                                  style={getPriorityStyle(task.priority)}
+                                <td>
+                                  <span
+                                    className="badge"
+                                    style={getPriorityStyle(task.priority)}
+                                  >
+                                    {task.priority}
+                                  </span>
+                                </td>
+                                <td>
+                                  {task.assignees &&
+                                  task.assignees.length > 0 ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: 3,
+                                      }}
+                                    >
+                                      {task.assignees.map((name) => (
+                                        <span
+                                          key={name}
+                                          style={{
+                                            background: "#f0f0ef",
+                                            borderRadius: 20,
+                                            padding: "1px 7px",
+                                            fontSize: 11,
+                                            fontWeight: 500,
+                                            color: "#333",
+                                          }}
+                                        >
+                                          {name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : task.assignee ? (
+                                    <span
+                                      style={{
+                                        background: "#f0f0ef",
+                                        borderRadius: 20,
+                                        padding: "1px 7px",
+                                        fontSize: 11,
+                                        fontWeight: 500,
+                                        color: "#333",
+                                      }}
+                                    >
+                                      {task.assignee}
+                                    </span>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </td>
+                                <td
+                                  style={{
+                                    fontSize: 12,
+                                    color:
+                                      task.due_date &&
+                                      new Date(task.due_date) < new Date() &&
+                                      task.status !== "Done"
+                                        ? "#b91c1c"
+                                        : "#555",
+                                    fontWeight:
+                                      task.due_date &&
+                                      new Date(task.due_date) < new Date() &&
+                                      task.status !== "Done"
+                                        ? 600
+                                        : 400,
+                                  }}
                                 >
-                                  {task.priority}
-                                </span>
-                              </td>
-                              <td>
-                                {((task.assignees &&
-                                  task.assignees.length > 0) ||
-                                  task.assignee) && (
+                                  {task.due_date
+                                    ? new Date(task.due_date) < new Date() &&
+                                      task.status !== "Done"
+                                      ? `⚠️ ${task.due_date}`
+                                      : task.due_date
+                                    : "—"}
+                                </td>
+                                {getFields().map((f) => {
+                                  const fv = task.task_field_values?.find(
+                                    (v) => v.field_id === f.id,
+                                  );
+                                  return (
+                                    <td
+                                      key={f.id}
+                                      style={{ fontSize: 12, color: "#555" }}
+                                    >
+                                      {fv?.value || "—"}
+                                    </td>
+                                  );
+                                })}
+                                <td>
                                   <div
                                     style={{
                                       display: "flex",
-                                      flexWrap: "wrap",
-                                      gap: 3,
-                                      marginTop: 4,
+                                      alignItems: "center",
+                                      gap: 4,
                                     }}
                                   >
-                                    {(task.assignees &&
-                                    task.assignees.length > 0
-                                      ? task.assignees
-                                      : [task.assignee]
-                                    ).map((name) => (
-                                      <span
-                                        key={name}
-                                        style={{
-                                          background: "#f0f0ef",
-                                          borderRadius: 20,
-                                          padding: "1px 6px",
-                                          fontSize: 10,
-                                          color: "#333",
-                                        }}
+                                    <select
+                                      value={task.status}
+                                      onChange={(e) =>
+                                        updateTaskStatus(
+                                          task.id,
+                                          e.target.value,
+                                        )
+                                      }
+                                      style={{
+                                        fontSize: 11,
+                                        padding: "3px 6px",
+                                      }}
+                                    >
+                                      {getStatuses().map((s) => (
+                                        <option key={s} value={s}>
+                                          {s}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <div className="task-row-actions">
+                                      <button
+                                        className="btn btn-sm"
+                                        onClick={() => openEditTask(task)}
                                       >
-                                        {name}
-                                      </span>
-                                    ))}
+                                        ✏️
+                                      </button>
+                                      <button
+                                        className="btn btn-sm btn-danger"
+                                        onClick={() => deleteTask(task.id)}
+                                      >
+                                        🗑
+                                      </button>
+                                    </div>
                                   </div>
-                                )}
-                              </td>
-                              <td
-                                style={{
-                                  fontSize: 12,
-                                  color: task.due_date
-                                    ? new Date(task.due_date) < new Date() &&
-                                      task.status !== "Done"
-                                      ? "#b91c1c"
-                                      : "#333"
-                                    : "#ccc",
-                                  fontWeight:
-                                    task.due_date &&
-                                    new Date(task.due_date) < new Date() &&
-                                    task.status !== "Done"
-                                      ? 600
-                                      : 400,
-                                }}
-                              >
-                                {task.due_date
-                                  ? new Date(task.due_date) < new Date() &&
-                                    task.status !== "Done"
-                                    ? `⚠️ ${task.due_date}`
-                                    : task.due_date
-                                  : "—"}
-                              </td>
-                              {getFields().map((f) => {
-                                const fv = task.task_field_values?.find(
-                                  (v) => v.field_id === f.id,
-                                );
-                                return (
-                                  <td
-                                    key={f.id}
-                                    style={{ fontSize: 12, color: "#555" }}
-                                  >
-                                    {fv?.value || "—"}
-                                  </td>
-                                );
-                              })}
-                              <td>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                  }}
-                                >
-                                  <select
-                                    value={task.status}
-                                    onChange={(e) =>
-                                      updateTaskStatus(task.id, e.target.value)
-                                    }
-                                    style={{ fontSize: 11, padding: "3px 6px" }}
-                                  >
-                                    {getStatuses().map((s) => (
-                                      <option key={s} value={s}>
-                                        {s}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <div className="task-row-actions">
-                                    <button
-                                      className="btn btn-sm"
-                                      onClick={() => openEditTask(task)}
-                                    >
-                                      ✏️
-                                    </button>
-                                    <button
-                                      className="btn btn-sm btn-danger"
-                                      onClick={() => deleteTask(task.id)}
-                                    >
-                                      🗑
-                                    </button>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
-                  {isExpanded && statusTasks.length === 0 && (
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#ccc",
-                        padding: "8px 12px",
-                      }}
-                    >
-                      No tasks
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                    {isExpanded && groupTasks.length === 0 && (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#ccc",
+                          padding: "8px 12px",
+                        }}
+                      >
+                        No tasks
+                      </div>
+                    )}
+                  </div>
+                );
+              },
+            )}
           </div>
         )}
 
         {/* BOARD VIEW */}
         {viewMode === "board" && (
           <div className="kanban-board">
-            {getStatuses().map((status) => {
-              const statusTasks = groupedTasks[status] || [];
-              return (
-                <div key={status} className="kanban-col">
+            {Object.entries(getGroupedTasks()).map(
+              ([groupName, groupTasks]) => (
+                <div key={groupName} className="kanban-col">
                   <div className="kanban-col-header">
                     <span
                       style={{
-                        background: getStatusColor(status),
-                        color: "#fff",
+                        background:
+                          groupBy === "status"
+                            ? getStatusColor(groupName)
+                            : "#f0f0ef",
+                        color: groupBy === "status" ? "#fff" : "#333",
                         padding: "2px 10px",
                         borderRadius: 20,
                         fontSize: 11,
                       }}
                     >
-                      {status}
+                      {groupName}
                     </span>
                     <span style={{ fontSize: 12, color: "#aaa" }}>
-                      {statusTasks.length}
+                      {groupTasks.length}
                     </span>
                   </div>
-                  {statusTasks.map((task) => (
+                  {groupTasks.map((task) => (
                     <div
                       key={task.id}
                       className="kanban-card"
@@ -787,7 +907,7 @@ export default function Tasks({
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          marginBottom: 6,
+                          marginBottom: 4,
                         }}
                       >
                         <span
@@ -802,16 +922,40 @@ export default function Tasks({
                           </span>
                         )}
                       </div>
-                      {task.assignee && (
-                        <div style={{ fontSize: 11, color: "#888" }}>
-                          👤 {task.assignee}
+                      {((task.assignees && task.assignees.length > 0) ||
+                        task.assignee) && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 3,
+                            marginTop: 4,
+                          }}
+                        >
+                          {(task.assignees && task.assignees.length > 0
+                            ? task.assignees
+                            : [task.assignee]
+                          ).map((name) => (
+                            <span
+                              key={name}
+                              style={{
+                                background: "#f0f0ef",
+                                borderRadius: 20,
+                                padding: "1px 6px",
+                                fontSize: 10,
+                                color: "#333",
+                              }}
+                            >
+                              {name}
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
-              );
-            })}
+              ),
+            )}
           </div>
         )}
 
