@@ -210,23 +210,58 @@ export default function Tasks({
   async function addCustomStatus() {
     if (!newStatus.name.trim() || !activeSpace) return;
 
-    let query = supabase.from("space_statuses").select("name");
+    setStatusLoading(true);
+    setStatusActionMsg("");
 
+    // If at folder level and folder has no own statuses yet,
+    // first copy space-level statuses to folder level
     if (activeFolder) {
-      query = query.eq("folder_id", activeFolder.id);
-    } else {
-      query = query.eq("space_id", activeSpace.id).is("folder_id", null);
+      const { data: existingFolderStatuses } = await supabase
+        .from("space_statuses")
+        .select("*")
+        .eq("folder_id", activeFolder.id);
+
+      if (!existingFolderStatuses || existingFolderStatuses.length === 0) {
+        // Copy space statuses to folder level
+        const { data: spaceStatuses } = await supabase
+          .from("space_statuses")
+          .select("*")
+          .eq("space_id", activeSpace.id)
+          .is("folder_id", null)
+          .order("status_order");
+
+        if (spaceStatuses && spaceStatuses.length > 0) {
+          await supabase.from("space_statuses").insert(
+            spaceStatuses.map((s) => ({
+              space_id: activeSpace.id,
+              folder_id: activeFolder.id,
+              name: s.name,
+              color: s.color,
+              status_order: s.status_order,
+            })),
+          );
+        }
+      }
     }
 
-    const { data: existing } = await query;
+    // Now check for duplicates at the right level
+    let dupQuery = supabase.from("space_statuses").select("name");
+
+    if (activeFolder) {
+      dupQuery = dupQuery.eq("folder_id", activeFolder.id);
+    } else {
+      dupQuery = dupQuery.eq("space_id", activeSpace.id).is("folder_id", null);
+    }
+
+    const { data: existing } = await dupQuery;
     const existingNames = (existing || []).map((s) => s.name.toLowerCase());
 
     if (existingNames.includes(newStatus.name.trim().toLowerCase())) {
       setStatusActionMsg("⚠️ A status with this name already exists.");
+      setStatusLoading(false);
       return;
     }
 
-    setStatusLoading(true);
     const { error } = await supabase.from("space_statuses").insert({
       space_id: activeSpace.id,
       folder_id: activeFolder?.id || null,
