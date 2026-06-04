@@ -160,9 +160,10 @@ export default function Tasks({
 
   async function addCustomField() {
     if (!newField.field_name.trim() || !activeSpace) return;
-    const fields = activeSpace.space_fields || [];
+    const fields = getFields();
     await supabase.from("space_fields").insert({
       space_id: activeSpace.id,
+      folder_id: activeFolder?.id || null,
       field_name: newField.field_name.trim(),
       field_type: newField.field_type,
       field_order: fields.length + 1,
@@ -173,13 +174,18 @@ export default function Tasks({
   }
 
   async function ensureDefaultStatuses() {
-    if (!activeSpace) return;
+    const targetId = activeFolder?.id || activeSpace?.id;
+    if (!targetId) return;
 
-    const { data: existing } = await supabase
-      .from("space_statuses")
-      .select("name")
-      .eq("space_id", activeSpace.id);
+    let query = supabase.from("space_statuses").select("name");
 
+    if (activeFolder) {
+      query = query.eq("folder_id", activeFolder.id);
+    } else {
+      query = query.eq("space_id", activeSpace.id).is("folder_id", null);
+    }
+
+    const { data: existing } = await query;
     const existingNames = (existing || []).map((s) => s.name);
 
     const defaults = [
@@ -192,20 +198,29 @@ export default function Tasks({
     const toInsert = defaults.filter((d) => !existingNames.includes(d.name));
     if (toInsert.length === 0) return;
 
-    await supabase
-      .from("space_statuses")
-      .insert(toInsert.map((d) => ({ ...d, space_id: activeSpace.id })));
+    await supabase.from("space_statuses").insert(
+      toInsert.map((d) => ({
+        ...d,
+        space_id: activeSpace.id,
+        folder_id: activeFolder?.id || null,
+      })),
+    );
   }
 
   async function addCustomStatus() {
     if (!newStatus.name.trim() || !activeSpace) return;
 
-    const { data: existing } = await supabase
-      .from("space_statuses")
-      .select("name")
-      .eq("space_id", activeSpace.id);
+    let query = supabase.from("space_statuses").select("name");
 
+    if (activeFolder) {
+      query = query.eq("folder_id", activeFolder.id);
+    } else {
+      query = query.eq("space_id", activeSpace.id).is("folder_id", null);
+    }
+
+    const { data: existing } = await query;
     const existingNames = (existing || []).map((s) => s.name.toLowerCase());
+
     if (existingNames.includes(newStatus.name.trim().toLowerCase())) {
       setStatusActionMsg("⚠️ A status with this name already exists.");
       return;
@@ -214,6 +229,7 @@ export default function Tasks({
     setStatusLoading(true);
     const { error } = await supabase.from("space_statuses").insert({
       space_id: activeSpace.id,
+      folder_id: activeFolder?.id || null,
       name: newStatus.name.trim(),
       color: newStatus.color,
       status_order: (existing?.length || 0) + 1,
@@ -292,11 +308,18 @@ export default function Tasks({
 
   async function fetchModalStatuses() {
     if (!activeSpace) return;
-    const { data } = await supabase
+    let query = supabase
       .from("space_statuses")
       .select("*")
-      .eq("space_id", activeSpace.id)
       .order("status_order");
+
+    if (activeFolder) {
+      query = query.eq("folder_id", activeFolder.id);
+    } else {
+      query = query.eq("space_id", activeSpace.id).is("folder_id", null);
+    }
+
+    const { data } = await query;
     setModalSpaceStatuses(data || []);
     return data || [];
   }
@@ -350,6 +373,16 @@ export default function Tasks({
   }
 
   function getStatuses() {
+    // If at folder level, use folder statuses first
+    if (activeFolder) {
+      const folderStatuses = activeFolder.space_statuses || [];
+      if (folderStatuses.length > 0) {
+        return folderStatuses
+          .sort((a, b) => a.status_order - b.status_order)
+          .map((s) => s.name);
+      }
+    }
+    // Fall back to space statuses
     const dbStatuses = activeSpace?.space_statuses || [];
     if (dbStatuses.length > 0) {
       return dbStatuses
@@ -360,20 +393,33 @@ export default function Tasks({
   }
 
   function getFields() {
+    // If at folder level, use folder fields first
+    if (activeFolder) {
+      const folderFields = activeFolder.space_fields || [];
+      if (folderFields.length > 0) {
+        return folderFields.sort((a, b) => a.field_order - b.field_order);
+      }
+    }
     return (activeSpace?.space_fields || []).sort(
       (a, b) => a.field_order - b.field_order,
     );
   }
 
   function getStatusColor(status) {
+    // Check folder statuses first
+    if (activeFolder?.space_statuses) {
+      const found = activeFolder.space_statuses.find((s) => s.name === status);
+      if (found) return found.color;
+    }
+    // Fall back to space statuses
     if (activeSpace?.space_statuses) {
       const found = activeSpace.space_statuses.find((s) => s.name === status);
       if (found) return found.color;
     }
     const defaults = {
       "To Do": "#888",
-      "In Progress": "#d97706",
-      "In Review": "#7c3aed",
+      "In Progress": "#7c3aed",
+      "In Review": "#d97706",
       Done: "#16a34a",
     };
     return defaults[status] || "#888";
@@ -393,6 +439,16 @@ export default function Tasks({
 
   function getSelectedSpaceStatuses() {
     const space = spaces.find((s) => s.id === newTask.space_id);
+    // Check if selected folder has its own statuses
+    if (newTask.folder_id) {
+      const folder = space?.folders?.find((f) => f.id === newTask.folder_id);
+      const folderStatuses = folder?.space_statuses || [];
+      if (folderStatuses.length > 0) {
+        return folderStatuses
+          .sort((a, b) => a.status_order - b.status_order)
+          .map((s) => s.name);
+      }
+    }
     const dbStatuses = space?.space_statuses || [];
     if (dbStatuses.length > 0) {
       return dbStatuses
@@ -1711,8 +1767,18 @@ export default function Tasks({
         >
           <div className="modal" style={{ maxWidth: 400 }}>
             <div className="modal-title">Custom fields</div>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
-              Space: <strong>{activeSpace?.name}</strong>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+              {activeFolder ? (
+                <>
+                  <span>Folder: </span>
+                  <strong>{activeFolder.name}</strong>
+                </>
+              ) : (
+                <>
+                  <span>Space: </span>
+                  <strong>{activeSpace?.name}</strong>
+                </>
+              )}
             </div>
 
             {/* Existing fields */}
@@ -1848,8 +1914,18 @@ export default function Tasks({
               </button>
             </div>
 
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>
-              Space: <strong>{activeSpace?.name}</strong>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
+              {activeFolder ? (
+                <>
+                  <span>Folder: </span>
+                  <strong>{activeFolder.name}</strong>
+                </>
+              ) : (
+                <>
+                  <span>Space: </span>
+                  <strong>{activeSpace?.name}</strong>
+                </>
+              )}
             </div>
 
             {/* Feedback message */}

@@ -83,7 +83,18 @@ export default function App() {
   async function fetchSpaces() {
     const { data } = await supabase
       .from("spaces")
-      .select("*, folders(*), space_statuses(*), space_fields(*)")
+      .select(
+        `
+      *,
+      folders(
+        *,
+        space_statuses(*),
+        space_fields(*)
+      ),
+      space_statuses(*),
+      space_fields(*)
+    `,
+      )
       .order("created_at");
     if (data) {
       setSpaces(data);
