@@ -13,10 +13,18 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [view, setView] = useState("dashboard");
+  const [view, setView] = useState(
+    () => localStorage.getItem("abc_view") || "dashboard",
+  );
   const [activeSpace, setActiveSpace] = useState(null);
   const [activeFolder, setActiveFolder] = useState(null);
   const [spaces, setSpaces] = useState([]);
+  const [pendingSpaceId, setPendingSpaceId] = useState(
+    () => localStorage.getItem("abc_space_id") || null,
+  );
+  const [pendingFolderId, setPendingFolderId] = useState(
+    () => localStorage.getItem("abc_folder_id") || null,
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -45,6 +53,23 @@ export default function App() {
   useEffect(() => {
     if (user) fetchSpaces();
   }, [user]);
+
+  // Restore active space and folder after spaces are loaded
+  useEffect(() => {
+    if (spaces.length === 0) return;
+    if (pendingSpaceId) {
+      const space = spaces.find((s) => s.id === pendingSpaceId);
+      if (space) {
+        setActiveSpace(space);
+        if (pendingFolderId) {
+          const folder = space.folders?.find((f) => f.id === pendingFolderId);
+          if (folder) setActiveFolder(folder);
+        }
+      }
+      setPendingSpaceId(null);
+      setPendingFolderId(null);
+    }
+  }, [spaces]);
 
   async function fetchProfile(userId) {
     const { data } = await supabase
@@ -90,6 +115,9 @@ export default function App() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    localStorage.removeItem("abc_view");
+    localStorage.removeItem("abc_space_id");
+    localStorage.removeItem("abc_folder_id");
     setUser(null);
     setProfile(null);
     setView("dashboard");
@@ -101,12 +129,29 @@ export default function App() {
     setActiveSpace(space);
     setActiveFolder(null);
     setView("tasks");
+    localStorage.setItem("abc_view", "tasks");
+    localStorage.setItem("abc_space_id", space.id);
+    localStorage.removeItem("abc_folder_id");
   }
 
   function handleFolderSelect(space, folder) {
     setActiveSpace(space);
     setActiveFolder(folder);
     setView("tasks");
+    localStorage.setItem("abc_view", "tasks");
+    localStorage.setItem("abc_space_id", space.id);
+    localStorage.setItem("abc_folder_id", folder.id);
+  }
+
+  function handleNavigate(v) {
+    setView(v);
+    localStorage.setItem("abc_view", v);
+    if (v !== "tasks") {
+      localStorage.removeItem("abc_space_id");
+      localStorage.removeItem("abc_folder_id");
+      setActiveSpace(null);
+      setActiveFolder(null);
+    }
   }
 
   if (authLoading) {
@@ -137,7 +182,7 @@ export default function App() {
         activeFolder={activeFolder}
         view={view}
         profile={profile}
-        onNavigate={setView}
+        onNavigate={handleNavigate}
         onSpaceSelect={handleSpaceSelect}
         onFolderSelect={handleFolderSelect}
         taskCounts={taskCounts}
@@ -149,7 +194,7 @@ export default function App() {
           <Dashboard
             spaces={spaces}
             profile={profile}
-            onNavigate={setView}
+            onNavigate={handleNavigate}
             onSpaceSelect={handleSpaceSelect}
           />
         )}
