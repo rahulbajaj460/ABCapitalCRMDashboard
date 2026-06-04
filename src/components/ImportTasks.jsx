@@ -2,7 +2,15 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import Papa from "papaparse";
 
-const FIELD_TYPES = ["text", "number", "date", "email", "phone", "url"];
+const FIELD_TYPES = [
+  "text",
+  "number",
+  "date",
+  "email",
+  "phone",
+  "url",
+  "dropdown",
+];
 
 const CORE_FIELDS = [
   { key: "title", label: "Task Name *", required: true },
@@ -202,7 +210,12 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     setCustomFieldMappings((prev) => ({
       ...prev,
       [col]: {
-        ...(prev[col] || { action: "skip", fieldName: col, fieldType: "text" }),
+        ...(prev[col] || {
+          action: "skip",
+          fieldName: col,
+          fieldType: "text",
+          dropdownOptions: [],
+        }),
         ...updates,
       },
     }));
@@ -252,6 +265,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
           field_type: cfg.fieldType || "text",
           field_order:
             (existingFields.length || 0) + Object.keys(created).length + 1,
+          field_options:
+            cfg.fieldType === "dropdown" ? cfg.dropdownOptions || [] : [],
         })
         .select()
         .single();
@@ -698,11 +713,271 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                                   color: "#1d4ed8",
                                   borderRadius: 20,
                                   padding: "2px 8px",
+                                  whiteSpace: "nowrap",
                                 }}
                               >
                                 Will be created
                               </span>
                             </>
+                          )}
+                          {/* Dropdown options editor — shown below the row when type is dropdown */}
+                          {action === "new" && cfg.fieldType === "dropdown" && (
+                            <div
+                              style={{
+                                width: "100%",
+                                marginTop: 10,
+                                paddingTop: 10,
+                                borderTop: "1px solid #e8e8e8",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  color: "#555",
+                                  marginBottom: 8,
+                                }}
+                              >
+                                Dropdown options
+                                <span
+                                  style={{
+                                    color: "#888",
+                                    fontWeight: 400,
+                                    marginLeft: 6,
+                                  }}
+                                >
+                                  (unique values from CSV will be auto-detected)
+                                </span>
+                              </div>
+                              {/* Auto-detect from CSV */}
+                              {(() => {
+                                const csvValues = [
+                                  ...new Set(
+                                    rows
+                                      .map((r) => r[col])
+                                      .filter((v) => v && v.trim()),
+                                  ),
+                                ].slice(0, 20);
+                                const currentOptions =
+                                  cfg.dropdownOptions || [];
+                                return (
+                                  <>
+                                    {csvValues.length > 0 && (
+                                      <div style={{ marginBottom: 8 }}>
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            color: "#888",
+                                            marginBottom: 4,
+                                          }}
+                                        >
+                                          Found in CSV ({csvValues.length}{" "}
+                                          unique values):
+                                        </div>
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexWrap: "wrap",
+                                            gap: 4,
+                                          }}
+                                        >
+                                          {csvValues.map((val) => {
+                                            const isAdded =
+                                              currentOptions.includes(val);
+                                            return (
+                                              <button
+                                                key={val}
+                                                onClick={() => {
+                                                  if (isAdded) {
+                                                    updateCustomFieldMapping(
+                                                      col,
+                                                      {
+                                                        dropdownOptions:
+                                                          currentOptions.filter(
+                                                            (o) => o !== val,
+                                                          ),
+                                                      },
+                                                    );
+                                                  } else {
+                                                    updateCustomFieldMapping(
+                                                      col,
+                                                      {
+                                                        dropdownOptions: [
+                                                          ...currentOptions,
+                                                          val,
+                                                        ],
+                                                      },
+                                                    );
+                                                  }
+                                                }}
+                                                style={{
+                                                  fontSize: 11,
+                                                  padding: "2px 10px",
+                                                  borderRadius: 20,
+                                                  cursor: "pointer",
+                                                  border: "1px solid",
+                                                  borderColor: isAdded
+                                                    ? "#1d4ed8"
+                                                    : "#e8e8e8",
+                                                  background: isAdded
+                                                    ? "#eff6ff"
+                                                    : "#f5f5f4",
+                                                  color: isAdded
+                                                    ? "#1d4ed8"
+                                                    : "#555",
+                                                  fontWeight: isAdded
+                                                    ? 600
+                                                    : 400,
+                                                }}
+                                              >
+                                                {isAdded ? "✓ " : "+ "}
+                                                {val}
+                                              </button>
+                                            );
+                                          })}
+                                          <button
+                                            onClick={() =>
+                                              updateCustomFieldMapping(col, {
+                                                dropdownOptions: csvValues,
+                                              })
+                                            }
+                                            style={{
+                                              fontSize: 11,
+                                              padding: "2px 10px",
+                                              borderRadius: 20,
+                                              cursor: "pointer",
+                                              border: "1px solid #16a34a",
+                                              background: "#f0fdf4",
+                                              color: "#15803d",
+                                            }}
+                                          >
+                                            Add all
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* Current selected options */}
+                                    {currentOptions.length > 0 && (
+                                      <div>
+                                        <div
+                                          style={{
+                                            fontSize: 11,
+                                            color: "#888",
+                                            marginBottom: 4,
+                                          }}
+                                        >
+                                          Selected options (
+                                          {currentOptions.length}):
+                                        </div>
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            flexWrap: "wrap",
+                                            gap: 4,
+                                          }}
+                                        >
+                                          {currentOptions.map((opt) => (
+                                            <span
+                                              key={opt}
+                                              style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: 4,
+                                                fontSize: 11,
+                                                padding: "2px 8px",
+                                                borderRadius: 20,
+                                                background: "#eff6ff",
+                                                color: "#1d4ed8",
+                                                border: "1px solid #bfdbfe",
+                                              }}
+                                            >
+                                              {opt}
+                                              <span
+                                                style={{
+                                                  cursor: "pointer",
+                                                  fontSize: 13,
+                                                  lineHeight: 1,
+                                                }}
+                                                onClick={() =>
+                                                  updateCustomFieldMapping(
+                                                    col,
+                                                    {
+                                                      dropdownOptions:
+                                                        currentOptions.filter(
+                                                          (o) => o !== opt,
+                                                        ),
+                                                    },
+                                                  )
+                                                }
+                                              >
+                                                ×
+                                              </span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* Add custom option */}
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: 6,
+                                        marginTop: 8,
+                                      }}
+                                    >
+                                      <input
+                                        placeholder="Add custom option..."
+                                        id={`dropdown-input-${col}`}
+                                        style={{
+                                          fontSize: 12,
+                                          padding: "4px 8px",
+                                          flex: 1,
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (
+                                            e.key === "Enter" &&
+                                            e.target.value.trim()
+                                          ) {
+                                            const val = e.target.value.trim();
+                                            if (!currentOptions.includes(val)) {
+                                              updateCustomFieldMapping(col, {
+                                                dropdownOptions: [
+                                                  ...currentOptions,
+                                                  val,
+                                                ],
+                                              });
+                                            }
+                                            e.target.value = "";
+                                          }
+                                        }}
+                                      />
+                                      <button
+                                        className="btn btn-sm"
+                                        onClick={() => {
+                                          const input = document.getElementById(
+                                            `dropdown-input-${col}`,
+                                          );
+                                          if (input && input.value.trim()) {
+                                            const val = input.value.trim();
+                                            if (!currentOptions.includes(val)) {
+                                              updateCustomFieldMapping(col, {
+                                                dropdownOptions: [
+                                                  ...currentOptions,
+                                                  val,
+                                                ],
+                                              });
+                                            }
+                                            input.value = "";
+                                          }
+                                        }}
+                                      >
+                                        + Add
+                                      </button>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
                           )}
                           {action === "existing" && (
                             <select

@@ -1186,14 +1186,36 @@ export default function Tasks({
                                                     (v) => v.field_id === f.id,
                                                   );
                                                 return (
-                                                  <td
-                                                    key={f.id}
-                                                    style={{
-                                                      fontSize: 12,
-                                                      color: "#555",
-                                                    }}
-                                                  >
-                                                    {fv?.value || "—"}
+                                                  <td key={f.id}>
+                                                    {fv?.value ? (
+                                                      f.field_type ===
+                                                      "dropdown" ? (
+                                                        <span
+                                                          style={{
+                                                            background:
+                                                              "#f0f0ef",
+                                                            borderRadius: 20,
+                                                            padding: "1px 8px",
+                                                            fontSize: 11,
+                                                            fontWeight: 500,
+                                                            color: "#333",
+                                                          }}
+                                                        >
+                                                          {fv.value}
+                                                        </span>
+                                                      ) : (
+                                                        <span
+                                                          style={{
+                                                            fontSize: 12,
+                                                            color: "#555",
+                                                          }}
+                                                        >
+                                                          {fv.value}
+                                                        </span>
+                                                      )
+                                                    ) : (
+                                                      "—"
+                                                    )}
                                                   </td>
                                                 );
                                               })}
@@ -2012,16 +2034,71 @@ export default function Tasks({
                   {getSelectedSpaceFields().map((field) => (
                     <div key={field.id} className="form-group">
                       <label className="form-label">{field.field_name}</label>
-                      <input
-                        placeholder={`Enter ${field.field_name}...`}
-                        value={taskFieldValues[field.id] || ""}
-                        onChange={(e) =>
-                          setTaskFieldValues((prev) => ({
-                            ...prev,
-                            [field.id]: e.target.value,
-                          }))
-                        }
-                      />
+                      {field.field_type === "dropdown" &&
+                      field.field_options?.length > 0 ? (
+                        <select
+                          value={taskFieldValues[field.id] || ""}
+                          onChange={(e) =>
+                            setTaskFieldValues((prev) => ({
+                              ...prev,
+                              [field.id]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Select {field.field_name}...</option>
+                          {field.field_options.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : field.field_type === "date" ? (
+                        <input
+                          type="date"
+                          value={taskFieldValues[field.id] || ""}
+                          onChange={(e) =>
+                            setTaskFieldValues((prev) => ({
+                              ...prev,
+                              [field.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      ) : field.field_type === "number" ? (
+                        <input
+                          type="number"
+                          placeholder={`Enter ${field.field_name}...`}
+                          value={taskFieldValues[field.id] || ""}
+                          onChange={(e) =>
+                            setTaskFieldValues((prev) => ({
+                              ...prev,
+                              [field.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      ) : field.field_type === "email" ? (
+                        <input
+                          type="email"
+                          placeholder={`Enter ${field.field_name}...`}
+                          value={taskFieldValues[field.id] || ""}
+                          onChange={(e) =>
+                            setTaskFieldValues((prev) => ({
+                              ...prev,
+                              [field.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      ) : (
+                        <input
+                          placeholder={`Enter ${field.field_name}...`}
+                          value={taskFieldValues[field.id] || ""}
+                          onChange={(e) =>
+                            setTaskFieldValues((prev) => ({
+                              ...prev,
+                              [field.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
