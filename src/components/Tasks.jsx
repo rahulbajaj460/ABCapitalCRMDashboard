@@ -79,7 +79,8 @@ export default function Tasks({
       query = query.eq("assignee_id", profile.id);
     }
 
-    const { data } = await query;
+    const { data, error } = await query;
+    console.log("fetchTasks result", { count: data?.length, error });
     if (data) setTasks(data);
   }
 
