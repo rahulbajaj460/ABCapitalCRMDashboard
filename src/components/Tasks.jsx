@@ -111,35 +111,24 @@ export default function Tasks({
   }
 
   function getUniqueStatuses() {
-    // At folder level — use folder's own statuses
-    if (activeFolder) {
-      return getStatuses();
-    }
-    // At space level — collect all unique statuses across all folders + space level
-    const allStatuses = new Set();
+    if (activeFolder) return getStatuses();
 
-    // Add space-level statuses
-    const spaceStatuses = activeSpace?.space_statuses || [];
-    spaceStatuses
-      .filter((s) => !s.folder_id)
+    const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
+    const seen = new Set();
+    const unique = [];
+    (activeSpace?.space_statuses || [])
+      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
       .sort((a, b) => a.status_order - b.status_order)
-      .forEach((s) => allStatuses.add(s.name));
+      .forEach((s) => {
+        if (!seen.has(s.name)) {
+          seen.add(s.name);
+          unique.push(s.name);
+        }
+      });
 
-    // Add folder-level statuses
-    const folders = activeSpace?.folders || [];
-    folders.forEach((folder) => {
-      const folderStatuses = folder.space_statuses || [];
-      folderStatuses
-        .sort((a, b) => a.status_order - b.status_order)
-        .forEach((s) => allStatuses.add(s.name));
-    });
-
-    // If nothing found, use defaults
-    if (allStatuses.size === 0) {
-      return ["To Do", "In Progress", "In Review", "Done"];
-    }
-
-    return [...allStatuses];
+    return unique.length > 0
+      ? unique
+      : ["To Do", "In Progress", "In Review", "Done"];
   }
 
   async function saveTask() {
@@ -231,27 +220,20 @@ export default function Tasks({
   }
 
   async function ensureDefaultStatuses() {
-    const targetId = activeFolder?.id || activeSpace?.id;
-    if (!targetId) return;
+    if (!activeSpace || !activeFolder) return;
 
-    let query = supabase.from("space_statuses").select("name");
+    const { data: existing } = await supabase
+      .from("space_statuses")
+      .select("name")
+      .eq("folder_id", activeFolder.id);
 
-    if (activeFolder) {
-      query = query.eq("folder_id", activeFolder.id);
-    } else {
-      query = query.eq("space_id", activeSpace.id).is("folder_id", null);
-    }
-
-    const { data: existing } = await query;
     const existingNames = (existing || []).map((s) => s.name);
-
     const defaults = [
       { name: "To Do", color: "#888780", status_order: 1 },
       { name: "In Progress", color: "#7c3aed", status_order: 2 },
       { name: "In Review", color: "#d97706", status_order: 3 },
       { name: "Done", color: "#16a34a", status_order: 4 },
     ];
-
     const toInsert = defaults.filter((d) => !existingNames.includes(d.name));
     if (toInsert.length === 0) return;
 
@@ -259,7 +241,7 @@ export default function Tasks({
       toInsert.map((d) => ({
         ...d,
         space_id: activeSpace.id,
-        folder_id: activeFolder?.id || null,
+        folder_id: activeFolder.id,
       })),
     );
   }
@@ -487,33 +469,28 @@ export default function Tasks({
 
   function getStatuses() {
     if (activeFolder) {
-      const folderStatuses = (activeFolder.space_statuses || []).filter(
-        (s) => s.folder_id === activeFolder.id,
-      );
-      if (folderStatuses.length > 0) {
-        return folderStatuses
-          .sort((a, b) => a.status_order - b.status_order)
-          .map((s) => s.name);
-      }
-      // Fall back to space statuses
-      const spaceStatuses = (activeSpace?.space_statuses || []).filter(
-        (s) => !s.folder_id,
-      );
-      if (spaceStatuses.length > 0) {
-        return spaceStatuses
-          .sort((a, b) => a.status_order - b.status_order)
-          .map((s) => s.name);
-      }
-    } else if (activeSpace) {
-      const spaceStatuses = (activeSpace.space_statuses || []).filter(
-        (s) => !s.folder_id,
-      );
-      if (spaceStatuses.length > 0) {
-        return spaceStatuses
-          .sort((a, b) => a.status_order - b.status_order)
-          .map((s) => s.name);
-      }
+      // Folder level — show only this folder's own statuses
+      const folderStatuses = (activeSpace?.space_statuses || [])
+        .filter((s) => s.folder_id === activeFolder.id)
+        .sort((a, b) => a.status_order - b.status_order);
+      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
     }
+
+    // Space level — union of ALL folders' statuses deduplicated
+    const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
+    const seen = new Set();
+    const unique = [];
+    (activeSpace?.space_statuses || [])
+      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => {
+        if (!seen.has(s.name)) {
+          seen.add(s.name);
+          unique.push(s.name);
+        }
+      });
+
+    if (unique.length > 0) return unique;
     return ["To Do", "In Progress", "In Review", "Done"];
   }
 
@@ -531,19 +508,16 @@ export default function Tasks({
   }
 
   function getStatusColor(status) {
-    // Check folder statuses first
     if (activeFolder) {
-      const folderStatuses = (activeFolder.space_statuses || []).filter(
-        (s) => s.folder_id === activeFolder.id,
-      );
-      const found = folderStatuses.find((s) => s.name === status);
+      const found = (activeSpace?.space_statuses || [])
+        .filter((s) => s.folder_id === activeFolder.id)
+        .find((s) => s.name === status);
       if (found) return found.color;
     }
-    // Fall back to space statuses
-    const spaceStatuses = (activeSpace?.space_statuses || []).filter(
-      (s) => !s.folder_id,
+    // Search across all statuses in space
+    const found = (activeSpace?.space_statuses || []).find(
+      (s) => s.name === status,
     );
-    const found = spaceStatuses.find((s) => s.name === status);
     if (found) return found.color;
 
     const defaults = {
@@ -570,23 +544,32 @@ export default function Tasks({
 
   function getSelectedSpaceStatuses() {
     const space = spaces.find((s) => s.id === newTask.space_id);
-    // Check if selected folder has its own statuses
+    if (!space) return ["To Do", "In Progress", "In Review", "Done"];
+
     if (newTask.folder_id) {
-      const folder = space?.folders?.find((f) => f.id === newTask.folder_id);
-      const folderStatuses = folder?.space_statuses || [];
-      if (folderStatuses.length > 0) {
-        return folderStatuses
-          .sort((a, b) => a.status_order - b.status_order)
-          .map((s) => s.name);
-      }
+      const folderStatuses = (space.space_statuses || [])
+        .filter((s) => s.folder_id === newTask.folder_id)
+        .sort((a, b) => a.status_order - b.status_order);
+      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
     }
-    const dbStatuses = space?.space_statuses || [];
-    if (dbStatuses.length > 0) {
-      return dbStatuses
-        .sort((a, b) => a.status_order - b.status_order)
-        .map((s) => s.name);
-    }
-    return ["To Do", "In Progress", "In Review", "Done"];
+
+    // Fall back to space-level union
+    const allFolderIds = (space.folders || []).map((f) => f.id);
+    const seen = new Set();
+    const unique = [];
+    (space.space_statuses || [])
+      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => {
+        if (!seen.has(s.name)) {
+          seen.add(s.name);
+          unique.push(s.name);
+        }
+      });
+
+    return unique.length > 0
+      ? unique
+      : ["To Do", "In Progress", "In Review", "Done"];
   }
 
   function getSelectedSpaceFields() {

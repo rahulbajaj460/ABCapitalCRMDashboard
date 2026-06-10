@@ -33,23 +33,7 @@ export default function Sidebar({
       .single();
 
     if (!error && data) {
-      // Seed default statuses immediately
-      await supabase.from("space_statuses").insert([
-        { space_id: data.id, name: "To Do", color: "#888780", status_order: 1 },
-        {
-          space_id: data.id,
-          name: "In Progress",
-          color: "#7c3aed",
-          status_order: 2,
-        },
-        {
-          space_id: data.id,
-          name: "In Review",
-          color: "#d97706",
-          status_order: 3,
-        },
-        { space_id: data.id, name: "Done", color: "#16a34a", status_order: 4 },
-      ]);
+      // No statuses at space level — folders will own their statuses
       setNewSpace({ name: "", color: "#378ADD" });
       setShowAddSpace(false);
       onSpaceCreated();
@@ -58,10 +42,44 @@ export default function Sidebar({
 
   async function createFolder(spaceId) {
     if (!newFolder.trim()) return;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("folders")
-      .insert({ space_id: spaceId, name: newFolder.trim() });
-    if (!error) {
+      .insert({ space_id: spaceId, name: newFolder.trim() })
+      .select()
+      .single();
+
+    if (!error && data) {
+      // Seed default statuses at folder level
+      await supabase.from("space_statuses").insert([
+        {
+          space_id: spaceId,
+          folder_id: data.id,
+          name: "To Do",
+          color: "#888780",
+          status_order: 1,
+        },
+        {
+          space_id: spaceId,
+          folder_id: data.id,
+          name: "In Progress",
+          color: "#7c3aed",
+          status_order: 2,
+        },
+        {
+          space_id: spaceId,
+          folder_id: data.id,
+          name: "In Review",
+          color: "#d97706",
+          status_order: 3,
+        },
+        {
+          space_id: spaceId,
+          folder_id: data.id,
+          name: "Done",
+          color: "#16a34a",
+          status_order: 4,
+        },
+      ]);
       setNewFolder("");
       setShowAddFolder(null);
       onSpaceCreated();
