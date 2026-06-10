@@ -487,19 +487,32 @@ export default function Tasks({
 
   function getStatuses() {
     if (activeFolder) {
-      const folderStatuses = activeFolder.space_statuses || [];
+      const folderStatuses = (activeFolder.space_statuses || []).filter(
+        (s) => s.folder_id === activeFolder.id,
+      );
       if (folderStatuses.length > 0) {
         return folderStatuses
           .sort((a, b) => a.status_order - b.status_order)
           .map((s) => s.name);
       }
-    }
-    // Fall back to space statuses
-    const dbStatuses = activeSpace?.space_statuses || [];
-    if (dbStatuses.length > 0) {
-      return dbStatuses
-        .sort((a, b) => a.status_order - b.status_order)
-        .map((s) => s.name);
+      // Fall back to space statuses
+      const spaceStatuses = (activeSpace?.space_statuses || []).filter(
+        (s) => !s.folder_id,
+      );
+      if (spaceStatuses.length > 0) {
+        return spaceStatuses
+          .sort((a, b) => a.status_order - b.status_order)
+          .map((s) => s.name);
+      }
+    } else if (activeSpace) {
+      const spaceStatuses = (activeSpace.space_statuses || []).filter(
+        (s) => !s.folder_id,
+      );
+      if (spaceStatuses.length > 0) {
+        return spaceStatuses
+          .sort((a, b) => a.status_order - b.status_order)
+          .map((s) => s.name);
+      }
     }
     return ["To Do", "In Progress", "In Review", "Done"];
   }
@@ -519,20 +532,26 @@ export default function Tasks({
 
   function getStatusColor(status) {
     // Check folder statuses first
-    if (activeFolder?.space_statuses) {
-      const found = activeFolder.space_statuses.find((s) => s.name === status);
+    if (activeFolder) {
+      const folderStatuses = (activeFolder.space_statuses || []).filter(
+        (s) => s.folder_id === activeFolder.id,
+      );
+      const found = folderStatuses.find((s) => s.name === status);
       if (found) return found.color;
     }
     // Fall back to space statuses
-    if (activeSpace?.space_statuses) {
-      const found = activeSpace.space_statuses.find((s) => s.name === status);
-      if (found) return found.color;
-    }
+    const spaceStatuses = (activeSpace?.space_statuses || []).filter(
+      (s) => !s.folder_id,
+    );
+    const found = spaceStatuses.find((s) => s.name === status);
+    if (found) return found.color;
+
     const defaults = {
       "To Do": "#888",
       "In Progress": "#7c3aed",
       "In Review": "#d97706",
       Done: "#16a34a",
+      "Client Cancelled": "#f59e0b",
     };
     return defaults[status] || "#888";
   }

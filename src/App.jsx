@@ -81,21 +81,22 @@ export default function App() {
   }
 
   async function fetchSpaces() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("spaces")
       .select(
         `
       *,
+      space_statuses(*),
+      space_fields(*),
       folders(
         *,
         space_statuses(*),
         space_fields(*)
-      ),
-      space_statuses(*),
-      space_fields(*)
+      )
     `,
       )
       .order("created_at");
+
     if (data) {
       setSpaces(data);
       if (activeSpace) {
