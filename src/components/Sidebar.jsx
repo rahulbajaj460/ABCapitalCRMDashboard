@@ -13,6 +13,7 @@ export default function Sidebar({
   profile,
   onLogout,
   taskCounts = {},
+  width = 240,
 }) {
   const [expandedSpaces, setExpandedSpaces] = useState({});
   const [showAddSpace, setShowAddSpace] = useState(false);
@@ -120,7 +121,7 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={{ width, minWidth: width }}>
       <div className="sidebar-header">
         <div className="sidebar-logo">AB Capital</div>
         <div className="sidebar-sub">Internal workspace</div>

@@ -12,13 +12,14 @@
 
 /* Sidebar */
 .sidebar {
-  width: 240px;
   flex-shrink: 0;
   background: #fff;
   border-right: 1px solid #e8e8e8;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #e0e0e0 transparent;
 }
 
 .sidebar-header {
@@ -1136,11 +1137,6 @@
 }
 
 /* Sidebar scrollbar */
-.sidebar {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #e0e0e0 transparent;
-}
 
 .sidebar::-webkit-scrollbar {
   width: 4px;

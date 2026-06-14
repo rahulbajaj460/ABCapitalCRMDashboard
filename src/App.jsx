@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -25,6 +25,10 @@ export default function App() {
   const [pendingFolderId, setPendingFolderId] = useState(
     () => localStorage.getItem("abc_folder_id") || null,
   );
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    return parseInt(localStorage.getItem("abc_sidebar_width") || "240");
+  });
+  const isSidebarResizing = useRef(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -125,6 +129,28 @@ export default function App() {
     setTaskCounts(counts);
   }
 
+  function startSidebarResize(e) {
+    isSidebarResizing.current = true;
+    document.addEventListener("mousemove", onSidebarMouseMove);
+    document.addEventListener("mouseup", stopSidebarResize);
+    e.preventDefault();
+  }
+
+  function onSidebarMouseMove(e) {
+    if (!isSidebarResizing.current) return;
+    const newWidth = e.clientX;
+    if (newWidth >= 180 && newWidth <= 400) {
+      setSidebarWidth(newWidth);
+      localStorage.setItem("abc_sidebar_width", newWidth);
+    }
+  }
+
+  function stopSidebarResize() {
+    isSidebarResizing.current = false;
+    document.removeEventListener("mousemove", onSidebarMouseMove);
+    document.removeEventListener("mouseup", stopSidebarResize);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     localStorage.removeItem("abc_view");
@@ -200,6 +226,22 @@ export default function App() {
         taskCounts={taskCounts}
         onSpaceCreated={fetchSpaces}
         onLogout={handleLogout}
+        width={sidebarWidth}
+      />
+      {/* Resize handle */}
+      <div
+        onMouseDown={startSidebarResize}
+        style={{
+          width: 4,
+          flexShrink: 0,
+          background: "transparent",
+          cursor: "col-resize",
+          transition: "background 0.15s",
+          zIndex: 10,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#bfdbfe")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+        title="Drag to resize sidebar"
       />
       <main className="app-main">
         {view === "dashboard" && (
