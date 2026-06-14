@@ -1134,3 +1134,92 @@
 .task-table tr:hover .task-row-actions {
   opacity: 1;
 }
+
+/* Sidebar scrollbar */
+.sidebar {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #e0e0e0 transparent;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #e0e0e0;
+  border-radius: 20px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+/* Wiki sidebar scrollbar */
+.wiki-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #e0e0e0 transparent;
+}
+
+.wiki-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.wiki-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wiki-sidebar::-webkit-scrollbar-thumb {
+  background: #e0e0e0;
+  border-radius: 20px;
+}
+
+.wiki-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+/* Wiki tree scrollbar */
+.wiki-tree {
+  scrollbar-width: thin;
+  scrollbar-color: #e0e0e0 transparent;
+}
+
+.wiki-tree::-webkit-scrollbar {
+  width: 4px;
+}
+
+.wiki-tree::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wiki-tree::-webkit-scrollbar-thumb {
+  background: #e0e0e0;
+  border-radius: 20px;
+}
+
+/* Main content area scrollbar */
+.app-main {
+  scrollbar-width: thin;
+  scrollbar-color: #e0e0e0 transparent;
+}
+
+.app-main::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-main::-webkit-scrollbar-thumb {
+  background: #e0e0e0;
+  border-radius: 20px;
+}
+
+.app-main::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
