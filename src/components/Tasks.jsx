@@ -384,38 +384,43 @@ export default function Tasks({
     if (!activeSpace) return;
 
     if (activeFolder) {
-      // First check if folder has its own statuses
-      const { data: folderStatuses } = await supabase
+      // At folder level — fetch this folder's own statuses
+      const { data } = await supabase
         .from("space_statuses")
         .select("*")
         .eq("folder_id", activeFolder.id)
         .order("status_order");
-
-      if (folderStatuses && folderStatuses.length > 0) {
-        // Folder has its own statuses — show those
-        setModalSpaceStatuses(folderStatuses);
-        return folderStatuses;
-      } else {
-        // Folder has no statuses yet — show space-level statuses as starting point
-        const { data: spaceStatuses } = await supabase
+      setModalSpaceStatuses(data || []);
+      return data || [];
+    } else {
+      // At space level — fetch union of all folder statuses
+      const folderIds = (activeSpace.folders || []).map((f) => f.id);
+      if (folderIds.length === 0) {
+        // No folders yet — fetch space-level statuses
+        const { data } = await supabase
           .from("space_statuses")
           .select("*")
           .eq("space_id", activeSpace.id)
           .is("folder_id", null)
           .order("status_order");
-        setModalSpaceStatuses(spaceStatuses || []);
-        return spaceStatuses || [];
+        setModalSpaceStatuses(data || []);
+        return data || [];
       }
-    } else {
-      // Space level — fetch space statuses only
+      // Get all folder statuses deduplicated
       const { data } = await supabase
         .from("space_statuses")
-        .select("*")
-        .eq("space_id", activeSpace.id)
-        .is("folder_id", null)
+        .select("*, folders(name)")
+        .in("folder_id", folderIds)
         .order("status_order");
-      setModalSpaceStatuses(data || []);
-      return data || [];
+      // Deduplicate by name
+      const seen = new Set();
+      const unique = (data || []).filter((s) => {
+        if (seen.has(s.name)) return false;
+        seen.add(s.name);
+        return true;
+      });
+      setModalSpaceStatuses(unique);
+      return unique;
     }
   }
 
@@ -718,6 +723,7 @@ export default function Tasks({
           padding: "0 24px",
           borderBottom: "1px solid #e8e8e8",
           background: "#fff",
+          minHeight: 48,
         }}
       >
         <div className="tabs" style={{ border: "none", padding: 0 }}>
@@ -735,8 +741,7 @@ export default function Tasks({
           </div>
         </div>
 
-        {/* Search + filter */}
-        <div style={{ display: "flex", gap: 8, padding: "8px 0" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div className="search-wrap">
             <span style={{ color: "#aaa" }}>🔍</span>
             <input
@@ -753,7 +758,6 @@ export default function Tasks({
             >
               ⊞ Columns
             </button>
-
             {showColumnPicker && (
               <div
                 style={{
@@ -785,7 +789,6 @@ export default function Tasks({
                   { key: "priority", label: "Priority" },
                   { key: "assignees", label: "Assignees" },
                   { key: "due_date", label: "Due date" },
-                  { key: "status", label: "Status (when grouped)" },
                   ...getFields().map((f) => ({
                     key: `field_${f.id}`,
                     label: f.field_name,
@@ -806,11 +809,10 @@ export default function Tasks({
                       type="checkbox"
                       checked={visibleColumns.includes(col.key)}
                       onChange={(e) => {
-                        updateVisibleColumns((prev) =>
-                          e.target.checked
-                            ? [...prev, col.key]
-                            : prev.filter((c) => c !== col.key),
-                        );
+                        const next = e.target.checked
+                          ? [...visibleColumns, col.key]
+                          : visibleColumns.filter((c) => c !== col.key);
+                        updateVisibleColumns(next);
                       }}
                       style={{ width: 14, height: 14, cursor: "pointer" }}
                     />
@@ -2279,13 +2281,23 @@ export default function Tasks({
             <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
               {activeFolder ? (
                 <>
-                  <span>Folder: </span>
-                  <strong>{activeFolder.name}</strong>
+                  Folder: <strong>{activeFolder.name}</strong>
                 </>
               ) : (
                 <>
-                  <span>Space: </span>
-                  <strong>{activeSpace?.name}</strong>
+                  Space: <strong>{activeSpace?.name}</strong>
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 11,
+                      background: "#fef9c3",
+                      color: "#854d0e",
+                      padding: "1px 8px",
+                      borderRadius: 20,
+                    }}
+                  >
+                    Showing all folder statuses combined
+                  </span>
                 </>
               )}
             </div>
