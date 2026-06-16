@@ -139,7 +139,6 @@ export default function Sidebar({
   });
   const [showIconPicker, setShowIconPicker] = useState(false);
 
-  // Editable statuses for step 2
   const [editableStatuses, setEditableStatuses] = useState([]);
   const [newStatusName, setNewStatusName] = useState("");
   const [newStatusColor, setNewStatusColor] = useState("#378ADD");
@@ -527,6 +526,7 @@ export default function Sidebar({
                 icon: "💼",
                 description: "",
               });
+              setShowIconPicker(false);
               setShowAddSpace(true);
             }}
             style={{ width: "100%", marginTop: 4 }}
@@ -598,9 +598,9 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* ══════════════════════════════
+      {/* ═══════════════════════════════════
           SPACE CREATION MODAL
-          ══════════════════════════════ */}
+          ═══════════════════════════════════ */}
       {showAddSpace && (
         <div
           style={{
@@ -620,7 +620,7 @@ export default function Sidebar({
               background: "#fff",
               borderRadius: 16,
               width: "100%",
-              maxWidth: spaceStep === 2 ? 680 : 560,
+              maxWidth: spaceStep === 2 ? 700 : 560,
               maxHeight: "92vh",
               overflow: "hidden",
               display: "flex",
@@ -632,6 +632,7 @@ export default function Sidebar({
             {/* ── STEP 1 ── */}
             {spaceStep === 1 && (
               <>
+                {/* Modal header */}
                 <div
                   style={{
                     padding: "26px 28px 18px",
@@ -685,10 +686,11 @@ export default function Sidebar({
                   </div>
                 </div>
 
+                {/* Modal body */}
                 <div
                   style={{ padding: "22px 28px", flex: 1, overflowY: "auto" }}
                 >
-                  {/* Icon + Name */}
+                  {/* ── Icon + Name ── */}
                   <div style={{ marginBottom: 20 }}>
                     <label
                       style={{
@@ -704,125 +706,55 @@ export default function Sidebar({
                       Icon & name
                     </label>
                     <div
-                      style={{ display: "flex", gap: 10, alignItems: "center" }}
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "flex-start",
+                      }}
                     >
                       {/* Icon button */}
-                      <div style={{ position: "relative" }}>
-                        <button
-                          onClick={() => setShowIconPicker((v) => !v)}
+                      <button
+                        onClick={() => setShowIconPicker((v) => !v)}
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: 12,
+                          background: newSpace.color,
+                          border: showIconPicker ? "2px solid #1d4ed8" : "none",
+                          fontSize: 24,
+                          cursor: "pointer",
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+                          position: "relative",
+                          outline: "none",
+                        }}
+                        title="Click to choose icon"
+                      >
+                        {newSpace.icon}
+                        <span
                           style={{
-                            width: 52,
-                            height: 52,
-                            borderRadius: 12,
-                            background: newSpace.color,
-                            border: "none",
-                            fontSize: 24,
-                            cursor: "pointer",
+                            position: "absolute",
+                            bottom: -4,
+                            right: -4,
+                            background: "#fff",
+                            borderRadius: "50%",
+                            width: 18,
+                            height: 18,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
-                            flexShrink: 0,
-                            position: "relative",
+                            fontSize: 9,
+                            border: "1px solid #e0e0e0",
+                            color: "#555",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                           }}
-                          title="Click to change icon"
                         >
-                          {newSpace.icon}
-                          <span
-                            style={{
-                              position: "absolute",
-                              bottom: -4,
-                              right: -4,
-                              background: "#fff",
-                              borderRadius: "50%",
-                              width: 16,
-                              height: 16,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 9,
-                              border: "1px solid #e0e0e0",
-                              color: "#555",
-                            }}
-                          >
-                            ✎
-                          </span>
-                        </button>
-
-                        {/* Icon picker dropdown */}
-                        {showIconPicker && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              top: "110%",
-                              left: 0,
-                              zIndex: 100,
-                              background: "#fff",
-                              borderRadius: 12,
-                              padding: 14,
-                              boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
-                              border: "1px solid #e8e8e8",
-                              width: 220,
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: "#999",
-                                marginBottom: 10,
-                                textTransform: "uppercase",
-                                letterSpacing: ".06em",
-                              }}
-                            >
-                              Choose icon
-                            </div>
-                            <div
-                              style={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(6,1fr)",
-                                gap: 4,
-                              }}
-                            >
-                              {SPACE_ICONS.map((icon) => (
-                                <button
-                                  key={icon}
-                                  onClick={() => {
-                                    setNewSpace((prev) => ({ ...prev, icon }));
-                                    setShowIconPicker(false);
-                                  }}
-                                  style={{
-                                    width: 32,
-                                    height: 32,
-                                    fontSize: 18,
-                                    cursor: "pointer",
-                                    border: "none",
-                                    borderRadius: 7,
-                                    background:
-                                      newSpace.icon === icon
-                                        ? newSpace.color + "22"
-                                        : "transparent",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    transition: "background 0.1s",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (newSpace.icon !== icon)
-                                      e.target.style.background = "#f5f5f4";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (newSpace.icon !== icon)
-                                      e.target.style.background = "transparent";
-                                  }}
-                                >
-                                  {icon}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                          ✎
+                        </span>
+                      </button>
 
                       <input
                         autoFocus
@@ -843,12 +775,13 @@ export default function Sidebar({
                         style={{
                           flex: 1,
                           fontSize: 15,
-                          padding: "12px 16px",
+                          padding: "14px 16px",
                           border: "1.5px solid #e0e0e0",
                           borderRadius: 10,
                           outline: "none",
                           fontWeight: 500,
                           color: "#1a1a1a",
+                          marginTop: 2,
                         }}
                         onFocus={(e) => {
                           e.target.style.borderColor = "#1d4ed8";
@@ -857,9 +790,85 @@ export default function Sidebar({
                         onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                       />
                     </div>
+
+                    {/* ── Inline icon picker grid ── */}
+                    {showIconPicker && (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          background: "#f9f9f9",
+                          borderRadius: 12,
+                          padding: "14px 14px 10px",
+                          border: "1px solid #e8e8e8",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: "#999",
+                            marginBottom: 10,
+                            textTransform: "uppercase",
+                            letterSpacing: ".06em",
+                          }}
+                        >
+                          Choose icon
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(10, 1fr)",
+                            gap: 4,
+                          }}
+                        >
+                          {SPACE_ICONS.map((icon) => (
+                            <button
+                              key={icon}
+                              onClick={() => {
+                                setNewSpace((prev) => ({ ...prev, icon }));
+                                setShowIconPicker(false);
+                              }}
+                              style={{
+                                width: "100%",
+                                aspectRatio: "1",
+                                fontSize: 20,
+                                cursor: "pointer",
+                                border: "none",
+                                borderRadius: 8,
+                                background:
+                                  newSpace.icon === icon
+                                    ? newSpace.color + "28"
+                                    : "transparent",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                transition: "background 0.1s",
+                                outline:
+                                  newSpace.icon === icon
+                                    ? `2px solid ${newSpace.color}`
+                                    : "none",
+                                padding: 0,
+                              }}
+                              onMouseEnter={(e) => {
+                                if (newSpace.icon !== icon)
+                                  e.currentTarget.style.background = "#efefef";
+                              }}
+                              onMouseLeave={(e) => {
+                                if (newSpace.icon !== icon)
+                                  e.currentTarget.style.background =
+                                    "transparent";
+                              }}
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Color */}
+                  {/* ── Color ── */}
                   <div style={{ marginBottom: 20 }}>
                     <label
                       style={{
@@ -896,13 +905,14 @@ export default function Sidebar({
                                 ? `0 0 0 3px #fff, 0 0 0 5px ${color}66`
                                 : "none",
                             transition: "all 0.12s",
+                            outline: "none",
                           }}
                         />
                       ))}
                     </div>
                   </div>
 
-                  {/* Description */}
+                  {/* ── Description ── */}
                   <div>
                     <label
                       style={{
@@ -959,6 +969,7 @@ export default function Sidebar({
                   </div>
                 </div>
 
+                {/* Footer */}
                 <div
                   style={{
                     padding: "16px 28px",
@@ -1004,13 +1015,13 @@ export default function Sidebar({
               </>
             )}
 
-            {/* ── STEP 2 — two-panel layout like ClickUp ── */}
+            {/* ── STEP 2 — Two-panel layout ── */}
             {spaceStep === 2 && (
               <>
                 {/* Header */}
                 <div
                   style={{
-                    padding: "22px 28px 18px",
+                    padding: "20px 28px 16px",
                     borderBottom: "1px solid #f0f0f0",
                     display: "flex",
                     justifyContent: "space-between",
@@ -1018,7 +1029,7 @@ export default function Sidebar({
                   }}
                 >
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: 12 }}
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
                   >
                     <button
                       onClick={() => setSpaceStep(1)}
@@ -1028,9 +1039,10 @@ export default function Sidebar({
                         cursor: "pointer",
                         color: "#888",
                         fontSize: 18,
-                        padding: 4,
+                        padding: "4px 6px",
                         display: "flex",
                         alignItems: "center",
+                        borderRadius: 6,
                       }}
                     >
                       ←
@@ -1046,7 +1058,7 @@ export default function Sidebar({
                         Define your workflow
                       </div>
                       <div
-                        style={{ fontSize: 12, color: "#999", marginTop: 2 }}
+                        style={{ fontSize: 12, color: "#999", marginTop: 1 }}
                       >
                         Choose a template, then customise statuses as needed
                       </div>
@@ -1075,13 +1087,13 @@ export default function Sidebar({
 
                 {/* Two-panel body */}
                 <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-                  {/* LEFT — Template picker */}
+                  {/* LEFT — Template selector */}
                   <div
                     style={{
                       width: 220,
                       flexShrink: 0,
                       borderRight: "1px solid #f0f0f0",
-                      padding: "16px 12px",
+                      padding: "16px 10px",
                       overflowY: "auto",
                       background: "#fafaf9",
                     }}
@@ -1109,21 +1121,24 @@ export default function Sidebar({
                           borderRadius: 8,
                           textAlign: "left",
                           border: "none",
-                          marginBottom: 4,
+                          marginBottom: 3,
                           background:
                             selectedTemplate === t.key ? "#fff" : "transparent",
                           boxShadow:
                             selectedTemplate === t.key
-                              ? "0 1px 4px rgba(0,0,0,0.08)"
+                              ? "0 1px 4px rgba(0,0,0,0.1)"
                               : "none",
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
                           gap: 8,
                           transition: "all 0.12s",
+                          outline: "none",
                         }}
                       >
-                        <span style={{ fontSize: 16 }}>{t.icon}</span>
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>
+                          {t.icon}
+                        </span>
                         <div>
                           <div
                             style={{
@@ -1136,17 +1151,35 @@ export default function Sidebar({
                           >
                             {t.label}
                           </div>
-                          <div style={{ fontSize: 11, color: "#aaa" }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#aaa",
+                              marginTop: 1,
+                            }}
+                          >
                             {t.desc}
                           </div>
                         </div>
+                        {selectedTemplate === t.key && (
+                          <span
+                            style={{
+                              marginLeft: "auto",
+                              color: "#1d4ed8",
+                              fontSize: 14,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ✓
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
 
                   {/* RIGHT — Status editor */}
                   <div
-                    style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}
+                    style={{ flex: 1, overflowY: "auto", padding: "20px 22px" }}
                   >
                     <div
                       style={{
@@ -1156,24 +1189,25 @@ export default function Sidebar({
                         marginBottom: 16,
                       }}
                     >
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: "#1a1a1a",
-                        }}
-                      >
-                        Edit statuses
-                        <span
+                      <div>
+                        <div
                           style={{
-                            fontSize: 12,
-                            fontWeight: 400,
-                            color: "#aaa",
-                            marginLeft: 8,
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: "#1a1a1a",
                           }}
                         >
-                          for {selectedTmpl.label}
-                        </span>
+                          Edit statuses
+                        </div>
+                        <div
+                          style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}
+                        >
+                          For{" "}
+                          <strong style={{ color: "#555" }}>
+                            {selectedTmpl.label}
+                          </strong>{" "}
+                          — click any status to rename
+                        </div>
                       </div>
                       <span
                         style={{
@@ -1182,7 +1216,8 @@ export default function Sidebar({
                           color: "#1d4ed8",
                           borderRadius: 20,
                           padding: "2px 10px",
-                          fontWeight: 500,
+                          fontWeight: 600,
+                          flexShrink: 0,
                         }}
                       >
                         {editableStatuses.length} statuses
@@ -1210,27 +1245,27 @@ export default function Sidebar({
                           display: "flex",
                           alignItems: "center",
                           gap: 8,
-                          padding: "10px 12px",
+                          padding: "9px 12px",
                           borderRadius: 8,
                           marginBottom: 6,
                           background: "#fafaf9",
                           border: "1px solid #ebebeb",
-                          position: "relative",
                         }}
                       >
                         {/* Drag handle */}
                         <span
                           style={{
-                            color: "#ccc",
+                            color: "#d0d0d0",
                             fontSize: 14,
                             cursor: "grab",
                             flexShrink: 0,
+                            userSelect: "none",
                           }}
                         >
                           ⠿
                         </span>
 
-                        {/* Color dot — click to change */}
+                        {/* Color dot with picker */}
                         <div style={{ position: "relative", flexShrink: 0 }}>
                           <button
                             onClick={() =>
@@ -1245,9 +1280,11 @@ export default function Sidebar({
                               background: s.color,
                               border: "2px solid #fff",
                               cursor: "pointer",
-                              boxShadow: "0 0 0 1px #ddd",
+                              boxShadow: "0 0 0 1.5px #ddd",
                               outline: "none",
+                              flexShrink: 0,
                             }}
+                            title="Change color"
                           />
                           {showColorPickerFor === idx && (
                             <div
@@ -1255,7 +1292,7 @@ export default function Sidebar({
                                 position: "absolute",
                                 top: "110%",
                                 left: 0,
-                                zIndex: 200,
+                                zIndex: 300,
                                 background: "#fff",
                                 borderRadius: 10,
                                 padding: 10,
@@ -1264,7 +1301,7 @@ export default function Sidebar({
                                 display: "grid",
                                 gridTemplateColumns: "repeat(5,1fr)",
                                 gap: 5,
-                                width: 160,
+                                width: 152,
                               }}
                             >
                               {STATUS_COLORS.map((c) => (
@@ -1281,13 +1318,16 @@ export default function Sidebar({
                                         ? "2.5px solid #1a1a1a"
                                         : "none",
                                     cursor: "pointer",
+                                    outline: "none",
                                     transition: "transform 0.1s",
                                   }}
                                   onMouseEnter={(e) =>
-                                    (e.target.style.transform = "scale(1.2)")
+                                    (e.currentTarget.style.transform =
+                                      "scale(1.2)")
                                   }
                                   onMouseLeave={(e) =>
-                                    (e.target.style.transform = "scale(1)")
+                                    (e.currentTarget.style.transform =
+                                      "scale(1)")
                                   }
                                 />
                               ))}
@@ -1295,7 +1335,7 @@ export default function Sidebar({
                           )}
                         </div>
 
-                        {/* Name — click to edit inline */}
+                        {/* Status name — click to edit */}
                         {editingStatusIdx === idx ? (
                           <input
                             autoFocus
@@ -1311,32 +1351,35 @@ export default function Sidebar({
                             style={{
                               flex: 1,
                               fontSize: 13,
-                              fontWeight: 500,
-                              padding: "3px 8px",
+                              fontWeight: 600,
+                              padding: "3px 10px",
                               border: "1.5px solid #1d4ed8",
-                              borderRadius: 6,
+                              borderRadius: 20,
                               outline: "none",
+                              background: "#fff",
                             }}
                           />
                         ) : (
                           <span
                             onClick={() => startEditStatus(idx)}
                             style={{
-                              flex: 1,
-                              fontSize: 13,
-                              fontWeight: 500,
+                              fontSize: 12,
+                              fontWeight: 600,
                               color: "#fff",
                               background: s.color,
                               borderRadius: 20,
                               padding: "3px 12px",
-                              display: "inline-block",
                               cursor: "text",
-                              maxWidth: "fit-content",
+                              display: "inline-block",
+                              flexShrink: 0,
                             }}
+                            title="Click to rename"
                           >
                             {s.name}
                           </span>
                         )}
+
+                        <span style={{ flex: 1 }} />
 
                         {/* Delete */}
                         <button
@@ -1345,17 +1388,20 @@ export default function Sidebar({
                             background: "none",
                             border: "none",
                             cursor: "pointer",
-                            color: "#ccc",
-                            fontSize: 16,
-                            padding: "2px 4px",
-                            borderRadius: 4,
+                            color: "#d0d0d0",
+                            fontSize: 18,
+                            padding: "0 2px",
                             lineHeight: 1,
                             flexShrink: 0,
+                            outline: "none",
                           }}
                           onMouseEnter={(e) =>
-                            (e.target.style.color = "#ef4444")
+                            (e.currentTarget.style.color = "#ef4444")
                           }
-                          onMouseLeave={(e) => (e.target.style.color = "#ccc")}
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.color = "#d0d0d0")
+                          }
+                          title="Delete status"
                         >
                           ×
                         </button>
@@ -1370,7 +1416,7 @@ export default function Sidebar({
                         alignItems: "center",
                         padding: "10px 12px",
                         borderRadius: 8,
-                        border: "1.5px dashed #ddd",
+                        border: "1.5px dashed #d8d8d8",
                         background: "#fafaf9",
                         marginTop: 8,
                       }}
@@ -1387,6 +1433,7 @@ export default function Sidebar({
                           border: "none",
                           borderRadius: "50%",
                           flexShrink: 0,
+                          outline: "none",
                         }}
                       />
                       <input
@@ -1401,13 +1448,14 @@ export default function Sidebar({
                           border: "1px solid #e0e0e0",
                           borderRadius: 7,
                           outline: "none",
+                          background: "#fff",
                         }}
                       />
                       <button
                         onClick={addStatus}
                         disabled={!newStatusName.trim()}
                         style={{
-                          padding: "6px 14px",
+                          padding: "6px 16px",
                           borderRadius: 7,
                           border: "none",
                           background: newStatusName.trim()
@@ -1419,6 +1467,8 @@ export default function Sidebar({
                           cursor: newStatusName.trim()
                             ? "pointer"
                             : "not-allowed",
+                          flexShrink: 0,
+                          outline: "none",
                         }}
                       >
                         Add
@@ -1439,16 +1489,18 @@ export default function Sidebar({
                     borderRadius: "0 0 16px 16px",
                   }}
                 >
-                  <div style={{ display: "flex", gap: 5 }}>
+                  <div
+                    style={{ display: "flex", gap: 5, alignItems: "center" }}
+                  >
                     {[1, 2].map((n) => (
                       <div
                         key={n}
                         style={{
-                          width: 8,
+                          width: n === spaceStep ? 18 : 8,
                           height: 8,
-                          borderRadius: "50%",
+                          borderRadius: 4,
                           background: spaceStep === n ? "#1a1a1a" : "#ddd",
-                          transition: "background 0.2s",
+                          transition: "all 0.2s",
                         }}
                       />
                     ))}
@@ -1468,6 +1520,7 @@ export default function Sidebar({
                       display: "flex",
                       alignItems: "center",
                       gap: 6,
+                      outline: "none",
                     }}
                   >
                     Create Space ✓
