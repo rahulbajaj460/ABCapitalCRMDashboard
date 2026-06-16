@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "../supabase";
 
 const SPACE_COLORS = [
@@ -17,9 +17,8 @@ const SPACE_COLORS = [
 ];
 
 const SPACE_ICONS = [
-  "🏢",
-  "📊",
   "💼",
+  "📊",
   "🚀",
   "⚡",
   "🎯",
@@ -32,9 +31,10 @@ const SPACE_ICONS = [
   "🗂️",
   "📌",
   "🧩",
+  "🏢",
 ];
 
-const TEMPLATES = [
+const BASE_TEMPLATES = [
   {
     key: "business",
     label: "Business Services",
@@ -105,6 +105,12 @@ export default function Sidebar({
     description: "",
   });
 
+  // Editable statuses for step 2
+  const [editableStatuses, setEditableStatuses] = useState([]);
+  const [newStatusName, setNewStatusName] = useState("");
+  const [newStatusColor, setNewStatusColor] = useState("#378ADD");
+  const [editingStatusIdx, setEditingStatusIdx] = useState(null);
+
   const [expandedSpaces, setExpandedSpaces] = useState({});
   const [showAddFolder, setShowAddFolder] = useState(null);
   const [newFolder, setNewFolder] = useState("");
@@ -113,7 +119,39 @@ export default function Sidebar({
     setExpandedSpaces((prev) => ({ ...prev, [spaceId]: !prev[spaceId] }));
   }
 
-  async function createSpace(template = "business") {
+  function selectTemplate(key) {
+    setSelectedTemplate(key);
+    const tmpl = BASE_TEMPLATES.find((t) => t.key === key);
+    setEditableStatuses(tmpl ? tmpl.statuses.map((s) => ({ ...s })) : []);
+  }
+
+  function addStatus() {
+    if (!newStatusName.trim()) return;
+    if (
+      editableStatuses.find(
+        (s) => s.name.toLowerCase() === newStatusName.trim().toLowerCase(),
+      )
+    )
+      return;
+    setEditableStatuses((prev) => [
+      ...prev,
+      { name: newStatusName.trim(), color: newStatusColor },
+    ]);
+    setNewStatusName("");
+    setNewStatusColor("#378ADD");
+  }
+
+  function deleteStatus(idx) {
+    setEditableStatuses((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateStatus(idx, field, val) {
+    setEditableStatuses((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, [field]: val } : s)),
+    );
+  }
+
+  async function createSpace() {
     if (!newSpace.name.trim()) return;
     const { data, error } = await supabase
       .from("spaces")
@@ -122,10 +160,9 @@ export default function Sidebar({
       .single();
 
     if (!error && data) {
-      const tmpl = TEMPLATES.find((t) => t.key === template) || TEMPLATES[0];
-      if (tmpl.statuses.length > 0) {
+      if (editableStatuses.length > 0) {
         await supabase.from("space_statuses").insert(
-          tmpl.statuses.map((s, i) => ({
+          editableStatuses.map((s, i) => ({
             space_id: data.id,
             folder_id: null,
             name: s.name,
@@ -137,6 +174,7 @@ export default function Sidebar({
       setNewSpace({ name: "", color: "#378ADD", icon: "💼", description: "" });
       setSpaceStep(1);
       setSelectedTemplate("business");
+      setEditableStatuses([]);
       setShowAddSpace(false);
       onSpaceCreated();
     }
@@ -144,11 +182,7 @@ export default function Sidebar({
 
   async function deleteSpace(spaceId, e) {
     e.stopPropagation();
-    if (
-      !confirm(
-        "Delete this space and all its folders and tasks? This cannot be undone.",
-      )
-    )
+    if (!confirm("Delete this space and all its data? This cannot be undone."))
       return;
     await supabase.from("spaces").delete().eq("id", spaceId);
     onSpaceCreated();
@@ -163,7 +197,6 @@ export default function Sidebar({
       .single();
 
     if (!error && data) {
-      // Seed default statuses at folder level
       await supabase.from("space_statuses").insert([
         {
           space_id: spaceId,
@@ -206,18 +239,21 @@ export default function Sidebar({
       .from("tasks")
       .select("id", { count: "exact", head: true })
       .eq("folder_id", folderId);
-    const taskCount = count || 0;
-    const message =
-      taskCount > 0
-        ? `Delete this folder and all ${taskCount} tasks inside it? This cannot be undone.`
-        : "Delete this folder?";
-    if (!confirm(message)) return;
+    const n = count || 0;
+    if (
+      !confirm(
+        n > 0
+          ? `Delete folder and all ${n} tasks inside? This cannot be undone.`
+          : "Delete this folder?",
+      )
+    )
+      return;
     await supabase.from("folders").delete().eq("id", folderId);
     onSpaceCreated();
   }
 
   const selectedTmpl =
-    TEMPLATES.find((t) => t.key === selectedTemplate) || TEMPLATES[0];
+    BASE_TEMPLATES.find((t) => t.key === selectedTemplate) || BASE_TEMPLATES[0];
 
   return (
     <aside
@@ -225,13 +261,19 @@ export default function Sidebar({
       style={{ width, minWidth: width, maxWidth: width }}
     >
       {/* Header */}
-      <div className="sidebar-header">
-        <div className="sidebar-logo">AB Capital</div>
-        <div className="sidebar-sub">Internal workspace</div>
+      <div
+        style={{ padding: "16px 16px 12px", borderBottom: "1px solid #e8e8e8" }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a" }}>
+          AB Capital
+        </div>
+        <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
+          Internal workspace
+        </div>
       </div>
 
-      {/* Main nav */}
-      <div style={{ padding: "8px 0" }}>
+      {/* Nav */}
+      <div style={{ padding: "8px 0 4px" }}>
         <div className="sidebar-section">Main</div>
         {[
           { key: "dashboard", icon: "📊", label: "Dashboard" },
@@ -259,14 +301,20 @@ export default function Sidebar({
         }}
       >
         <div className="sidebar-section">Spaces</div>
-        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            paddingBottom: 8,
+            scrollbarWidth: "thin",
+            scrollbarColor: "#e0e0e0 transparent",
+          }}
+        >
           {spaces.map((space) => {
             const isExpanded = expandedSpaces[space.id] !== false;
             const isActive = activeSpace?.id === space.id && !activeFolder;
-
             return (
               <div key={space.id}>
-                {/* Space row */}
                 <div
                   className={`space-item ${isActive ? "active" : ""}`}
                   onClick={() => {
@@ -292,7 +340,7 @@ export default function Sidebar({
                         color: "#aaa",
                         background: "#f0f0ef",
                         borderRadius: 20,
-                        padding: "0px 6px",
+                        padding: "0 6px",
                         flexShrink: 0,
                       }}
                     >
@@ -314,8 +362,6 @@ export default function Sidebar({
                     ✕
                   </span>
                 </div>
-
-                {/* Folders */}
                 {isExpanded && (
                   <div>
                     {(space.folders || []).map((folder) => {
@@ -338,7 +384,7 @@ export default function Sidebar({
                                 color: "#aaa",
                                 background: "#f0f0ef",
                                 borderRadius: 20,
-                                padding: "0px 6px",
+                                padding: "0 6px",
                                 flexShrink: 0,
                               }}
                             >
@@ -361,8 +407,6 @@ export default function Sidebar({
                         </div>
                       );
                     })}
-
-                    {/* Add folder */}
                     {showAddFolder === space.id ? (
                       <div
                         style={{
@@ -411,11 +455,16 @@ export default function Sidebar({
               </div>
             );
           })}
-
-          {/* Add space */}
           <button
             className="add-btn-sidebar"
-            onClick={() => setShowAddSpace(true)}
+            onClick={() => {
+              setSpaceStep(1);
+              setSelectedTemplate("business");
+              setEditableStatuses(
+                BASE_TEMPLATES[0].statuses.map((s) => ({ ...s })),
+              );
+              setShowAddSpace(true);
+            }}
             style={{ width: "100%", marginTop: 4 }}
           >
             + Add space
@@ -423,7 +472,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* User profile */}
+      {/* Profile */}
       <div
         style={{
           padding: "12px 14px",
@@ -485,13 +534,13 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* SPACE CREATION MODAL */}
+      {/* ── SPACE CREATION MODAL ── */}
       {showAddSpace && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.5)",
+            background: "rgba(0,0,0,0.55)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -504,18 +553,23 @@ export default function Sidebar({
               background: "#fff",
               borderRadius: 16,
               width: "100%",
-              maxWidth: 580,
+              maxWidth: 600,
               maxHeight: "92vh",
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.22)",
             }}
           >
-            {/* ── STEP 1 — Name & Icon ── */}
+            {/* ── STEP 1 ── */}
             {spaceStep === 1 && (
               <>
-                <div style={{ padding: "28px 32px 0" }}>
+                <div
+                  style={{
+                    padding: "28px 32px 20px",
+                    borderBottom: "1px solid #f0f0f0",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
@@ -529,21 +583,16 @@ export default function Sidebar({
                           fontSize: 20,
                           fontWeight: 700,
                           color: "#1a1a1a",
-                          marginBottom: 6,
+                          marginBottom: 4,
                         }}
                       >
                         Create a Space
                       </div>
                       <div
-                        style={{
-                          fontSize: 13,
-                          color: "#888",
-                          lineHeight: 1.6,
-                          maxWidth: 420,
-                        }}
+                        style={{ fontSize: 13, color: "#999", lineHeight: 1.6 }}
                       >
-                        A Space represents teams, departments, or groups, each
-                        with its own folders, workflows, and settings.
+                        A Space represents a team, department, or group with its
+                        own folders and workflows.
                       </div>
                     </div>
                     <button
@@ -558,7 +607,7 @@ export default function Sidebar({
                         width: 32,
                         height: 32,
                         cursor: "pointer",
-                        fontSize: 16,
+                        fontSize: 18,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -574,19 +623,20 @@ export default function Sidebar({
                 <div
                   style={{ padding: "24px 32px", flex: 1, overflowY: "auto" }}
                 >
-                  {/* Icon + Name row */}
-                  <div style={{ marginBottom: 24 }}>
+                  {/* Icon + Name */}
+                  <div style={{ marginBottom: 22 }}>
                     <label
                       style={{
                         display: "block",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#555",
-                        marginBottom: 10,
-                        letterSpacing: ".02em",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#888",
+                        marginBottom: 8,
+                        textTransform: "uppercase",
+                        letterSpacing: ".06em",
                       }}
                     >
-                      ICON & NAME
+                      Icon & name
                     </label>
                     <div
                       style={{ display: "flex", gap: 10, alignItems: "center" }}
@@ -601,28 +651,27 @@ export default function Sidebar({
                             ],
                           }));
                         }}
-                        title="Click to change icon"
                         style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 10,
+                          width: 52,
+                          height: 52,
+                          borderRadius: 12,
                           background: newSpace.color,
                           border: "none",
-                          fontSize: 22,
+                          fontSize: 24,
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                          boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
                           flexShrink: 0,
-                          transition: "transform 0.1s",
                         }}
+                        title="Click to change icon"
                       >
                         {newSpace.icon}
                       </button>
                       <input
                         autoFocus
-                        placeholder="e.g. Marketing, Engineering, HR"
+                        placeholder="e.g. Accounting, Visa Team, Growth"
                         value={newSpace.name}
                         onChange={(e) =>
                           setNewSpace((prev) => ({
@@ -644,7 +693,6 @@ export default function Sidebar({
                           outline: "none",
                           fontWeight: 500,
                           color: "#1a1a1a",
-                          transition: "border-color 0.15s",
                         }}
                         onFocus={(e) =>
                           (e.target.style.borderColor = "#1d4ed8")
@@ -655,18 +703,19 @@ export default function Sidebar({
                   </div>
 
                   {/* Color */}
-                  <div style={{ marginBottom: 24 }}>
+                  <div style={{ marginBottom: 22 }}>
                     <label
                       style={{
                         display: "block",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#555",
-                        marginBottom: 10,
-                        letterSpacing: ".02em",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#888",
+                        marginBottom: 8,
+                        textTransform: "uppercase",
+                        letterSpacing: ".06em",
                       }}
                     >
-                      COLOR
+                      Color
                     </label>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {SPACE_COLORS.map((color) => (
@@ -682,14 +731,14 @@ export default function Sidebar({
                             background: color,
                             border:
                               newSpace.color === color
-                                ? "3px solid #1a1a1a"
+                                ? "2.5px solid #1a1a1a"
                                 : "2px solid transparent",
                             cursor: "pointer",
                             boxShadow:
                               newSpace.color === color
-                                ? "0 0 0 2px #fff, 0 0 0 4px " + color
+                                ? `0 0 0 3px #fff, 0 0 0 5px ${color}66`
                                 : "none",
-                            transition: "all 0.15s",
+                            transition: "all 0.12s",
                           }}
                         />
                       ))}
@@ -701,18 +750,23 @@ export default function Sidebar({
                     <label
                       style={{
                         display: "block",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#555",
-                        marginBottom: 10,
-                        letterSpacing: ".02em",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#888",
+                        marginBottom: 8,
+                        textTransform: "uppercase",
+                        letterSpacing: ".06em",
                       }}
                     >
-                      DESCRIPTION{" "}
+                      Description{" "}
                       <span
-                        style={{ color: "#bbb", fontWeight: 400, fontSize: 11 }}
+                        style={{
+                          color: "#ccc",
+                          fontWeight: 400,
+                          textTransform: "none",
+                        }}
                       >
-                        optional
+                        (optional)
                       </span>
                     </label>
                     <textarea
@@ -731,13 +785,12 @@ export default function Sidebar({
                         border: "1.5px solid #e0e0e0",
                         borderRadius: 10,
                         resize: "none",
-                        minHeight: 80,
+                        minHeight: 72,
                         outline: "none",
                         boxSizing: "border-box",
                         fontFamily: "inherit",
                         color: "#333",
                         lineHeight: 1.6,
-                        transition: "border-color 0.15s",
                       }}
                       onFocus={(e) => (e.target.style.borderColor = "#1d4ed8")}
                       onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
@@ -785,7 +838,6 @@ export default function Sidebar({
                       fontSize: 13,
                       cursor: newSpace.name.trim() ? "pointer" : "not-allowed",
                       fontWeight: 600,
-                      transition: "all 0.15s",
                     }}
                   >
                     Continue →
@@ -794,10 +846,15 @@ export default function Sidebar({
               </>
             )}
 
-            {/* ── STEP 2 — Workflow ── */}
+            {/* ── STEP 2 ── */}
             {spaceStep === 2 && (
               <>
-                <div style={{ padding: "28px 32px 0" }}>
+                <div
+                  style={{
+                    padding: "28px 32px 20px",
+                    borderBottom: "1px solid #f0f0f0",
+                  }}
+                >
                   <div
                     style={{
                       display: "flex",
@@ -811,21 +868,16 @@ export default function Sidebar({
                           fontSize: 20,
                           fontWeight: 700,
                           color: "#1a1a1a",
-                          marginBottom: 6,
+                          marginBottom: 4,
                         }}
                       >
                         Define your workflow
                       </div>
                       <div
-                        style={{
-                          fontSize: 13,
-                          color: "#888",
-                          lineHeight: 1.6,
-                          maxWidth: 400,
-                        }}
+                        style={{ fontSize: 13, color: "#999", lineHeight: 1.6 }}
                       >
-                        Choose a pre-configured solution or customise to your
-                        liking with task statuses and views.
+                        Start with a template, then customise statuses exactly
+                        as you need.
                       </div>
                     </div>
                     <button
@@ -840,7 +892,7 @@ export default function Sidebar({
                         width: 32,
                         height: 32,
                         cursor: "pointer",
-                        fontSize: 16,
+                        fontSize: 18,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -854,7 +906,7 @@ export default function Sidebar({
                 </div>
 
                 <div
-                  style={{ padding: "24px 32px", flex: 1, overflowY: "auto" }}
+                  style={{ flex: 1, overflowY: "auto", padding: "20px 32px" }}
                 >
                   {/* Template grid */}
                   <div
@@ -865,12 +917,12 @@ export default function Sidebar({
                       marginBottom: 24,
                     }}
                   >
-                    {TEMPLATES.map((t) => (
+                    {BASE_TEMPLATES.map((t) => (
                       <button
                         key={t.key}
-                        onClick={() => setSelectedTemplate(t.key)}
+                        onClick={() => selectTemplate(t.key)}
                         style={{
-                          padding: "16px 18px",
+                          padding: "14px 16px",
                           borderRadius: 12,
                           textAlign: "left",
                           border:
@@ -880,230 +932,254 @@ export default function Sidebar({
                           background:
                             selectedTemplate === t.key ? "#f5f5f4" : "#fff",
                           cursor: "pointer",
-                          transition: "all 0.15s",
+                          transition: "all 0.12s",
                           boxShadow:
                             selectedTemplate === t.key
                               ? "0 2px 8px rgba(0,0,0,0.08)"
                               : "none",
                         }}
                       >
-                        <div style={{ fontSize: 18, marginBottom: 6 }}>
+                        <div style={{ fontSize: 16, marginBottom: 4 }}>
                           {t.icon}
                         </div>
                         <div
                           style={{
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: 600,
                             color: "#1a1a1a",
-                            marginBottom: 3,
+                            marginBottom: 2,
                           }}
                         >
                           {t.label}
                         </div>
-                        <div style={{ fontSize: 12, color: "#888" }}>
+                        <div style={{ fontSize: 11, color: "#888" }}>
                           {t.desc}
                         </div>
                       </button>
                     ))}
                   </div>
 
-                  {/* Customize section */}
+                  {/* Editable statuses section */}
                   <div
                     style={{ borderTop: "1px solid #f0f0f0", paddingTop: 20 }}
                   >
                     <div
-                      style={{ fontSize: 13, color: "#555", marginBottom: 12 }}
-                    >
-                      Customise defaults for{" "}
-                      <strong>{selectedTmpl.label}</strong>
-                    </div>
-
-                    {/* Default views card */}
-                    <div
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 14,
-                        padding: "14px 16px",
-                        borderRadius: 12,
-                        border: "1px solid #e8e8e8",
-                        marginBottom: 10,
-                        background: "#fafaf9",
+                        justifyContent: "space-between",
+                        marginBottom: 12,
                       }}
                     >
-                      <div
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 10,
-                          background: "#f0f0ef",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 18,
-                          flexShrink: 0,
-                        }}
-                      >
-                        ☰
-                      </div>
-                      <div style={{ flex: 1 }}>
+                      <div>
                         <div
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
                             color: "#1a1a1a",
-                            marginBottom: 2,
-                          }}
-                        >
-                          Default views
-                        </div>
-                        <div style={{ fontSize: 12, color: "#888" }}>
-                          List, Board
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Task statuses card */}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 14,
-                        padding: "14px 16px",
-                        borderRadius: 12,
-                        border: "1px solid #e8e8e8",
-                        marginBottom: 10,
-                        background: "#fafaf9",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 10,
-                          background: "#f0f0ef",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 18,
-                          flexShrink: 0,
-                        }}
-                      >
-                        ◎
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "#1a1a1a",
-                            marginBottom: 4,
                           }}
                         >
                           Task statuses
                         </div>
-                        {selectedTmpl.statuses.length === 0 ? (
-                          <div style={{ fontSize: 12, color: "#bbb" }}>
-                            No default statuses — add your own after creating
-                          </div>
-                        ) : (
+                        <div
+                          style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}
+                        >
+                          Customise for <strong>{selectedTmpl.label}</strong> —
+                          drag to reorder coming soon
+                        </div>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          borderRadius: 20,
+                          padding: "2px 10px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {editableStatuses.length} statuses
+                      </span>
+                    </div>
+
+                    {/* Status list */}
+                    {editableStatuses.length === 0 ? (
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "#ccc",
+                          padding: "16px 0",
+                          textAlign: "center",
+                        }}
+                      >
+                        No statuses yet — add one below
+                      </div>
+                    ) : (
+                      <div style={{ marginBottom: 12 }}>
+                        {editableStatuses.map((s, idx) => (
                           <div
+                            key={idx}
                             style={{
                               display: "flex",
                               alignItems: "center",
-                              gap: 4,
-                              flexWrap: "wrap",
+                              gap: 8,
+                              padding: "8px 10px",
+                              borderRadius: 8,
+                              background: "#fafaf9",
+                              border: "1px solid #e8e8e8",
+                              marginBottom: 6,
                             }}
                           >
-                            {selectedTmpl.statuses.map((s, i) => (
-                              <div
-                                key={s.name}
+                            <input
+                              type="color"
+                              value={s.color}
+                              onChange={(e) =>
+                                updateStatus(idx, "color", e.target.value)
+                              }
+                              style={{
+                                width: 28,
+                                height: 28,
+                                padding: 2,
+                                cursor: "pointer",
+                                border: "none",
+                                borderRadius: 6,
+                                flexShrink: 0,
+                              }}
+                            />
+                            {editingStatusIdx === idx ? (
+                              <input
+                                autoFocus
+                                value={s.name}
+                                onChange={(e) =>
+                                  updateStatus(idx, "name", e.target.value)
+                                }
+                                onBlur={() => setEditingStatusIdx(null)}
+                                onKeyDown={(e) =>
+                                  e.key === "Enter" && setEditingStatusIdx(null)
+                                }
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
+                                  flex: 1,
+                                  fontSize: 13,
+                                  padding: "3px 8px",
+                                  border: "1.5px solid #1d4ed8",
+                                  borderRadius: 6,
+                                  outline: "none",
+                                }}
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  flex: 1,
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  background: s.color,
+                                  color: "#fff",
+                                  borderRadius: 20,
+                                  padding: "2px 12px",
+                                  display: "inline-block",
+                                  maxWidth: "fit-content",
                                 }}
                               >
-                                <span
-                                  style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: "50%",
-                                    background: s.color,
-                                    display: "inline-block",
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    color: "#555",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {s.name}
-                                </span>
-                                {i < selectedTmpl.statuses.length - 1 && (
-                                  <span
-                                    style={{
-                                      color: "#ccc",
-                                      fontSize: 11,
-                                      marginLeft: 2,
-                                    }}
-                                  >
-                                    →
-                                  </span>
-                                )}
-                              </div>
-                            ))}
+                                {s.name}
+                              </span>
+                            )}
+                            <button
+                              onClick={() =>
+                                setEditingStatusIdx(
+                                  idx === editingStatusIdx ? null : idx,
+                                )
+                              }
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: 13,
+                                color: "#aaa",
+                                padding: "2px 6px",
+                              }}
+                              title="Rename"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => deleteStatus(idx)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: 13,
+                                color: "#f87171",
+                                padding: "2px 6px",
+                              }}
+                              title="Delete"
+                            >
+                              ✕
+                            </button>
                           </div>
-                        )}
+                        ))}
                       </div>
-                    </div>
+                    )}
 
-                    {/* Custom fields card */}
+                    {/* Add status input */}
                     <div
                       style={{
                         display: "flex",
+                        gap: 8,
                         alignItems: "center",
-                        gap: 14,
-                        padding: "14px 16px",
-                        borderRadius: 12,
-                        border: "1px solid #e8e8e8",
+                        padding: "10px 12px",
+                        borderRadius: 8,
+                        border: "1.5px dashed #e0e0e0",
                         background: "#fafaf9",
                       }}
                     >
-                      <div
+                      <input
+                        type="color"
+                        value={newStatusColor}
+                        onChange={(e) => setNewStatusColor(e.target.value)}
                         style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 10,
-                          background: "#f0f0ef",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 18,
+                          width: 28,
+                          height: 28,
+                          padding: 2,
+                          cursor: "pointer",
+                          border: "none",
+                          borderRadius: 6,
                           flexShrink: 0,
                         }}
+                      />
+                      <input
+                        placeholder="Add a status..."
+                        value={newStatusName}
+                        onChange={(e) => setNewStatusName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addStatus()}
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          padding: "6px 10px",
+                          border: "1px solid #e0e0e0",
+                          borderRadius: 7,
+                          outline: "none",
+                        }}
+                      />
+                      <button
+                        onClick={addStatus}
+                        disabled={!newStatusName.trim()}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: 7,
+                          border: "none",
+                          background: newStatusName.trim()
+                            ? "#1d4ed8"
+                            : "#e0e0e0",
+                          color: "#fff",
+                          fontSize: 12,
+                          cursor: newStatusName.trim()
+                            ? "pointer"
+                            : "not-allowed",
+                          fontWeight: 500,
+                        }}
                       >
-                        ⊞
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "#1a1a1a",
-                            marginBottom: 2,
-                          }}
-                        >
-                          Custom fields
-                        </div>
-                        <div style={{ fontSize: 12, color: "#888" }}>
-                          Priority, Assignees, Due Date + add your own after
-                          creating
-                        </div>
-                      </div>
+                        + Add
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1136,28 +1212,21 @@ export default function Sidebar({
                   <div
                     style={{ display: "flex", alignItems: "center", gap: 12 }}
                   >
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 6 }}
-                    >
-                      <div
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: spaceStep === 1 ? "#1a1a1a" : "#ddd",
-                        }}
-                      />
-                      <div
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: spaceStep === 2 ? "#1a1a1a" : "#ddd",
-                        }}
-                      />
+                    <div style={{ display: "flex", gap: 5 }}>
+                      {[1, 2].map((n) => (
+                        <div
+                          key={n}
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: spaceStep === n ? "#1a1a1a" : "#ddd",
+                          }}
+                        />
+                      ))}
                     </div>
                     <button
-                      onClick={() => createSpace(selectedTemplate)}
+                      onClick={createSpace}
                       style={{
                         padding: "10px 28px",
                         borderRadius: 8,
@@ -1167,7 +1236,7 @@ export default function Sidebar({
                         fontSize: 13,
                         cursor: "pointer",
                         fontWeight: 600,
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                        boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
                       }}
                     >
                       Create Space ✓
