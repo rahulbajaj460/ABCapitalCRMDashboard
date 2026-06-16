@@ -128,6 +128,7 @@ export default function Sidebar({
   taskCounts = {},
   width = 240,
 }) {
+  // Space modal state
   const [showAddSpace, setShowAddSpace] = useState(false);
   const [spaceStep, setSpaceStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState("business");
@@ -138,7 +139,6 @@ export default function Sidebar({
     description: "",
   });
   const [showIconPicker, setShowIconPicker] = useState(false);
-
   const [editableStatuses, setEditableStatuses] = useState([]);
   const [newStatusName, setNewStatusName] = useState("");
   const [newStatusColor, setNewStatusColor] = useState("#378ADD");
@@ -146,11 +146,16 @@ export default function Sidebar({
   const [editingStatusName, setEditingStatusName] = useState("");
   const [showColorPickerFor, setShowColorPickerFor] = useState(null);
 
-  const [expandedSpaces, setExpandedSpaces] = useState({});
-  const [showAddFolder, setShowAddFolder] = useState(null);
+  // Folder modal state
+  const [showAddFolderModal, setShowAddFolderModal] = useState(null); // spaceId
   const [newFolder, setNewFolder] = useState("");
+  const [newFolderDesc, setNewFolderDesc] = useState("");
+  const [folderUseSpaceStatuses, setFolderUseSpaceStatuses] = useState(true);
 
-  function closeModal() {
+  const [expandedSpaces, setExpandedSpaces] = useState({});
+
+  // ── Space modal helpers ──
+  function closeSpaceModal() {
     setShowAddSpace(false);
     setSpaceStep(1);
     setShowIconPicker(false);
@@ -219,7 +224,6 @@ export default function Sidebar({
       .insert({ name: newSpace.name.trim(), color: newSpace.color })
       .select()
       .single();
-
     if (!error && data) {
       if (editableStatuses.length > 0) {
         await supabase.from("space_statuses").insert(
@@ -249,6 +253,7 @@ export default function Sidebar({
     onSpaceCreated();
   }
 
+  // ── Folder helpers ──
   async function createFolder(spaceId) {
     if (!newFolder.trim()) return;
     const { data, error } = await supabase
@@ -257,6 +262,7 @@ export default function Sidebar({
       .select()
       .single();
     if (!error && data) {
+      // Always seed default statuses at folder level
       await supabase.from("space_statuses").insert([
         {
           space_id: spaceId,
@@ -288,7 +294,9 @@ export default function Sidebar({
         },
       ]);
       setNewFolder("");
-      setShowAddFolder(null);
+      setNewFolderDesc("");
+      setFolderUseSpaceStatuses(true);
+      setShowAddFolderModal(null);
       onSpaceCreated();
     }
   }
@@ -315,12 +323,25 @@ export default function Sidebar({
   const selectedTmpl =
     BASE_TEMPLATES.find((t) => t.key === selectedTemplate) || BASE_TEMPLATES[0];
 
+  // ── Shared modal styles ──
+  const inputStyle = {
+    width: "100%",
+    fontSize: 14,
+    padding: "11px 14px",
+    border: "1.5px solid #e0e0e0",
+    borderRadius: 9,
+    outline: "none",
+    color: "#1a1a1a",
+    boxSizing: "border-box",
+    fontFamily: "inherit",
+  };
+
   return (
     <aside
       className="sidebar"
       style={{ width, minWidth: width, maxWidth: width }}
     >
-      {/* Header */}
+      {/* ── Header ── */}
       <div
         style={{ padding: "16px 16px 12px", borderBottom: "1px solid #ebebeb" }}
       >
@@ -332,7 +353,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Nav */}
+      {/* ── Nav ── */}
       <div style={{ padding: "8px 0 4px" }}>
         <div className="sidebar-section">Main</div>
         {[
@@ -351,7 +372,7 @@ export default function Sidebar({
         ))}
       </div>
 
-      {/* Spaces */}
+      {/* ── Spaces ── */}
       <div
         style={{
           flex: 1,
@@ -422,6 +443,7 @@ export default function Sidebar({
                     ✕
                   </span>
                 </div>
+
                 {isExpanded && (
                   <div>
                     {(space.folders || []).map((folder) => (
@@ -464,54 +486,28 @@ export default function Sidebar({
                         </span>
                       </div>
                     ))}
-                    {showAddFolder === space.id ? (
-                      <div
-                        style={{
-                          padding: "4px 10px 4px 28px",
-                          display: "flex",
-                          gap: 4,
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          placeholder="Folder name"
-                          value={newFolder}
-                          onChange={(e) => setNewFolder(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") createFolder(space.id);
-                            if (e.key === "Escape") {
-                              setShowAddFolder(null);
-                              setNewFolder("");
-                            }
-                          }}
-                          style={{ flex: 1, fontSize: 12, padding: "4px 8px" }}
-                        />
-                        <button
-                          className="btn btn-primary btn-sm"
-                          style={{ fontSize: 11, padding: "3px 8px" }}
-                          onClick={() => createFolder(space.id)}
-                        >
-                          +
-                        </button>
-                      </div>
-                    ) : (
-                      <div
-                        className="add-btn-sidebar"
-                        style={{ paddingLeft: 28 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowAddFolder(space.id);
-                          setNewFolder("");
-                        }}
-                      >
-                        + Add folder
-                      </div>
-                    )}
+
+                    {/* Add folder button — opens modal */}
+                    <div
+                      className="add-btn-sidebar"
+                      style={{ paddingLeft: 28 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNewFolder("");
+                        setNewFolderDesc("");
+                        setFolderUseSpaceStatuses(true);
+                        setShowAddFolderModal(space.id);
+                      }}
+                    >
+                      + Add folder
+                    </div>
                   </div>
                 )}
               </div>
             );
           })}
+
+          {/* Add space button */}
           <button
             className="add-btn-sidebar"
             onClick={() => {
@@ -536,7 +532,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Profile */}
+      {/* ── Profile ── */}
       <div
         style={{
           padding: "12px 14px",
@@ -598,9 +594,279 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* ═══════════════════════════════════
+      {/* ════════════════════════════════════════
+          FOLDER CREATION MODAL
+          ════════════════════════════════════════ */}
+      {showAddFolderModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            padding: 20,
+          }}
+          onClick={(e) =>
+            e.target === e.currentTarget && setShowAddFolderModal(null)
+          }
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 480,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: "24px 28px 18px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 19,
+                      fontWeight: 700,
+                      color: "#1a1a1a",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Create Folder
+                  </div>
+                  <div style={{ fontSize: 13, color: "#999", lineHeight: 1.5 }}>
+                    Use Folders to organise your tasks, Lists, and workflows.
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAddFolderModal(null)}
+                  style={{
+                    background: "#f5f5f4",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: 30,
+                    height: 30,
+                    cursor: "pointer",
+                    fontSize: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#666",
+                    flexShrink: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: "0 28px 4px" }}>
+              {/* Name */}
+              <div style={{ marginBottom: 14 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#555",
+                    marginBottom: 6,
+                  }}
+                >
+                  Name
+                </label>
+                <input
+                  autoFocus
+                  placeholder="e.g. Project, Client, Team"
+                  value={newFolder}
+                  onChange={(e) => setNewFolder(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newFolder.trim())
+                      createFolder(showAddFolderModal);
+                    if (e.key === "Escape") setShowAddFolderModal(null);
+                  }}
+                  style={inputStyle}
+                  onFocus={(e) => (e.target.style.borderColor = "#1d4ed8")}
+                  onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: 20 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#555",
+                    marginBottom: 6,
+                  }}
+                >
+                  Description
+                </label>
+                <input
+                  placeholder="Tell us a bit about your Folder (optional)"
+                  value={newFolderDesc}
+                  onChange={(e) => setNewFolderDesc(e.target.value)}
+                  style={inputStyle}
+                  onFocus={(e) => (e.target.style.borderColor = "#1d4ed8")}
+                  onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
+                />
+              </div>
+
+              {/* Settings */}
+              <div style={{ marginBottom: 24 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#555",
+                    marginBottom: 8,
+                  }}
+                >
+                  Settings
+                </label>
+
+                {/* Statuses card */}
+                <div
+                  onClick={() => setFolderUseSpaceStatuses((v) => !v)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    padding: "14px 16px",
+                    borderRadius: 10,
+                    border:
+                      "1.5px solid " +
+                      (folderUseSpaceStatuses ? "#1d4ed8" : "#e0e0e0"),
+                    background: folderUseSpaceStatuses ? "#f0f7ff" : "#fafaf9",
+                    cursor: "pointer",
+                    transition: "all 0.12s",
+                    marginBottom: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      background: "#fff",
+                      border: "1px solid #e8e8e8",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      flexShrink: 0,
+                    }}
+                  >
+                    ◎
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#1a1a1a",
+                      }}
+                    >
+                      Statuses
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
+                      {folderUseSpaceStatuses
+                        ? "Use Space statuses (To Do, In Progress, In Review, Done)"
+                        : "Custom statuses — you can edit after creating"}
+                    </div>
+                  </div>
+                  {/* Toggle */}
+                  <div
+                    style={{
+                      width: 40,
+                      height: 22,
+                      borderRadius: 20,
+                      background: folderUseSpaceStatuses ? "#1d4ed8" : "#ddd",
+                      position: "relative",
+                      flexShrink: 0,
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: "50%",
+                        background: "#fff",
+                        position: "absolute",
+                        top: 3,
+                        left: folderUseSpaceStatuses ? 21 : 3,
+                        transition: "left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: "14px 28px 20px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <button
+                onClick={() => setShowAddFolderModal(null)}
+                style={{
+                  fontSize: 13,
+                  color: "#888",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                  padding: "4px 0",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!newFolder.trim()}
+                onClick={() => createFolder(showAddFolderModal)}
+                style={{
+                  padding: "10px 32px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: newFolder.trim() ? "#1a1a1a" : "#e0e0e0",
+                  color: newFolder.trim() ? "#fff" : "#aaa",
+                  fontSize: 13,
+                  cursor: newFolder.trim() ? "pointer" : "not-allowed",
+                  fontWeight: 600,
+                  transition: "all 0.12s",
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
           SPACE CREATION MODAL
-          ═══════════════════════════════════ */}
+          ════════════════════════════════════════ */}
       {showAddSpace && (
         <div
           style={{
@@ -613,7 +879,7 @@ export default function Sidebar({
             zIndex: 2000,
             padding: 20,
           }}
-          onClick={(e) => e.target === e.currentTarget && closeModal()}
+          onClick={(e) => e.target === e.currentTarget && closeSpaceModal()}
         >
           <div
             style={{
@@ -632,7 +898,6 @@ export default function Sidebar({
             {/* ── STEP 1 ── */}
             {spaceStep === 1 && (
               <>
-                {/* Modal header */}
                 <div
                   style={{
                     padding: "26px 28px 18px",
@@ -665,7 +930,7 @@ export default function Sidebar({
                       </div>
                     </div>
                     <button
-                      onClick={closeModal}
+                      onClick={closeSpaceModal}
                       style={{
                         background: "#f5f5f4",
                         border: "none",
@@ -686,11 +951,10 @@ export default function Sidebar({
                   </div>
                 </div>
 
-                {/* Modal body */}
                 <div
                   style={{ padding: "22px 28px", flex: 1, overflowY: "auto" }}
                 >
-                  {/* ── Icon + Name ── */}
+                  {/* Icon + Name */}
                   <div style={{ marginBottom: 20 }}>
                     <label
                       style={{
@@ -712,7 +976,6 @@ export default function Sidebar({
                         alignItems: "flex-start",
                       }}
                     >
-                      {/* Icon button */}
                       <button
                         onClick={() => setShowIconPicker((v) => !v)}
                         style={{
@@ -755,7 +1018,6 @@ export default function Sidebar({
                           ✎
                         </span>
                       </button>
-
                       <input
                         autoFocus
                         placeholder="e.g. Accounting, Visa Team, Growth"
@@ -791,7 +1053,7 @@ export default function Sidebar({
                       />
                     </div>
 
-                    {/* ── Inline icon picker grid ── */}
+                    {/* Inline icon grid */}
                     {showIconPicker && (
                       <div
                         style={{
@@ -843,12 +1105,12 @@ export default function Sidebar({
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                transition: "background 0.1s",
                                 outline:
                                   newSpace.icon === icon
                                     ? `2px solid ${newSpace.color}`
                                     : "none",
                                 padding: 0,
+                                transition: "background 0.1s",
                               }}
                               onMouseEnter={(e) => {
                                 if (newSpace.icon !== icon)
@@ -868,7 +1130,7 @@ export default function Sidebar({
                     )}
                   </div>
 
-                  {/* ── Color ── */}
+                  {/* Color */}
                   <div style={{ marginBottom: 20 }}>
                     <label
                       style={{
@@ -900,19 +1162,19 @@ export default function Sidebar({
                                 ? "2.5px solid #1a1a1a"
                                 : "2px solid transparent",
                             cursor: "pointer",
+                            outline: "none",
+                            transition: "all 0.12s",
                             boxShadow:
                               newSpace.color === color
                                 ? `0 0 0 3px #fff, 0 0 0 5px ${color}66`
                                 : "none",
-                            transition: "all 0.12s",
-                            outline: "none",
                           }}
                         />
                       ))}
                     </div>
                   </div>
 
-                  {/* ── Description ── */}
+                  {/* Description */}
                   <div>
                     <label
                       style={{
@@ -969,7 +1231,6 @@ export default function Sidebar({
                   </div>
                 </div>
 
-                {/* Footer */}
                 <div
                   style={{
                     padding: "16px 28px",
@@ -981,7 +1242,7 @@ export default function Sidebar({
                   }}
                 >
                   <button
-                    onClick={closeModal}
+                    onClick={closeSpaceModal}
                     style={{
                       padding: "10px 20px",
                       borderRadius: 8,
@@ -1015,10 +1276,9 @@ export default function Sidebar({
               </>
             )}
 
-            {/* ── STEP 2 — Two-panel layout ── */}
+            {/* ── STEP 2 — two-panel ── */}
             {spaceStep === 2 && (
               <>
-                {/* Header */}
                 <div
                   style={{
                     padding: "20px 28px 16px",
@@ -1060,12 +1320,12 @@ export default function Sidebar({
                       <div
                         style={{ fontSize: 12, color: "#999", marginTop: 1 }}
                       >
-                        Choose a template, then customise statuses as needed
+                        Choose a template then customise statuses as needed
                       </div>
                     </div>
                   </div>
                   <button
-                    onClick={closeModal}
+                    onClick={closeSpaceModal}
                     style={{
                       background: "#f5f5f4",
                       border: "none",
@@ -1085,9 +1345,8 @@ export default function Sidebar({
                   </button>
                 </div>
 
-                {/* Two-panel body */}
                 <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-                  {/* LEFT — Template selector */}
+                  {/* Left panel — templates */}
                   <div
                     style={{
                       width: 220,
@@ -1139,7 +1398,7 @@ export default function Sidebar({
                         <span style={{ fontSize: 16, flexShrink: 0 }}>
                           {t.icon}
                         </span>
-                        <div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
                               fontSize: 13,
@@ -1164,7 +1423,6 @@ export default function Sidebar({
                         {selectedTemplate === t.key && (
                           <span
                             style={{
-                              marginLeft: "auto",
                               color: "#1d4ed8",
                               fontSize: 14,
                               flexShrink: 0,
@@ -1177,7 +1435,7 @@ export default function Sidebar({
                     ))}
                   </div>
 
-                  {/* RIGHT — Status editor */}
+                  {/* Right panel — status editor */}
                   <div
                     style={{ flex: 1, overflowY: "auto", padding: "20px 22px" }}
                   >
@@ -1206,7 +1464,7 @@ export default function Sidebar({
                           <strong style={{ color: "#555" }}>
                             {selectedTmpl.label}
                           </strong>{" "}
-                          — click any status to rename
+                          — click a status to rename
                         </div>
                       </div>
                       <span
@@ -1224,7 +1482,6 @@ export default function Sidebar({
                       </span>
                     </div>
 
-                    {/* Status list */}
                     {editableStatuses.length === 0 && (
                       <div
                         style={{
@@ -1252,7 +1509,6 @@ export default function Sidebar({
                           border: "1px solid #ebebeb",
                         }}
                       >
-                        {/* Drag handle */}
                         <span
                           style={{
                             color: "#d0d0d0",
@@ -1265,7 +1521,7 @@ export default function Sidebar({
                           ⠿
                         </span>
 
-                        {/* Color dot with picker */}
+                        {/* Color dot */}
                         <div style={{ position: "relative", flexShrink: 0 }}>
                           <button
                             onClick={() =>
@@ -1335,7 +1591,7 @@ export default function Sidebar({
                           )}
                         </div>
 
-                        {/* Status name — click to edit */}
+                        {/* Name */}
                         {editingStatusIdx === idx ? (
                           <input
                             autoFocus
@@ -1381,7 +1637,6 @@ export default function Sidebar({
 
                         <span style={{ flex: 1 }} />
 
-                        {/* Delete */}
                         <button
                           onClick={() => deleteStatus(idx)}
                           style={{
@@ -1401,14 +1656,14 @@ export default function Sidebar({
                           onMouseLeave={(e) =>
                             (e.currentTarget.style.color = "#d0d0d0")
                           }
-                          title="Delete status"
+                          title="Delete"
                         >
                           ×
                         </button>
                       </div>
                     ))}
 
-                    {/* Add status row */}
+                    {/* Add status */}
                     <div
                       style={{
                         display: "flex",
@@ -1517,9 +1772,6 @@ export default function Sidebar({
                       cursor: "pointer",
                       fontWeight: 600,
                       boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
                       outline: "none",
                     }}
                   >
