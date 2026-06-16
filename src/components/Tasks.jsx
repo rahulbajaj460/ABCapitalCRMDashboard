@@ -57,14 +57,17 @@ export default function Tasks({
   const [modalSpaceStatuses, setModalSpaceStatuses] = useState([]);
   const [statusActionMsg, setStatusActionMsg] = useState("");
   const [statusLoading, setStatusLoading] = useState(false);
+
   useEffect(() => {
     fetchTasks();
   }, [activeSpace, activeFolder]);
-
   useEffect(() => {
     fetchMembers();
   }, []);
-
+  useEffect(() => {
+    if (activeSpace)
+      setNewTask((prev) => ({ ...prev, space_id: activeSpace.id }));
+  }, [activeSpace]);
   useEffect(() => {
     function handleClickOutside(e) {
       if (showColumnPicker && !e.target.closest(".column-picker-wrap")) {
@@ -83,36 +86,30 @@ export default function Tasks({
     if (data) setMembers(data);
   }
 
-  useEffect(() => {
-    if (activeSpace) {
-      setNewTask((prev) => ({ ...prev, space_id: activeSpace.id }));
-    }
-  }, [activeSpace]);
-
   async function fetchTasks() {
     let query = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
       .order("created_at", { ascending: false });
-
     if (activeFolder) {
       query = query.eq("folder_id", activeFolder.id);
     } else if (activeSpace) {
       query = query.eq("space_id", activeSpace.id);
     }
-
     if (profile?.role === "member") {
       query = query.eq("assignee_id", profile.id);
     }
-
-    const { data, error } = await query;
-    console.log("fetchTasks result", { count: data?.length, error });
+    const { data } = await query;
     if (data) setTasks(data);
   }
 
-  function getUniqueStatuses() {
-    if (activeFolder) return getStatuses();
-
+  function getStatuses() {
+    if (activeFolder) {
+      const folderStatuses = (activeSpace?.space_statuses || [])
+        .filter((s) => s.folder_id === activeFolder.id)
+        .sort((a, b) => a.status_order - b.status_order);
+      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
+    }
     const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
     const seen = new Set();
     const unique = [];
@@ -125,10 +122,191 @@ export default function Tasks({
           unique.push(s.name);
         }
       });
+    if (unique.length > 0) return unique;
+    return ["To Do", "In Progress", "In Review", "Done"];
+  }
 
+  // Get statuses for a specific folder (used in space-level view)
+  function getFolderStatuses(folder) {
+    const folderStatuses = (activeSpace?.space_statuses || [])
+      .filter((s) => s.folder_id === folder.id)
+      .sort((a, b) => a.status_order - b.status_order);
+    if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
+    // Fall back to space-level statuses
+    return getStatuses();
+  }
+
+  function getUniqueStatuses() {
+    if (activeFolder) return getStatuses();
+    const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
+    const seen = new Set();
+    const unique = [];
+    (activeSpace?.space_statuses || [])
+      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => {
+        if (!seen.has(s.name)) {
+          seen.add(s.name);
+          unique.push(s.name);
+        }
+      });
     return unique.length > 0
       ? unique
       : ["To Do", "In Progress", "In Review", "Done"];
+  }
+
+  function getFields() {
+    if (activeFolder) {
+      const folderFields = activeFolder.space_fields || [];
+      if (folderFields.length > 0)
+        return folderFields.sort((a, b) => a.field_order - b.field_order);
+    }
+    return (activeSpace?.space_fields || []).sort(
+      (a, b) => a.field_order - b.field_order,
+    );
+  }
+
+  // Get fields for a specific folder (used in space-level view)
+  function getFolderFields(folder) {
+    const folderFields = folder.space_fields || [];
+    if (folderFields.length > 0)
+      return folderFields.sort((a, b) => a.field_order - b.field_order);
+    return (activeSpace?.space_fields || []).sort(
+      (a, b) => a.field_order - b.field_order,
+    );
+  }
+
+  function getStatusColor(status) {
+    if (activeFolder) {
+      const found = (activeSpace?.space_statuses || [])
+        .filter((s) => s.folder_id === activeFolder.id)
+        .find((s) => s.name === status);
+      if (found) return found.color;
+    }
+    const found = (activeSpace?.space_statuses || []).find(
+      (s) => s.name === status,
+    );
+    if (found) return found.color;
+    const defaults = {
+      "To Do": "#888",
+      "In Progress": "#7c3aed",
+      "In Review": "#d97706",
+      Done: "#16a34a",
+      "Client Cancelled": "#f59e0b",
+    };
+    return defaults[status] || "#888";
+  }
+
+  function getStatusColorForFolder(status, folder) {
+    const found = (activeSpace?.space_statuses || [])
+      .filter((s) => s.folder_id === folder.id)
+      .find((s) => s.name === status);
+    if (found) return found.color;
+    return getStatusColor(status);
+  }
+
+  function getPriorityStyle(priority) {
+    if (priority === "High") return { background: "#fee2e2", color: "#b91c1c" };
+    if (priority === "Low") return { background: "#dcfce7", color: "#15803d" };
+    return { background: "#fef9c3", color: "#854d0e" };
+  }
+
+  function getSelectedSpaceFolders() {
+    const space = spaces.find((s) => s.id === newTask.space_id);
+    return space?.folders || [];
+  }
+
+  function getSelectedSpaceStatuses() {
+    const space = spaces.find((s) => s.id === newTask.space_id);
+    if (!space) return ["To Do", "In Progress", "In Review", "Done"];
+    if (newTask.folder_id) {
+      const folderStatuses = (space.space_statuses || [])
+        .filter((s) => s.folder_id === newTask.folder_id)
+        .sort((a, b) => a.status_order - b.status_order);
+      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
+    }
+    const allFolderIds = (space.folders || []).map((f) => f.id);
+    const seen = new Set();
+    const unique = [];
+    (space.space_statuses || [])
+      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => {
+        if (!seen.has(s.name)) {
+          seen.add(s.name);
+          unique.push(s.name);
+        }
+      });
+    return unique.length > 0
+      ? unique
+      : ["To Do", "In Progress", "In Review", "Done"];
+  }
+
+  function getSelectedSpaceFields() {
+    const space = spaces.find((s) => s.id === newTask.space_id);
+    if (!space) return [];
+    if (newTask.folder_id) {
+      const folder = space.folders?.find((f) => f.id === newTask.folder_id);
+      const folderFields = folder?.space_fields || [];
+      if (folderFields.length > 0)
+        return folderFields.sort((a, b) => a.field_order - b.field_order);
+    }
+    return (space.space_fields || []).sort(
+      (a, b) => a.field_order - b.field_order,
+    );
+  }
+
+  const filteredTasks = tasks.filter((t) => {
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (search && !t.title.toLowerCase().includes(search.toLowerCase()))
+      return false;
+    return true;
+  });
+
+  function getGroupedTasks() {
+    const taskList = filteredTasks;
+    if (groupBy === "status") {
+      return getStatuses().reduce((acc, status) => {
+        acc[status] = taskList.filter((t) => t.status === status);
+        return acc;
+      }, {});
+    }
+    if (groupBy === "folder") {
+      const groups = {};
+      if (activeSpace) {
+        (activeSpace.folders || []).forEach((f) => {
+          groups[f.name] = taskList.filter((t) => t.folder_id === f.id);
+        });
+      }
+      const ungrouped = taskList.filter((t) => !t.folder_id);
+      if (ungrouped.length > 0) groups["No folder"] = ungrouped;
+      return groups;
+    }
+    if (groupBy === "assignee") {
+      const groups = {};
+      taskList.forEach((task) => {
+        const assignees =
+          task.assignees?.length > 0
+            ? task.assignees
+            : task.assignee
+              ? [task.assignee]
+              : ["Unassigned"];
+        assignees.forEach((name) => {
+          if (!groups[name]) groups[name] = [];
+          groups[name].push(task);
+        });
+      });
+      return Object.fromEntries(
+        Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)),
+      );
+    }
+    if (groupBy === "priority") {
+      return ["High", "Medium", "Low"].reduce((acc, p) => {
+        acc[p] = taskList.filter((t) => t.priority === p);
+        return acc;
+      }, {});
+    }
+    return { "All tasks": taskList };
   }
 
   async function saveTask() {
@@ -138,7 +316,6 @@ export default function Tasks({
       else if (spaces.length > 0) newTask.space_id = spaces[0].id;
       else return;
     }
-
     const payload = {
       title: newTask.title.trim(),
       description: newTask.description,
@@ -151,15 +328,9 @@ export default function Tasks({
       assignees: newTask.assignees,
       due_date: newTask.due_date || null,
     };
-
     let taskId;
     if (editingTask) {
-      const { data } = await supabase
-        .from("tasks")
-        .update(payload)
-        .eq("id", editingTask.id)
-        .select()
-        .single();
+      await supabase.from("tasks").update(payload).eq("id", editingTask.id);
       taskId = editingTask.id;
     } else {
       const { data } = await supabase
@@ -169,8 +340,6 @@ export default function Tasks({
         .single();
       if (data) taskId = data.id;
     }
-
-    // Save custom field values
     if (taskId && Object.keys(taskFieldValues).length > 0) {
       for (const [fieldId, value] of Object.entries(taskFieldValues)) {
         const existing = editingTask?.task_field_values?.find(
@@ -188,7 +357,6 @@ export default function Tasks({
         }
       }
     }
-
     closeTaskModal();
     fetchTasks();
   }
@@ -219,14 +387,24 @@ export default function Tasks({
     onRefreshSpaces();
   }
 
+  async function deleteCustomField(fieldId) {
+    if (
+      !confirm(
+        "Delete this custom field? All values stored in this field will also be deleted.",
+      )
+    )
+      return;
+    await supabase.from("space_fields").delete().eq("id", fieldId);
+    onRefreshSpaces();
+    fetchTasks();
+  }
+
   async function ensureDefaultStatuses() {
     if (!activeSpace || !activeFolder) return;
-
     const { data: existing } = await supabase
       .from("space_statuses")
       .select("name")
       .eq("folder_id", activeFolder.id);
-
     const existingNames = (existing || []).map((s) => s.name);
     const defaults = [
       { name: "To Do", color: "#888780", status_order: 1 },
@@ -236,39 +414,34 @@ export default function Tasks({
     ];
     const toInsert = defaults.filter((d) => !existingNames.includes(d.name));
     if (toInsert.length === 0) return;
-
-    await supabase.from("space_statuses").insert(
-      toInsert.map((d) => ({
-        ...d,
-        space_id: activeSpace.id,
-        folder_id: activeFolder.id,
-      })),
-    );
+    await supabase
+      .from("space_statuses")
+      .insert(
+        toInsert.map((d) => ({
+          ...d,
+          space_id: activeSpace.id,
+          folder_id: activeFolder.id,
+        })),
+      );
   }
 
   async function addCustomStatus() {
     if (!newStatus.name.trim() || !activeSpace) return;
-
     setStatusLoading(true);
     setStatusActionMsg("");
 
-    // If at folder level and folder has no own statuses yet,
-    // first copy space-level statuses to folder level
     if (activeFolder) {
       const { data: existingFolderStatuses } = await supabase
         .from("space_statuses")
         .select("*")
         .eq("folder_id", activeFolder.id);
-
       if (!existingFolderStatuses || existingFolderStatuses.length === 0) {
-        // Copy space statuses to folder level
         const { data: spaceStatuses } = await supabase
           .from("space_statuses")
           .select("*")
           .eq("space_id", activeSpace.id)
           .is("folder_id", null)
           .order("status_order");
-
         if (spaceStatuses && spaceStatuses.length > 0) {
           await supabase.from("space_statuses").insert(
             spaceStatuses.map((s) => ({
@@ -283,15 +456,12 @@ export default function Tasks({
       }
     }
 
-    // Now check for duplicates at the right level
     let dupQuery = supabase.from("space_statuses").select("name");
-
     if (activeFolder) {
       dupQuery = dupQuery.eq("folder_id", activeFolder.id);
     } else {
       dupQuery = dupQuery.eq("space_id", activeSpace.id).is("folder_id", null);
     }
-
     const { data: existing } = await dupQuery;
     const existingNames = (existing || []).map((s) => s.name.toLowerCase());
 
@@ -322,18 +492,6 @@ export default function Tasks({
     setStatusLoading(false);
   }
 
-  async function deleteCustomField(fieldId) {
-    if (
-      !confirm(
-        "Delete this custom field? All values stored in this field will also be deleted.",
-      )
-    )
-      return;
-    await supabase.from("space_fields").delete().eq("id", fieldId);
-    onRefreshSpaces();
-    fetchTasks();
-  }
-
   async function deleteCustomStatus(statusId, statusName) {
     if (
       !confirm(
@@ -343,12 +501,8 @@ export default function Tasks({
       return;
     setStatusLoading(true);
     setStatusActionMsg("");
-
-    // Get remaining statuses after deletion
     const remaining = modalSpaceStatuses.filter((s) => s.id !== statusId);
     const fallback = remaining.length > 0 ? remaining[0].name : null;
-
-    // Move affected tasks
     if (fallback) {
       await supabase
         .from("tasks")
@@ -356,24 +510,19 @@ export default function Tasks({
         .eq("space_id", activeSpace.id)
         .eq("status", statusName);
     }
-
     const { error } = await supabase
       .from("space_statuses")
       .delete()
       .eq("id", statusId);
-
     if (error) {
       setStatusActionMsg("❌ Failed to delete status. Please try again.");
       setStatusLoading(false);
       return;
     }
-
     const msg = fallback
       ? `✅ "${statusName}" deleted. Affected tasks moved to "${fallback}".`
       : `✅ "${statusName}" deleted.`;
     setStatusActionMsg(msg);
-
-    // Refresh everything in correct order
     await fetchModalStatuses();
     await onRefreshSpaces();
     fetchTasks();
@@ -382,9 +531,7 @@ export default function Tasks({
 
   async function fetchModalStatuses() {
     if (!activeSpace) return;
-
     if (activeFolder) {
-      // At folder level — fetch this folder's own statuses
       const { data } = await supabase
         .from("space_statuses")
         .select("*")
@@ -393,10 +540,8 @@ export default function Tasks({
       setModalSpaceStatuses(data || []);
       return data || [];
     } else {
-      // At space level — fetch union of all folder statuses
       const folderIds = (activeSpace.folders || []).map((f) => f.id);
       if (folderIds.length === 0) {
-        // No folders yet — fetch space-level statuses
         const { data } = await supabase
           .from("space_statuses")
           .select("*")
@@ -406,13 +551,11 @@ export default function Tasks({
         setModalSpaceStatuses(data || []);
         return data || [];
       }
-      // Get all folder statuses deduplicated
       const { data } = await supabase
         .from("space_statuses")
-        .select("*, folders(name)")
+        .select("*")
         .in("folder_id", folderIds)
         .order("status_order");
-      // Deduplicate by name
       const seen = new Set();
       const unique = (data || []).filter((s) => {
         if (seen.has(s.name)) return false;
@@ -472,181 +615,192 @@ export default function Tasks({
     setTaskFieldValues({});
   }
 
-  function getStatuses() {
-    if (activeFolder) {
-      // Folder level — show only this folder's own statuses
-      const folderStatuses = (activeSpace?.space_statuses || [])
-        .filter((s) => s.folder_id === activeFolder.id)
-        .sort((a, b) => a.status_order - b.status_order);
-      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
-    }
+  // Reusable task row renderer
+  function renderTaskRow(task, statusList, fieldList, folderCtx = null) {
+    const statusColor = folderCtx
+      ? getStatusColorForFolder(task.status, folderCtx)
+      : getStatusColor(task.status);
+    const isOverdue =
+      task.due_date &&
+      new Date(task.due_date) < new Date() &&
+      task.status !== "Done";
 
-    // Space level — union of ALL folders' statuses deduplicated
-    const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
-    const seen = new Set();
-    const unique = [];
-    (activeSpace?.space_statuses || [])
-      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
-      .sort((a, b) => a.status_order - b.status_order)
-      .forEach((s) => {
-        if (!seen.has(s.name)) {
-          seen.add(s.name);
-          unique.push(s.name);
-        }
-      });
+    return (
+      <tr key={task.id}>
+        {/* Name */}
+        <td style={{ paddingLeft: folderCtx ? 32 : undefined }}>
+          <span
+            style={{ fontWeight: 500, cursor: "pointer" }}
+            onClick={() => openEditTask(task)}
+          >
+            {task.title}
+          </span>
+          {task.description && (
+            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
+              {task.description.slice(0, 60)}
+              {task.description.length > 60 ? "..." : ""}
+            </div>
+          )}
+        </td>
 
-    if (unique.length > 0) return unique;
-    return ["To Do", "In Progress", "In Review", "Done"];
-  }
+        {/* Status badge — only when not grouping by status */}
+        {groupBy !== "status" && visibleColumns.includes("status") && (
+          <td>
+            <span
+              className="badge"
+              style={{ background: statusColor + "22", color: statusColor }}
+            >
+              {task.status}
+            </span>
+          </td>
+        )}
 
-  function getFields() {
-    // If at folder level, use folder fields first
-    if (activeFolder) {
-      const folderFields = activeFolder.space_fields || [];
-      if (folderFields.length > 0) {
-        return folderFields.sort((a, b) => a.field_order - b.field_order);
-      }
-    }
-    return (activeSpace?.space_fields || []).sort(
-      (a, b) => a.field_order - b.field_order,
+        {/* Priority */}
+        {visibleColumns.includes("priority") && (
+          <td>
+            <span className="badge" style={getPriorityStyle(task.priority)}>
+              {task.priority}
+            </span>
+          </td>
+        )}
+
+        {/* Assignees */}
+        {visibleColumns.includes("assignees") && (
+          <td>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+              {(task.assignees?.length > 0
+                ? task.assignees
+                : task.assignee
+                  ? [task.assignee]
+                  : []
+              ).map((name) => (
+                <span
+                  key={name}
+                  style={{
+                    background: "#f0f0ef",
+                    borderRadius: 20,
+                    padding: "1px 7px",
+                    fontSize: 11,
+                    fontWeight: 500,
+                  }}
+                >
+                  {name}
+                </span>
+              ))}
+              {!task.assignees?.length && !task.assignee && "—"}
+            </div>
+          </td>
+        )}
+
+        {/* Due date */}
+        {visibleColumns.includes("due_date") && (
+          <td
+            style={{
+              fontSize: 12,
+              color: isOverdue ? "#b91c1c" : "#555",
+              fontWeight: isOverdue ? 600 : 400,
+            }}
+          >
+            {task.due_date
+              ? isOverdue
+                ? `⚠️ ${task.due_date}`
+                : task.due_date
+              : "—"}
+          </td>
+        )}
+
+        {/* Custom fields — only ones visible */}
+        {fieldList
+          .filter((f) => visibleColumns.includes(`field_${f.id}`))
+          .map((f) => {
+            const fv = task.task_field_values?.find((v) => v.field_id === f.id);
+            return (
+              <td key={f.id}>
+                {fv?.value ? (
+                  f.field_type === "dropdown" ? (
+                    <span
+                      style={{
+                        background: "#f0f0ef",
+                        borderRadius: 20,
+                        padding: "1px 8px",
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: "#333",
+                      }}
+                    >
+                      {fv.value}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 12, color: "#555" }}>
+                      {fv.value}
+                    </span>
+                  )
+                ) : (
+                  "—"
+                )}
+              </td>
+            );
+          })}
+
+        {/* Status dropdown */}
+        <td style={{ minWidth: 130 }}>
+          <select
+            value={task.status}
+            onChange={(e) => updateTaskStatus(task.id, e.target.value)}
+            style={{ fontSize: 11, padding: "3px 6px" }}
+          >
+            {statusList.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </td>
+
+        {/* Actions */}
+        <td style={{ width: 70 }}>
+          <div className="task-row-actions" style={{ display: "flex", gap: 4 }}>
+            <button className="btn btn-sm" onClick={() => openEditTask(task)}>
+              ✏️
+            </button>
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={() => deleteTask(task.id)}
+            >
+              🗑
+            </button>
+          </div>
+        </td>
+      </tr>
     );
   }
 
-  function getStatusColor(status) {
-    if (activeFolder) {
-      const found = (activeSpace?.space_statuses || [])
-        .filter((s) => s.folder_id === activeFolder.id)
-        .find((s) => s.name === status);
-      if (found) return found.color;
-    }
-    // Search across all statuses in space
-    const found = (activeSpace?.space_statuses || []).find(
-      (s) => s.name === status,
+  // Reusable table header renderer
+  function renderTableHead(
+    fieldList,
+    showStatusBadge = false,
+    indented = false,
+  ) {
+    return (
+      <thead>
+        <tr>
+          <th style={indented ? { paddingLeft: 32 } : {}}>Name</th>
+          {showStatusBadge &&
+            groupBy !== "status" &&
+            visibleColumns.includes("status") && <th>Status</th>}
+          {visibleColumns.includes("priority") && <th>Priority</th>}
+          {visibleColumns.includes("assignees") && <th>Assignees</th>}
+          {visibleColumns.includes("due_date") && <th>Due date</th>}
+          {fieldList
+            .filter((f) => visibleColumns.includes(`field_${f.id}`))
+            .map((f) => (
+              <th key={f.id}>{f.field_name}</th>
+            ))}
+          <th style={{ minWidth: 130 }}>Status</th>
+          <th style={{ width: 70 }}></th>
+        </tr>
+      </thead>
     );
-    if (found) return found.color;
-
-    const defaults = {
-      "To Do": "#888",
-      "In Progress": "#7c3aed",
-      "In Review": "#d97706",
-      Done: "#16a34a",
-      "Client Cancelled": "#f59e0b",
-    };
-    return defaults[status] || "#888";
-  }
-
-  function getPriorityStyle(priority) {
-    if (priority === "High") return { background: "#fee2e2", color: "#b91c1c" };
-    if (priority === "Low") return { background: "#dcfce7", color: "#15803d" };
-    return { background: "#fef9c3", color: "#854d0e" };
-  }
-
-  function getSelectedSpaceFolders() {
-    const spaceId = newTask.space_id;
-    const space = spaces.find((s) => s.id === spaceId);
-    return space?.folders || [];
-  }
-
-  function getSelectedSpaceStatuses() {
-    const space = spaces.find((s) => s.id === newTask.space_id);
-    if (!space) return ["To Do", "In Progress", "In Review", "Done"];
-
-    if (newTask.folder_id) {
-      const folderStatuses = (space.space_statuses || [])
-        .filter((s) => s.folder_id === newTask.folder_id)
-        .sort((a, b) => a.status_order - b.status_order);
-      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
-    }
-
-    // Fall back to space-level union
-    const allFolderIds = (space.folders || []).map((f) => f.id);
-    const seen = new Set();
-    const unique = [];
-    (space.space_statuses || [])
-      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
-      .sort((a, b) => a.status_order - b.status_order)
-      .forEach((s) => {
-        if (!seen.has(s.name)) {
-          seen.add(s.name);
-          unique.push(s.name);
-        }
-      });
-
-    return unique.length > 0
-      ? unique
-      : ["To Do", "In Progress", "In Review", "Done"];
-  }
-
-  function getSelectedSpaceFields() {
-    const spaceId = newTask.space_id;
-    const space = spaces.find((s) => s.id === spaceId);
-    return (space?.space_fields || []).sort(
-      (a, b) => a.field_order - b.field_order,
-    );
-  }
-
-  const filteredTasks = tasks.filter((t) => {
-    if (statusFilter !== "all" && t.status !== statusFilter) return false;
-    if (search && !t.title.toLowerCase().includes(search.toLowerCase()))
-      return false;
-    return true;
-  });
-
-  function getGroupedTasks() {
-    const tasks = filteredTasks;
-
-    if (groupBy === "status") {
-      return getStatuses().reduce((acc, status) => {
-        acc[status] = tasks.filter((t) => t.status === status);
-        return acc;
-      }, {});
-    }
-
-    if (groupBy === "folder") {
-      // When at space level — group by folder
-      const groups = {};
-      // First add folder groups
-      if (activeSpace) {
-        const spaceFolders = activeSpace.folders || [];
-        spaceFolders.forEach((f) => {
-          groups[f.name] = tasks.filter((t) => t.folder_id === f.id);
-        });
-      }
-      // Add ungrouped tasks (no folder)
-      const ungrouped = tasks.filter((t) => !t.folder_id);
-      if (ungrouped.length > 0) groups["No folder"] = ungrouped;
-      return groups;
-    }
-
-    if (groupBy === "assignee") {
-      const groups = {};
-      tasks.forEach((task) => {
-        const assignees =
-          task.assignees && task.assignees.length > 0
-            ? task.assignees
-            : task.assignee
-              ? [task.assignee]
-              : ["Unassigned"];
-        assignees.forEach((name) => {
-          if (!groups[name]) groups[name] = [];
-          groups[name].push(task);
-        });
-      });
-      // Sort by name
-      return Object.fromEntries(
-        Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)),
-      );
-    }
-
-    if (groupBy === "priority") {
-      const order = ["High", "Medium", "Low"];
-      return order.reduce((acc, p) => {
-        acc[p] = tasks.filter((t) => t.priority === p);
-        return acc;
-      }, {});
-    }
-
-    return { "All tasks": tasks };
   }
 
   const pageTitle = activeFolder
@@ -714,7 +868,7 @@ export default function Tasks({
         </div>
       </div>
 
-      {/* Tabs — List / Board */}
+      {/* Toolbar */}
       <div
         style={{
           display: "flex",
@@ -740,7 +894,6 @@ export default function Tasks({
             📌 Board
           </div>
         </div>
-
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div className="search-wrap">
             <span style={{ color: "#aaa" }}>🔍</span>
@@ -789,6 +942,7 @@ export default function Tasks({
                   { key: "priority", label: "Priority" },
                   { key: "assignees", label: "Assignees" },
                   { key: "due_date", label: "Due date" },
+                  { key: "status", label: "Status badge" },
                   ...getFields().map((f) => ({
                     key: `field_${f.id}`,
                     label: f.field_name,
@@ -881,20 +1035,57 @@ export default function Tasks({
         {/* LIST VIEW */}
         {viewMode === "list" && (
           <div>
-            {/* SPACE LEVEL — show folders as sections */}
             {activeSpace && !activeFolder ? (
+              /* SPACE LEVEL — show folders as sections */
               <div>
                 {(activeSpace.folders || []).map((folder) => {
                   const folderTasks = tasks.filter(
                     (t) => t.folder_id === folder.id,
                   );
+                  const filteredFolderTasks = folderTasks.filter((t) => {
+                    if (statusFilter !== "all" && t.status !== statusFilter)
+                      return false;
+                    if (
+                      search &&
+                      !t.title.toLowerCase().includes(search.toLowerCase())
+                    )
+                      return false;
+                    return true;
+                  });
                   const isExpanded = expandedGroups[folder.id] !== false;
-                  const statusGroups = getStatuses().reduce((acc, status) => {
-                    acc[status] = folderTasks.filter(
-                      (t) => t.status === status,
-                    );
-                    return acc;
-                  }, {});
+                  const folderStatusList = getFolderStatuses(folder);
+                  const folderFieldList = getFolderFields(folder);
+
+                  const grouped =
+                    groupBy === "status"
+                      ? folderStatusList.reduce((acc, s) => {
+                          acc[s] = filteredFolderTasks.filter(
+                            (t) => t.status === s,
+                          );
+                          return acc;
+                        }, {})
+                      : groupBy === "priority"
+                        ? ["High", "Medium", "Low"].reduce((acc, p) => {
+                            acc[p] = filteredFolderTasks.filter(
+                              (t) => t.priority === p,
+                            );
+                            return acc;
+                          }, {})
+                        : groupBy === "assignee"
+                          ? filteredFolderTasks.reduce((acc, task) => {
+                              const names =
+                                task.assignees?.length > 0
+                                  ? task.assignees
+                                  : task.assignee
+                                    ? [task.assignee]
+                                    : ["Unassigned"];
+                              names.forEach((n) => {
+                                if (!acc[n]) acc[n] = [];
+                                acc[n].push(task);
+                              });
+                              return acc;
+                            }, {})
+                          : { "All tasks": filteredFolderTasks };
 
                   return (
                     <div
@@ -948,10 +1139,9 @@ export default function Tasks({
                         </span>
                       </div>
 
-                      {/* Folder tasks grouped by selected groupBy */}
                       {isExpanded && (
                         <div style={{ padding: "8px 0" }}>
-                          {folderTasks.length === 0 ? (
+                          {filteredFolderTasks.length === 0 ? (
                             <div
                               style={{
                                 fontSize: 13,
@@ -962,322 +1152,90 @@ export default function Tasks({
                               No tasks in this folder
                             </div>
                           ) : (
-                            Object.entries(
-                              groupBy === "status"
-                                ? statusGroups
-                                : groupBy === "priority"
-                                  ? ["High", "Medium", "Low"].reduce(
-                                      (acc, p) => {
-                                        acc[p] = folderTasks.filter(
-                                          (t) => t.priority === p,
-                                        );
-                                        return acc;
-                                      },
-                                      {},
-                                    )
-                                  : groupBy === "assignee"
-                                    ? folderTasks.reduce((acc, task) => {
-                                        const names =
-                                          task.assignees?.length > 0
-                                            ? task.assignees
-                                            : task.assignee
-                                              ? [task.assignee]
-                                              : ["Unassigned"];
-                                        names.forEach((n) => {
-                                          if (!acc[n]) acc[n] = [];
-                                          acc[n].push(task);
-                                        });
-                                        return acc;
-                                      }, {})
-                                    : statusGroups,
-                            ).map(([groupName, groupTasks]) => {
-                              if (groupTasks.length === 0) return null;
-                              const groupKey = `${folder.id}_${groupName}`;
-                              const groupExpanded =
-                                expandedGroups[groupKey] !== false;
-                              return (
-                                <div
-                                  key={groupName}
-                                  style={{ marginBottom: 4 }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 8,
-                                      padding: "6px 16px",
-                                      cursor: "pointer",
-                                    }}
-                                    onClick={() =>
-                                      setExpandedGroups((prev) => ({
-                                        ...prev,
-                                        [groupKey]: !groupExpanded,
-                                      }))
-                                    }
-                                  >
-                                    <span
-                                      style={{ fontSize: 10, color: "#aaa" }}
-                                    >
-                                      {groupExpanded ? "▾" : "▸"}
-                                    </span>
-                                    <span
-                                      style={{
-                                        background:
-                                          groupBy === "status"
-                                            ? getStatusColor(groupName)
-                                            : "#f0f0ef",
-                                        color:
-                                          groupBy === "status"
-                                            ? "#fff"
-                                            : "#333",
-                                        padding: "2px 10px",
-                                        borderRadius: 20,
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {groupName}
-                                    </span>
-                                    <span
-                                      style={{ fontSize: 12, color: "#aaa" }}
-                                    >
-                                      {groupTasks.length}
-                                    </span>
-                                  </div>
+                            Object.entries(grouped).map(
+                              ([groupName, groupTasks]) => {
+                                if (groupTasks.length === 0) return null;
+                                const groupKey = `${folder.id}_${groupName}`;
+                                const groupExpanded =
+                                  expandedGroups[groupKey] !== false;
+                                const groupColor =
+                                  groupBy === "status"
+                                    ? getStatusColorForFolder(groupName, folder)
+                                    : "#f0f0ef";
 
-                                  {groupExpanded && (
-                                    <table
-                                      className="task-table"
-                                      style={{ marginBottom: 4 }}
+                                return (
+                                  <div
+                                    key={groupName}
+                                    style={{ marginBottom: 4 }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "6px 16px",
+                                        cursor: "pointer",
+                                      }}
+                                      onClick={() =>
+                                        setExpandedGroups((prev) => ({
+                                          ...prev,
+                                          [groupKey]: !groupExpanded,
+                                        }))
+                                      }
                                     >
-                                      <thead>
-                                        <tr>
-                                          <th style={{ paddingLeft: 32 }}>
-                                            Name
-                                          </th>
-                                          {groupBy !== "status" && (
-                                            <th>Status</th>
+                                      <span
+                                        style={{ fontSize: 10, color: "#aaa" }}
+                                      >
+                                        {groupExpanded ? "▾" : "▸"}
+                                      </span>
+                                      <span
+                                        style={{
+                                          background: groupColor,
+                                          color:
+                                            groupBy === "status"
+                                              ? "#fff"
+                                              : "#333",
+                                          padding: "2px 10px",
+                                          borderRadius: 20,
+                                          fontSize: 11,
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        {groupName}
+                                      </span>
+                                      <span
+                                        style={{ fontSize: 12, color: "#aaa" }}
+                                      >
+                                        {groupTasks.length}
+                                      </span>
+                                    </div>
+
+                                    {groupExpanded && (
+                                      <table
+                                        className="task-table"
+                                        style={{ marginBottom: 4 }}
+                                      >
+                                        {renderTableHead(
+                                          folderFieldList,
+                                          true,
+                                          true,
+                                        )}
+                                        <tbody>
+                                          {groupTasks.map((task) =>
+                                            renderTaskRow(
+                                              task,
+                                              folderStatusList,
+                                              folderFieldList,
+                                              folder,
+                                            ),
                                           )}
-                                          <th>Priority</th>
-                                          <th>Assignees</th>
-                                          <th>Due date</th>
-                                          {getFields().map((f) => (
-                                            <th key={f.id}>{f.field_name}</th>
-                                          ))}
-                                          <th></th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {groupTasks.map((task) => (
-                                          <tr key={task.id}>
-                                            <td>
-                                              <span
-                                                style={{
-                                                  fontWeight: 500,
-                                                  cursor: "pointer",
-                                                }}
-                                                onClick={() =>
-                                                  openEditTask(task)
-                                                }
-                                              >
-                                                {task.title}
-                                              </span>
-                                            </td>
-                                            {groupBy !== "status" &&
-                                              visibleColumns.includes(
-                                                "status",
-                                              ) && (
-                                                <td>
-                                                  <span
-                                                    className="badge"
-                                                    style={{
-                                                      background:
-                                                        getStatusColor(
-                                                          task.status,
-                                                        ) + "22",
-                                                      color: getStatusColor(
-                                                        task.status,
-                                                      ),
-                                                    }}
-                                                  >
-                                                    {task.status}
-                                                  </span>
-                                                </td>
-                                              )}
-                                            {visibleColumns.includes(
-                                              "priority",
-                                            ) && (
-                                              <td>
-                                                <span
-                                                  className="badge"
-                                                  style={getPriorityStyle(
-                                                    task.priority,
-                                                  )}
-                                                >
-                                                  {task.priority}
-                                                </span>
-                                              </td>
-                                            )}
-                                            {visibleColumns.includes(
-                                              "assignees",
-                                            ) && (
-                                              <td>
-                                                <div
-                                                  style={{
-                                                    display: "flex",
-                                                    flexWrap: "wrap",
-                                                    gap: 3,
-                                                  }}
-                                                >
-                                                  {(task.assignees?.length > 0
-                                                    ? task.assignees
-                                                    : task.assignee
-                                                      ? [task.assignee]
-                                                      : []
-                                                  ).map((name) => (
-                                                    <span
-                                                      key={name}
-                                                      style={{
-                                                        background: "#f0f0ef",
-                                                        borderRadius: 20,
-                                                        padding: "1px 7px",
-                                                        fontSize: 11,
-                                                        fontWeight: 500,
-                                                      }}
-                                                    >
-                                                      {name}
-                                                    </span>
-                                                  ))}
-                                                  {!task.assignees?.length &&
-                                                    !task.assignee &&
-                                                    "—"}
-                                                </div>
-                                              </td>
-                                            )}
-                                            {visibleColumns.includes(
-                                              "due_date",
-                                            ) && (
-                                              <td
-                                                style={{
-                                                  fontSize: 12,
-                                                  color:
-                                                    task.due_date &&
-                                                    new Date(task.due_date) <
-                                                      new Date() &&
-                                                    task.status !== "Done"
-                                                      ? "#b91c1c"
-                                                      : "#555",
-                                                }}
-                                              >
-                                                {task.due_date
-                                                  ? new Date(task.due_date) <
-                                                      new Date() &&
-                                                    task.status !== "Done"
-                                                    ? `⚠️ ${task.due_date}`
-                                                    : task.due_date
-                                                  : "—"}
-                                              </td>
-                                            )}
-                                            {getFields()
-                                              .filter((f) =>
-                                                visibleColumns.includes(
-                                                  `field_${f.id}`,
-                                                ),
-                                              )
-                                              .map((f) => {
-                                                const fv =
-                                                  task.task_field_values?.find(
-                                                    (v) => v.field_id === f.id,
-                                                  );
-                                                return (
-                                                  <td key={f.id}>
-                                                    {fv?.value ? (
-                                                      f.field_type ===
-                                                      "dropdown" ? (
-                                                        <span
-                                                          style={{
-                                                            background:
-                                                              "#f0f0ef",
-                                                            borderRadius: 20,
-                                                            padding: "1px 8px",
-                                                            fontSize: 11,
-                                                            fontWeight: 500,
-                                                            color: "#333",
-                                                          }}
-                                                        >
-                                                          {fv.value}
-                                                        </span>
-                                                      ) : (
-                                                        <span
-                                                          style={{
-                                                            fontSize: 12,
-                                                            color: "#555",
-                                                          }}
-                                                        >
-                                                          {fv.value}
-                                                        </span>
-                                                      )
-                                                    ) : (
-                                                      "—"
-                                                    )}
-                                                  </td>
-                                                );
-                                              })}
-                                            <td>
-                                              <div
-                                                style={{
-                                                  display: "flex",
-                                                  alignItems: "center",
-                                                  gap: 4,
-                                                }}
-                                              >
-                                                <select
-                                                  value={task.status}
-                                                  onChange={(e) =>
-                                                    updateTaskStatus(
-                                                      task.id,
-                                                      e.target.value,
-                                                    )
-                                                  }
-                                                  style={{
-                                                    fontSize: 11,
-                                                    padding: "3px 6px",
-                                                  }}
-                                                >
-                                                  {getStatuses().map((s) => (
-                                                    <option key={s} value={s}>
-                                                      {s}
-                                                    </option>
-                                                  ))}
-                                                </select>
-                                                <div className="task-row-actions">
-                                                  <button
-                                                    className="btn btn-sm"
-                                                    onClick={() =>
-                                                      openEditTask(task)
-                                                    }
-                                                  >
-                                                    ✏️
-                                                  </button>
-                                                  <button
-                                                    className="btn btn-sm btn-danger"
-                                                    onClick={() =>
-                                                      deleteTask(task.id)
-                                                    }
-                                                  >
-                                                    🗑
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  )}
-                                </div>
-                              );
-                            })
+                                        </tbody>
+                                      </table>
+                                    )}
+                                  </div>
+                                );
+                              },
+                            )
                           )}
                         </div>
                       )}
@@ -1327,69 +1285,11 @@ export default function Tasks({
                         </span>
                       </div>
                       <table className="task-table">
-                        <thead>
-                          <tr>
-                            <th>Name</th>
-                            <th>Status</th>
-                            <th>Priority</th>
-                            <th>Assignees</th>
-                            <th>Due date</th>
-                            <th></th>
-                          </tr>
-                        </thead>
+                        {renderTableHead(getFields(), true)}
                         <tbody>
-                          {noFolderTasks.map((task) => (
-                            <tr key={task.id}>
-                              <td style={{ fontWeight: 500 }}>{task.title}</td>
-                              <td>
-                                <span
-                                  className="badge"
-                                  style={{
-                                    background:
-                                      getStatusColor(task.status) + "22",
-                                    color: getStatusColor(task.status),
-                                  }}
-                                >
-                                  {task.status}
-                                </span>
-                              </td>
-                              <td>
-                                <span
-                                  className="badge"
-                                  style={getPriorityStyle(task.priority)}
-                                >
-                                  {task.priority}
-                                </span>
-                              </td>
-                              <td style={{ fontSize: 12 }}>
-                                {(task.assignees?.length > 0
-                                  ? task.assignees
-                                  : task.assignee
-                                    ? [task.assignee]
-                                    : ["—"]
-                                ).join(", ")}
-                              </td>
-                              <td style={{ fontSize: 12 }}>
-                                {task.due_date || "—"}
-                              </td>
-                              <td>
-                                <div className="task-row-actions">
-                                  <button
-                                    className="btn btn-sm"
-                                    onClick={() => openEditTask(task)}
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button
-                                    className="btn btn-sm btn-danger"
-                                    onClick={() => deleteTask(task.id)}
-                                  >
-                                    🗑
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                          {noFolderTasks.map((task) =>
+                            renderTaskRow(task, getStatuses(), getFields()),
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -1416,7 +1316,7 @@ export default function Tasks({
                   )}
               </div>
             ) : (
-              /* FOLDER LEVEL — show tasks grouped by selected groupBy */
+              /* FOLDER LEVEL — show tasks grouped */
               <div>
                 {Object.entries(getGroupedTasks()).map(
                   ([groupName, groupTasks]) => {
@@ -1470,204 +1370,19 @@ export default function Tasks({
                             }}
                           >
                             <table className="task-table">
-                              <thead>
-                                <tr>
-                                  <th>Name</th>
-                                  {groupBy !== "status" &&
-                                    visibleColumns.includes("status") && (
-                                      <th>Status</th>
-                                    )}
-                                  {visibleColumns.includes("priority") && (
-                                    <th>Priority</th>
-                                  )}
-                                  {visibleColumns.includes("assignees") && (
-                                    <th>Assignees</th>
-                                  )}
-                                  {visibleColumns.includes("due_date") && (
-                                    <th>Due date</th>
-                                  )}
-                                  {getFields()
-                                    .filter((f) =>
-                                      visibleColumns.includes(`field_${f.id}`),
-                                    )
-                                    .map((f) => (
-                                      <th key={f.id}>{f.field_name}</th>
-                                    ))}
-                                  <th></th>
-                                </tr>
-                              </thead>
+                              {renderTableHead(getFields(), true)}
                               <tbody>
-                                {groupTasks.map((task) => (
-                                  <tr key={task.id}>
-                                    <td>
-                                      <span
-                                        style={{
-                                          fontWeight: 500,
-                                          cursor: "pointer",
-                                        }}
-                                        onClick={() => openEditTask(task)}
-                                      >
-                                        {task.title}
-                                      </span>
-                                    </td>
-                                    {groupBy !== "status" &&
-                                      visibleColumns.includes("status") && (
-                                        <td>
-                                          <span
-                                            className="badge"
-                                            style={{
-                                              background:
-                                                getStatusColor(task.status) +
-                                                "22",
-                                              color: getStatusColor(
-                                                task.status,
-                                              ),
-                                            }}
-                                          >
-                                            {task.status}
-                                          </span>
-                                        </td>
-                                      )}
-                                    {visibleColumns.includes("priority") && (
-                                      <td>
-                                        <span
-                                          className="badge"
-                                          style={getPriorityStyle(
-                                            task.priority,
-                                          )}
-                                        >
-                                          {task.priority}
-                                        </span>
-                                      </td>
-                                    )}
-                                    {visibleColumns.includes("assignees") && (
-                                      <td>
-                                        <div
-                                          style={{
-                                            display: "flex",
-                                            flexWrap: "wrap",
-                                            gap: 3,
-                                          }}
-                                        >
-                                          {(task.assignees?.length > 0
-                                            ? task.assignees
-                                            : task.assignee
-                                              ? [task.assignee]
-                                              : []
-                                          ).map((name) => (
-                                            <span
-                                              key={name}
-                                              style={{
-                                                background: "#f0f0ef",
-                                                borderRadius: 20,
-                                                padding: "1px 7px",
-                                                fontSize: 11,
-                                                fontWeight: 500,
-                                              }}
-                                            >
-                                              {name}
-                                            </span>
-                                          ))}
-                                          {!task.assignees?.length &&
-                                            !task.assignee &&
-                                            "—"}
-                                        </div>
-                                      </td>
-                                    )}
-                                    {visibleColumns.includes("due_date") && (
-                                      <td
-                                        style={{
-                                          fontSize: 12,
-                                          color:
-                                            task.due_date &&
-                                            new Date(task.due_date) <
-                                              new Date() &&
-                                            task.status !== "Done"
-                                              ? "#b91c1c"
-                                              : "#555",
-                                        }}
-                                      >
-                                        {task.due_date
-                                          ? new Date(task.due_date) <
-                                              new Date() &&
-                                            task.status !== "Done"
-                                            ? `⚠️ ${task.due_date}`
-                                            : task.due_date
-                                          : "—"}
-                                      </td>
-                                    )}
-                                    {getFields()
-                                      .filter((f) =>
-                                        visibleColumns.includes(
-                                          `field_${f.id}`,
-                                        ),
-                                      )
-                                      .map((f) => {
-                                        const fv = task.task_field_values?.find(
-                                          (v) => v.field_id === f.id,
-                                        );
-                                        return (
-                                          <td
-                                            key={f.id}
-                                            style={{
-                                              fontSize: 12,
-                                              color: "#555",
-                                            }}
-                                          >
-                                            {fv?.value || "—"}
-                                          </td>
-                                        );
-                                      })}
-                                    <td>
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: 4,
-                                        }}
-                                      >
-                                        <select
-                                          value={task.status}
-                                          onChange={(e) =>
-                                            updateTaskStatus(
-                                              task.id,
-                                              e.target.value,
-                                            )
-                                          }
-                                          style={{
-                                            fontSize: 11,
-                                            padding: "3px 6px",
-                                          }}
-                                        >
-                                          {getStatuses().map((s) => (
-                                            <option key={s} value={s}>
-                                              {s}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <div className="task-row-actions">
-                                          <button
-                                            className="btn btn-sm"
-                                            onClick={() => openEditTask(task)}
-                                          >
-                                            ✏️
-                                          </button>
-                                          <button
-                                            className="btn btn-sm btn-danger"
-                                            onClick={() => deleteTask(task.id)}
-                                          >
-                                            🗑
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
+                                {groupTasks.map((task) =>
+                                  renderTaskRow(
+                                    task,
+                                    getStatuses(),
+                                    getFields(),
+                                  ),
+                                )}
                               </tbody>
                             </table>
                           </div>
                         )}
-
                         {isExpanded && groupTasks.length === 0 && (
                           <div
                             style={{
@@ -1750,7 +1465,7 @@ export default function Tasks({
                             marginTop: 4,
                           }}
                         >
-                          {(task.assignees && task.assignees.length > 0
+                          {(task.assignees?.length > 0
                             ? task.assignees
                             : [task.assignee]
                           ).map((name) => (
@@ -1800,7 +1515,6 @@ export default function Tasks({
             <div className="modal-title">
               {editingTask ? "Edit task" : "New task"}
             </div>
-
             <div className="form-group">
               <label className="form-label">Task name *</label>
               <input
@@ -1812,7 +1526,6 @@ export default function Tasks({
                 }
               />
             </div>
-
             <div className="form-group">
               <label className="form-label">Description</label>
               <textarea
@@ -1826,19 +1539,16 @@ export default function Tasks({
                 }
               />
             </div>
-
             <div className="form-grid">
               <div className="form-group">
                 <label className="form-label">Space *</label>
                 <select
                   value={newTask.space_id}
                   onChange={(e) => {
-                    const selectedSpace = spaces.find(
-                      (s) => s.id === e.target.value,
-                    );
+                    const sel = spaces.find((s) => s.id === e.target.value);
                     const firstStatus =
-                      selectedSpace?.space_statuses?.length > 0
-                        ? selectedSpace.space_statuses.sort(
+                      sel?.space_statuses?.length > 0
+                        ? sel.space_statuses.sort(
                             (a, b) => a.status_order - b.status_order,
                           )[0].name
                         : "To Do";
@@ -1858,7 +1568,6 @@ export default function Tasks({
                   ))}
                 </select>
               </div>
-
               <div className="form-group">
                 <label className="form-label">Folder</label>
                 <select
@@ -1878,7 +1587,6 @@ export default function Tasks({
                   ))}
                 </select>
               </div>
-
               <div className="form-group">
                 <label className="form-label">Status</label>
                 <select
@@ -1894,7 +1602,6 @@ export default function Tasks({
                   ))}
                 </select>
               </div>
-
               <div className="form-group">
                 <label className="form-label">Priority</label>
                 <select
@@ -1911,7 +1618,6 @@ export default function Tasks({
                   <option value="Low">Low</option>
                 </select>
               </div>
-
               <div className="form-group" style={{ gridColumn: "1 / -1" }}>
                 <label className="form-label">Assignees</label>
                 <div
@@ -2002,7 +1708,6 @@ export default function Tasks({
                   </select>
                 </div>
               </div>
-
               <div className="form-group">
                 <label className="form-label">Due date</label>
                 <input
@@ -2018,7 +1723,6 @@ export default function Tasks({
               </div>
             </div>
 
-            {/* Custom fields */}
             {getSelectedSpaceFields().length > 0 && (
               <div>
                 <div
@@ -2121,7 +1825,7 @@ export default function Tasks({
         </div>
       )}
 
-      {/* ADD CUSTOM FIELD MODAL */}
+      {/* CUSTOM FIELD MODAL */}
       {showFieldModal && (
         <div
           className="modal-overlay"
@@ -2144,8 +1848,6 @@ export default function Tasks({
                 </>
               )}
             </div>
-
-            {/* Existing fields */}
             {getFields().length > 0 && (
               <div style={{ marginBottom: 16 }}>
                 <div
@@ -2192,8 +1894,6 @@ export default function Tasks({
                 ))}
               </div>
             )}
-
-            {/* Add new field */}
             <div
               style={{
                 fontSize: 11,
@@ -2236,6 +1936,9 @@ export default function Tasks({
                 <option value="number">Number</option>
                 <option value="date">Date</option>
                 <option value="email">Email</option>
+                <option value="phone">Phone</option>
+                <option value="url">URL</option>
+                <option value="dropdown">Dropdown</option>
               </select>
             </div>
             <div className="modal-actions">
@@ -2250,7 +1953,7 @@ export default function Tasks({
         </div>
       )}
 
-      {/* ADD CUSTOM STATUS MODAL */}
+      {/* STATUS MODAL */}
       {showStatusModal && (
         <div
           className="modal-overlay"
@@ -2277,7 +1980,6 @@ export default function Tasks({
                 ✕
               </button>
             </div>
-
             <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
               {activeFolder ? (
                 <>
@@ -2301,8 +2003,6 @@ export default function Tasks({
                 </>
               )}
             </div>
-
-            {/* Feedback message */}
             {statusActionMsg && (
               <div
                 style={{
@@ -2326,8 +2026,6 @@ export default function Tasks({
                 {statusActionMsg}
               </div>
             )}
-
-            {/* Existing statuses */}
             <div
               style={{
                 fontSize: 11,
@@ -2402,13 +2100,9 @@ export default function Tasks({
                 ))}
               </div>
             )}
-
-            {/* Divider */}
             <div
               style={{ borderTop: "1px solid #e8e8e8", margin: "4px 0 16px" }}
             />
-
-            {/* Add new */}
             <div
               style={{
                 fontSize: 11,
