@@ -836,17 +836,7 @@ export default function Tasks({
       </div>
 
       {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 24px",
-          borderBottom: "1px solid #e8e8e8",
-          background: "#fff",
-          minHeight: 48,
-        }}
-      >
+      <div className="toolbar-row">
         <div className="tabs" style={{ border: "none", padding: 0 }}>
           <div
             className={`tab ${viewMode === "list" ? "active" : ""}`}
@@ -861,9 +851,9 @@ export default function Tasks({
             📌 Board
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div className="search-wrap">
-            <span style={{ color: "#aaa" }}>🔍</span>
+        <div className="toolbar-right">
+          <div className="toolbar-search">
+            <span style={{ color: "#bbb", fontSize: 13 }}>🔍</span>
             <input
               placeholder="Search tasks..."
               value={search}
@@ -873,9 +863,8 @@ export default function Tasks({
           {/* Column picker */}
           <div style={{ position: "relative" }} className="column-picker-wrap">
             <button
-              className="btn btn-sm"
+              className="toolbar-btn"
               onClick={() => setShowColumnPicker((prev) => !prev)}
-              style={{ display: "flex", alignItems: "center", gap: 4 }}
             >
               ⊞ Columns
             </button>
@@ -974,9 +963,9 @@ export default function Tasks({
             )}
           </div>
           <select
+            className="toolbar-select"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ fontSize: 13 }}
           >
             <option value="all">All statuses</option>
             {getUniqueStatuses().map((s) => (
@@ -986,9 +975,9 @@ export default function Tasks({
             ))}
           </select>
           <select
+            className="toolbar-select"
             value={groupBy}
             onChange={(e) => setGroupBy(e.target.value)}
-            style={{ fontSize: 13 }}
           >
             <option value="status">Group by: Status</option>
             <option value="folder">Group by: Folder</option>
