@@ -12,6 +12,138 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
 
+// ── Category accent colors cycling through a palette ──
+const CAT_COLORS = [
+  { bg: "#eff6ff", icon: "#3b82f6", text: "#1d4ed8" }, // blue
+  { bg: "#f0fdf4", icon: "#22c55e", text: "#15803d" }, // green
+  { bg: "#fdf4ff", icon: "#a855f7", text: "#7e22ce" }, // purple
+  { bg: "#fff7ed", icon: "#f97316", text: "#c2410c" }, // orange
+  { bg: "#fef2f2", icon: "#ef4444", text: "#b91c1c" }, // red
+  { bg: "#f0fdfa", icon: "#14b8a6", text: "#0f766e" }, // teal
+  { bg: "#fefce8", icon: "#eab308", text: "#a16207" }, // yellow
+  { bg: "#fff1f2", icon: "#f43f5e", text: "#be123c" }, // rose
+];
+
+function getCatColor(index) {
+  return CAT_COLORS[index % CAT_COLORS.length];
+}
+
+// ── SVG Icons ──
+function IconFolder({ color = "#6b7280", size = 15 }) {
+  return (
+    <svg
+      width={size}
+      height={size * 0.87}
+      viewBox="0 0 16 14"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ flexShrink: 0 }}
+    >
+      <path
+        d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
+        fill={color}
+        opacity="0.55"
+      />
+      <path
+        d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+function IconPage({ color = "#9ca3af", size = 14 }) {
+  return (
+    <svg
+      width={size * 0.82}
+      height={size}
+      viewBox="0 0 13 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ flexShrink: 0 }}
+    >
+      <path
+        d="M2 1H8.5L12 4.5V14C12 14.55 11.55 15 11 15H2C1.45 15 1 14.55 1 14V2C1 1.45 1.45 1 2 1Z"
+        fill={color}
+        opacity="0.15"
+        stroke={color}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.5 1V5H12"
+        stroke={color}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <line
+        x1="3.5"
+        y1="7.5"
+        x2="9.5"
+        y2="7.5"
+        stroke={color}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="3.5"
+        y1="9.5"
+        x2="9.5"
+        y2="9.5"
+        stroke={color}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <line
+        x1="3.5"
+        y1="11.5"
+        x2="7"
+        y2="11.5"
+        stroke={color}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconKnowledge({ size = 18, color = "#6366f1" }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 2L2 7L12 12L22 7L12 2Z"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+        fill={color}
+        fillOpacity="0.15"
+      />
+      <path
+        d="M2 17L12 22L22 17"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M2 12L12 17L22 12"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ── Toolbar button ──
 function ToolbarBtn({ onClick, active, title, children }) {
   return (
     <button
@@ -22,14 +154,21 @@ function ToolbarBtn({ onClick, active, title, children }) {
       title={title}
       style={{
         padding: "4px 8px",
-        borderRadius: 4,
+        borderRadius: 5,
         border: "none",
         background: active ? "#dbeafe" : "transparent",
-        color: active ? "#1d4ed8" : "#444",
+        color: active ? "#1d4ed8" : "#555",
         cursor: "pointer",
         fontSize: 13,
         fontWeight: active ? 600 : 400,
         minWidth: 28,
+        transition: "background 0.1s",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.background = "#f0f0ef";
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.background = "transparent";
       }}
     >
       {children}
@@ -37,6 +176,7 @@ function ToolbarBtn({ onClick, active, title, children }) {
   );
 }
 
+// ── Rich text editor ──
 function RichEditor({ content, onChange }) {
   const editor = useEditor({
     extensions: [
@@ -56,8 +196,7 @@ function RichEditor({ content, onChange }) {
     editorProps: {
       handlePaste(view, event) {
         const text = event.clipboardData?.getData("text/plain") || "";
-        const urlRegex = /^https?:\/\/[^\s]+$/;
-        if (urlRegex.test(text.trim())) {
+        if (/^https?:\/\/[^\s]+$/.test(text.trim())) {
           event.preventDefault();
           const url = text.trim();
           const { state, dispatch } = view;
@@ -94,11 +233,17 @@ function RichEditor({ content, onChange }) {
 
   if (!editor) return null;
 
+  const Divider = () => (
+    <div
+      style={{ width: 1, height: 20, background: "#e8e8e8", margin: "0 4px" }}
+    />
+  );
+
   return (
     <div
       style={{
-        border: "1px solid #e8e8e8",
-        borderRadius: 8,
+        border: "1.5px solid #e8e8e8",
+        borderRadius: 10,
         overflow: "hidden",
       }}
     >
@@ -141,14 +286,7 @@ function RichEditor({ content, onChange }) {
         >
           <s>S</s>
         </ToolbarBtn>
-        <div
-          style={{
-            width: 1,
-            height: 20,
-            background: "#e8e8e8",
-            margin: "0 4px",
-          }}
-        />
+        <Divider />
         <ToolbarBtn
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 1 }).run()
@@ -176,14 +314,7 @@ function RichEditor({ content, onChange }) {
         >
           H3
         </ToolbarBtn>
-        <div
-          style={{
-            width: 1,
-            height: 20,
-            background: "#e8e8e8",
-            margin: "0 4px",
-          }}
-        />
+        <Divider />
         <ToolbarBtn
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           active={editor.isActive("bulletList")}
@@ -198,14 +329,7 @@ function RichEditor({ content, onChange }) {
         >
           1. List
         </ToolbarBtn>
-        <div
-          style={{
-            width: 1,
-            height: 20,
-            background: "#e8e8e8",
-            margin: "0 4px",
-          }}
-        />
+        <Divider />
         <ToolbarBtn
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
           active={editor.isActive({ textAlign: "left" })}
@@ -227,14 +351,7 @@ function RichEditor({ content, onChange }) {
         >
           ➡
         </ToolbarBtn>
-        <div
-          style={{
-            width: 1,
-            height: 20,
-            background: "#e8e8e8",
-            margin: "0 4px",
-          }}
-        />
+        <Divider />
         <ToolbarBtn
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           active={editor.isActive("blockquote")}
@@ -257,25 +374,18 @@ function RichEditor({ content, onChange }) {
         </ToolbarBtn>
         {editor.isActive("table") && (
           <>
-            <div
-              style={{
-                width: 1,
-                height: 20,
-                background: "#e8e8e8",
-                margin: "0 4px",
-              }}
-            />
+            <Divider />
             <ToolbarBtn
               onClick={() => editor.chain().focus().addRowAfter().run()}
               active={false}
-              title="Add row below"
+              title="Add row"
             >
               + Row
             </ToolbarBtn>
             <ToolbarBtn
               onClick={() => editor.chain().focus().addColumnAfter().run()}
               active={false}
-              title="Add column right"
+              title="Add column"
             >
               + Col
             </ToolbarBtn>
@@ -303,20 +413,13 @@ function RichEditor({ content, onChange }) {
             <ToolbarBtn
               onClick={() => editor.chain().focus().toggleHeaderRow().run()}
               active={false}
-              title="Toggle header row"
+              title="Header"
             >
               Header
             </ToolbarBtn>
           </>
         )}
-        <div
-          style={{
-            width: 1,
-            height: 20,
-            background: "#e8e8e8",
-            margin: "0 4px",
-          }}
-        />
+        <Divider />
         <ToolbarBtn
           onClick={() => editor.chain().focus().undo().run()}
           active={false}
@@ -345,14 +448,14 @@ export default function Wiki() {
   const [activeArticle, setActiveArticle] = useState(null);
   const [expandedCats, setExpandedCats] = useState({});
   const [search, setSearch] = useState("");
-  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [sidebarWidth, setSidebarWidth] = useState(270);
   const isResizing = useRef(false);
+  const tooltipRef = useRef(null);
 
   const [showArticleModal, setShowArticleModal] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
   const [editingArticle, setEditingArticle] = useState(null);
   const [editingCat, setEditingCat] = useState(null);
-  const tooltipRef = useRef(null);
 
   const [newArticle, setNewArticle] = useState({
     title: "",
@@ -365,72 +468,41 @@ export default function Wiki() {
     fetchAll();
   }, []);
 
-  // Transform raw URL links into favicon pill style when article is viewed
+  // Transform raw URL links to favicon pills
   useEffect(() => {
     if (!activeArticle) return;
-
     const transform = () => {
       const container = document.querySelector(".wiki-content");
       if (!container) return;
-
       container.querySelectorAll("a[href]").forEach((link) => {
         if (link.dataset.transformed === "true") return;
-
         let url;
         try {
           url = new URL(link.href);
         } catch {
           return;
         }
-
         const domain = url.hostname.replace("www.", "");
         const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
-
         link.dataset.transformed = "true";
         link.target = "_blank";
         link.rel = "noopener noreferrer";
-
-        // Replace inner content with favicon + domain
         link.textContent = "";
         const img = document.createElement("img");
         img.src = faviconUrl;
         img.onerror = () => (img.style.display = "none");
         img.style.cssText =
           "width:14px;height:14px;min-width:14px;max-width:14px;max-height:14px;border:none;margin:0;padding:0;border-radius:2px;object-fit:contain;flex-shrink:0;display:inline-block;vertical-align:middle;";
-
         const span = document.createElement("span");
         span.textContent = domain;
         span.style.cssText = "vertical-align:middle;margin-left:2px;";
-
         link.appendChild(img);
         link.appendChild(span);
-
-        link.style.cssText = `
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 4px !important;
-        background: #f0f0ef !important;
-        border-radius: 4px !important;
-        padding: 2px 8px 2px 5px !important;
-        text-decoration: none !important;
-        color: #1d4ed8 !important;
-        font-size: 13px !important;
-        font-weight: 500 !important;
-        cursor: pointer !important;
-        border: none !important;
-        vertical-align: middle !important;
-        max-width: 320px !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        white-space: nowrap !important;
-      `;
+        link.style.cssText = `display:inline-flex!important;align-items:center!important;gap:4px!important;background:#f0f0ef!important;border-radius:4px!important;padding:2px 8px 2px 5px!important;text-decoration:none!important;color:#1d4ed8!important;font-size:13px!important;font-weight:500!important;cursor:pointer!important;border:none!important;vertical-align:middle!important;max-width:320px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;`;
       });
     };
-
-    // Try at 100ms and again at 500ms in case of slow render
     const t1 = setTimeout(transform, 100);
     const t2 = setTimeout(transform, 500);
-
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -490,15 +562,11 @@ export default function Wiki() {
     document.addEventListener("mouseup", stopResize);
     e.preventDefault();
   }
-
   function onMouseMove(e) {
     if (!isResizing.current) return;
     const newWidth = e.clientX - 240;
-    if (newWidth >= 180 && newWidth <= 500) {
-      setSidebarWidth(newWidth);
-    }
+    if (newWidth >= 180 && newWidth <= 500) setSidebarWidth(newWidth);
   }
-
   function stopResize() {
     isResizing.current = false;
     document.removeEventListener("mousemove", onMouseMove);
@@ -513,20 +581,12 @@ export default function Wiki() {
       category_order: categories.length + 1,
     };
     if (editingCat) {
-      const { error } = await supabase
+      await supabase
         .from("wiki_categories")
         .update(payload)
         .eq("id", editingCat.id);
-      if (error) {
-        alert("Error: " + error.message);
-        return;
-      }
     } else {
-      const { error } = await supabase.from("wiki_categories").insert(payload);
-      if (error) {
-        alert("Error: " + error.message);
-        return;
-      }
+      await supabase.from("wiki_categories").insert(payload);
     }
     closeCatModal();
     fetchAll();
@@ -548,7 +608,6 @@ export default function Wiki() {
     setNewArticle({ title: "", content: "", category_id: categoryId });
     setShowArticleModal(true);
   }
-
   function openEditArticle(article) {
     setEditingArticle(article);
     setNewArticle({
@@ -558,29 +617,24 @@ export default function Wiki() {
     });
     setShowArticleModal(true);
   }
-
   function closeArticleModal() {
     setShowArticleModal(false);
     setEditingArticle(null);
   }
-
   function openNewCat(parentId = "") {
     setEditingCat(null);
     setNewCat({ name: "", parent_id: parentId });
     setShowCatModal(true);
   }
-
   function openEditCat(cat) {
     setEditingCat(cat);
     setNewCat({ name: cat.name, parent_id: cat.parent_id || "" });
     setShowCatModal(true);
   }
-
   function closeCatModal() {
     setShowCatModal(false);
     setEditingCat(null);
   }
-
   function toggleCat(id) {
     setExpandedCats((prev) => ({ ...prev, [id]: !prev[id] }));
   }
@@ -590,19 +644,19 @@ export default function Wiki() {
       .filter((c) => !c.parent_id)
       .sort((a, b) => a.category_order - b.category_order);
   }
-
   function getSubCats(parentId) {
     return categories
       .filter((c) => c.parent_id === parentId)
       .sort((a, b) => a.category_order - b.category_order);
   }
-
   function getCatArticles(categoryId) {
     return articles.filter((a) => a.category_id === categoryId);
   }
-
   function getUncategorised() {
     return articles.filter((a) => !a.category_id);
+  }
+  function getCatIndex(catId) {
+    return categories.findIndex((c) => c.id === catId);
   }
 
   function formatDate(dateStr) {
@@ -626,23 +680,14 @@ export default function Wiki() {
         tooltipRef.current.style.left = rect.left + "px";
         tooltipRef.current.style.top = rect.bottom + 6 + "px";
         tooltipRef.current.innerHTML = `
-        <img
-          src="${faviconUrl}"
-          style="width:16px;height:16px;min-width:16px;border:none;margin:0;border-radius:3px;object-fit:contain;flex-shrink:0;"
-          onerror="this.style.display='none'"
-        />
-        <div style="min-width:0">
-          <div style="font-size:13px;font-weight:500;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${domain}</div>
-          <div style="font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">${link.href}</div>
-        </div>
-        <a href="${link.href}" target="_blank" rel="noopener noreferrer"
-          style="font-size:11px;color:#1d4ed8;white-space:nowrap;text-decoration:none;background:#eff6ff;padding:3px 8px;border-radius:4px;flex-shrink:0;pointer-events:all;">
-          Open ↗
-        </a>
-      `;
-      } catch {
-        // invalid URL
-      }
+          <img src="${faviconUrl}" style="width:16px;height:16px;min-width:16px;border:none;margin:0;border-radius:3px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'" />
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:500;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${domain}</div>
+            <div style="font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">${link.href}</div>
+          </div>
+          <a href="${link.href}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#1d4ed8;white-space:nowrap;text-decoration:none;background:#eff6ff;padding:3px 8px;border-radius:4px;flex-shrink:0;pointer-events:all;">Open ↗</a>
+        `;
+      } catch {}
     }
   }
 
@@ -662,36 +707,99 @@ export default function Wiki() {
       )
     : null;
 
+  // Build breadcrumb for active article
+  function getArticleBreadcrumb(article) {
+    if (!article?.category_id) return null;
+    const cat = categories.find((c) => c.id === article.category_id);
+    if (!cat) return null;
+    if (cat.parent_id) {
+      const parent = categories.find((c) => c.id === cat.parent_id);
+      return parent ? `${parent.name} / ${cat.name}` : cat.name;
+    }
+    return cat.name;
+  }
+
+  const topCats = getTopCats();
+  const uncategorised = getUncategorised();
+
   return (
     <div className="wiki-layout">
-      {/* LEFT SIDEBAR */}
+      {/* ── LEFT SIDEBAR ── */}
       <div
         className="wiki-sidebar"
         style={{ width: sidebarWidth, minWidth: sidebarWidth }}
       >
+        {/* Header */}
         <div className="wiki-sidebar-header">
-          <span className="wiki-sidebar-title">📚 Knowledge Base</span>
+          <span
+            className="wiki-sidebar-title"
+            style={{ display: "flex", alignItems: "center", gap: 8 }}
+          >
+            <IconKnowledge size={18} color="#6366f1" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>
+              Knowledge Base
+            </span>
+          </span>
           <div className="wiki-sidebar-actions">
             <button
-              className="btn btn-sm"
-              style={{ fontSize: 11, padding: "3px 8px" }}
               onClick={() => openNewCat()}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "5px 10px",
+                borderRadius: 7,
+                border: "1px solid #e0e0e0",
+                background: "#fff",
+                fontSize: 11,
+                cursor: "pointer",
+                color: "#555",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+              }}
             >
               + Category
             </button>
             <button
-              className="btn btn-primary btn-sm"
-              style={{ fontSize: 11, padding: "3px 8px" }}
               onClick={() => openNewArticle()}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "5px 10px",
+                borderRadius: 7,
+                border: "none",
+                background: "#1d4ed8",
+                color: "#fff",
+                fontSize: 11,
+                cursor: "pointer",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
             >
               + Page
             </button>
           </div>
         </div>
 
+        {/* Search */}
         <div className="wiki-search-wrap">
           <div className="wiki-search-input">
-            <span style={{ color: "#aaa", fontSize: 13 }}>🔍</span>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              style={{ flexShrink: 0 }}
+            >
+              <circle cx="6.5" cy="6.5" r="5" stroke="#aaa" strokeWidth="1.5" />
+              <path
+                d="M10.5 10.5L14 14"
+                stroke="#aaa"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
             <input
               placeholder="Search pages..."
               value={search}
@@ -699,7 +807,12 @@ export default function Wiki() {
             />
             {search && (
               <span
-                style={{ color: "#aaa", cursor: "pointer", fontSize: 13 }}
+                style={{
+                  color: "#bbb",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  lineHeight: 1,
+                }}
                 onClick={() => setSearch("")}
               >
                 ✕
@@ -708,16 +821,18 @@ export default function Wiki() {
           </div>
         </div>
 
+        {/* Tree */}
         <div className="wiki-tree">
           {searchResults ? (
             <div>
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 10,
+                  fontWeight: 700,
                   color: "#aaa",
-                  padding: "6px 12px 4px",
+                  padding: "8px 12px 4px",
                   textTransform: "uppercase",
-                  letterSpacing: ".05em",
+                  letterSpacing: ".06em",
                 }}
               >
                 {searchResults.length} result
@@ -728,7 +843,7 @@ export default function Wiki() {
                   style={{
                     fontSize: 12,
                     color: "#ccc",
-                    padding: "12px",
+                    padding: "16px",
                     textAlign: "center",
                   }}
                 >
@@ -745,7 +860,9 @@ export default function Wiki() {
                       setSearch("");
                     }}
                   >
-                    <span className="wiki-page-icon">📄</span>
+                    <IconPage
+                      color={activeArticle?.id === a.id ? "#1d4ed8" : "#9ca3af"}
+                    />
                     <span className="wiki-page-name">{a.title}</span>
                   </div>
                 ))
@@ -753,10 +870,11 @@ export default function Wiki() {
             </div>
           ) : (
             <>
-              {getTopCats().map((cat) => (
+              {topCats.map((cat, i) => (
                 <CategoryNode
                   key={cat.id}
                   cat={cat}
+                  catIndex={getCatIndex(cat.id)}
                   activeArticle={activeArticle}
                   expandedCats={expandedCats}
                   onToggle={toggleCat}
@@ -767,46 +885,65 @@ export default function Wiki() {
                   onDeleteCat={deleteCategory}
                   getSubCats={getSubCats}
                   getCatArticles={getCatArticles}
+                  getCatIndex={getCatIndex}
                   depth={0}
                 />
               ))}
 
-              {getUncategorised().length > 0 && (
-                <div>
+              {uncategorised.length > 0 && (
+                <div style={{ marginTop: 8 }}>
                   <div
                     style={{
                       fontSize: 10,
+                      fontWeight: 700,
                       color: "#bbb",
-                      padding: "8px 12px 4px",
+                      padding: "6px 12px 4px",
                       textTransform: "uppercase",
                       letterSpacing: ".06em",
                     }}
                   >
                     Uncategorised
                   </div>
-                  {getUncategorised().map((a) => (
+                  {uncategorised.map((a) => (
                     <ArticleTreeItem
                       key={a.id}
                       article={a}
                       active={activeArticle?.id === a.id}
                       onSelect={setActiveArticle}
                       depth={0}
+                      catColor={null}
                     />
                   ))}
                 </div>
               )}
 
               {categories.length === 0 && articles.length === 0 && (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "30px 16px",
-                    color: "#ccc",
-                  }}
-                >
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>📂</div>
-                  <div style={{ fontSize: 12 }}>No categories yet</div>
-                  <div style={{ fontSize: 11, marginTop: 4 }}>
+                <div style={{ textAlign: "center", padding: "40px 16px" }}>
+                  <div
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: "#f0f0ff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 12px",
+                    }}
+                  >
+                    <IconKnowledge size={24} color="#6366f1" />
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "#555",
+                      marginBottom: 4,
+                    }}
+                  >
+                    No content yet
+                  </div>
+                  <div style={{ fontSize: 12, color: "#aaa" }}>
                     Click "+ Category" to get started
                   </div>
                 </div>
@@ -824,7 +961,6 @@ export default function Wiki() {
           flexShrink: 0,
           background: "transparent",
           cursor: "col-resize",
-          position: "relative",
           transition: "background 0.15s",
         }}
         onMouseEnter={(e) => (e.currentTarget.style.background = "#bfdbfe")}
@@ -832,72 +968,240 @@ export default function Wiki() {
         title="Drag to resize"
       />
 
-      {/* MAIN CONTENT */}
+      {/* ── MAIN CONTENT ── */}
       <div className="wiki-main">
         {activeArticle ? (
-          <>
-            <div className="wiki-article-header">
-              <div>
-                <div className="wiki-article-title">{activeArticle.title}</div>
-                <div className="wiki-article-meta">
-                  Updated {formatDate(activeArticle.updated_at)}
+          <div
+            style={{ display: "flex", flexDirection: "column", height: "100%" }}
+          >
+            {/* Article header */}
+            <div
+              style={{
+                padding: "24px 40px 20px",
+                borderBottom: "1px solid #ebebeb",
+                background: "#fff",
+                flexShrink: 0,
+              }}
+            >
+              {/* Breadcrumb */}
+              {getArticleBreadcrumb(activeArticle) && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#aaa",
+                    marginBottom: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <IconKnowledge size={12} color="#aaa" />
+                  <span>Knowledge Base</span>
+                  <span style={{ color: "#ddd" }}>/</span>
+                  <span>{getArticleBreadcrumb(activeArticle)}</span>
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 16,
+                }}
+              >
+                <div>
+                  <h1
+                    style={{
+                      fontSize: 26,
+                      fontWeight: 800,
+                      color: "#1a1a1a",
+                      margin: 0,
+                      letterSpacing: "-0.4px",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {activeArticle.title}
+                  </h1>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#bbb",
+                      marginTop: 6,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: "#22c55e",
+                        display: "inline-block",
+                      }}
+                    />
+                    Last updated {formatDate(activeArticle.updated_at)}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    flexShrink: 0,
+                    marginTop: 4,
+                  }}
+                >
+                  <button
+                    onClick={() => openEditArticle(activeArticle)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "7px 14px",
+                      borderRadius: 7,
+                      border: "1px solid #e0e0e0",
+                      background: "#fff",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      color: "#444",
+                      fontWeight: 500,
+                    }}
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => deleteArticle(activeArticle.id)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "7px 14px",
+                      borderRadius: 7,
+                      border: "1px solid #fca5a5",
+                      background: "#fef2f2",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      color: "#b91c1c",
+                      fontWeight: 500,
+                    }}
+                  >
+                    🗑 Delete
+                  </button>
+                  <button
+                    onClick={() => setActiveArticle(null)}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 7,
+                      border: "1px solid #e0e0e0",
+                      background: "#fff",
+                      fontSize: 16,
+                      cursor: "pointer",
+                      color: "#999",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                <button
-                  className="btn btn-sm"
-                  onClick={() => openEditArticle(activeArticle)}
-                >
-                  ✏️ Edit
-                </button>
-                <button
-                  className="btn btn-sm btn-danger"
-                  onClick={() => deleteArticle(activeArticle.id)}
-                >
-                  🗑 Delete
-                </button>
-                <button
-                  className="btn btn-sm"
-                  onClick={() => setActiveArticle(null)}
-                >
-                  ✕
-                </button>
+            </div>
+
+            {/* Article body */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "36px 40px",
+                scrollbarWidth: "thin",
+                scrollbarColor: "#e0e0de transparent",
+              }}
+            >
+              <div style={{ maxWidth: 820 }}>
+                <div
+                  className="wiki-content"
+                  dangerouslySetInnerHTML={{ __html: activeArticle.content }}
+                  onMouseOver={handleContentMouseOver}
+                  onMouseOut={handleContentMouseOut}
+                />
               </div>
             </div>
-            <div className="wiki-article-body">
-              <div
-                className="wiki-content"
-                dangerouslySetInnerHTML={{ __html: activeArticle.content }}
-                onMouseOver={handleContentMouseOver}
-                onMouseOut={handleContentMouseOut}
-                onClick={() =>
-                  setLinkTooltip({ visible: false, url: "", x: 0, y: 0 })
-                }
-              />
-            </div>
-          </>
+          </div>
         ) : (
-          <div className="wiki-empty-state">
-            <div style={{ fontSize: 48 }}>📄</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "#555" }}>
-              Select a page to view
+          /* Empty state */
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "column",
+              gap: 0,
+              background: "#f7f8fa",
+            }}
+          >
+            <div style={{ textAlign: "center", maxWidth: 340 }}>
+              <div
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 20,
+                  background: "linear-gradient(135deg, #eff6ff, #f0f0ff)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 20px",
+                  boxShadow: "0 2px 16px rgba(99,102,241,0.12)",
+                }}
+              >
+                <IconKnowledge size={36} color="#6366f1" />
+              </div>
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#1a1a1a",
+                  marginBottom: 8,
+                }}
+              >
+                Your Knowledge Base
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "#999",
+                  lineHeight: 1.6,
+                  marginBottom: 20,
+                }}
+              >
+                Select a page from the sidebar to start reading, or create your
+                first page.
+              </div>
+              <button
+                onClick={() => openNewArticle()}
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#1d4ed8",
+                  color: "#fff",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  boxShadow: "0 2px 8px rgba(29,78,216,0.2)",
+                }}
+              >
+                + New page
+              </button>
             </div>
-            <div style={{ fontSize: 13 }}>
-              or create a new one from the sidebar
-            </div>
-            <button
-              className="btn btn-primary"
-              style={{ marginTop: 12 }}
-              onClick={() => openNewArticle()}
-            >
-              + New page
-            </button>
           </div>
         )}
       </div>
 
       {/* LINK TOOLTIP */}
-      {/* LINK TOOLTIP — ref-based, no re-render */}
       <div
         ref={tooltipRef}
         style={{
@@ -916,7 +1220,7 @@ export default function Wiki() {
         }}
       />
 
-      {/* ARTICLE MODAL */}
+      {/* ── ARTICLE MODAL ── */}
       {showArticleModal && (
         <div
           className="modal-overlay"
@@ -1015,21 +1319,33 @@ export default function Wiki() {
         </div>
       )}
 
-      {/* CATEGORY MODAL */}
+      {/* ── CATEGORY MODAL ── */}
       {showCatModal && (
         <div
           className="modal-overlay"
           onClick={(e) => e.target === e.currentTarget && closeCatModal()}
         >
           <div className="modal" style={{ maxWidth: 400 }}>
-            <div className="modal-title">
-              {editingCat ? "Edit category" : "New category"}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <div className="modal-title" style={{ margin: 0 }}>
+                {editingCat ? "Edit category" : "New category"}
+              </div>
+              <button className="btn btn-sm" onClick={closeCatModal}>
+                ✕
+              </button>
             </div>
             <div className="form-group">
               <label className="form-label">Category name</label>
               <input
                 autoFocus
-                placeholder="e.g. Business Set Up"
+                placeholder="e.g. Business Set Up, Compliance..."
                 value={newCat.name}
                 onChange={(e) =>
                   setNewCat((prev) => ({ ...prev, name: e.target.value }))
@@ -1043,10 +1359,7 @@ export default function Wiki() {
               <select
                 value={newCat.parent_id}
                 onChange={(e) =>
-                  setNewCat((prev) => ({
-                    ...prev,
-                    parent_id: e.target.value,
-                  }))
+                  setNewCat((prev) => ({ ...prev, parent_id: e.target.value }))
                 }
                 style={{ width: "100%" }}
               >
@@ -1073,8 +1386,10 @@ export default function Wiki() {
   );
 }
 
+// ── Category node ──
 function CategoryNode({
   cat,
+  catIndex,
   activeArticle,
   expandedCats,
   onToggle,
@@ -1085,26 +1400,80 @@ function CategoryNode({
   onDeleteCat,
   getSubCats,
   getCatArticles,
+  getCatIndex,
   depth,
 }) {
   const isExpanded = expandedCats[cat.id] !== false;
   const subCats = getSubCats(cat.id);
   const catArticles = getCatArticles(cat.id);
   const hasChildren = subCats.length > 0 || catArticles.length > 0;
-  const indent = depth * 14;
+  const indent = depth * 12;
+  const color = getCatColor(catIndex);
 
   return (
     <div>
       <div className="wiki-cat-row" style={{ paddingLeft: 8 + indent }}>
-        <span className="wiki-cat-toggle" onClick={() => onToggle(cat.id)}>
+        {/* Toggle arrow */}
+        <span
+          className="wiki-cat-toggle"
+          onClick={() => onToggle(cat.id)}
+          style={{
+            color: "#bbb",
+            fontSize: 9,
+            width: 14,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           {hasChildren ? (isExpanded ? "▾" : "▸") : ""}
         </span>
-        <span className="wiki-cat-icon" onClick={() => onToggle(cat.id)}>
-          📂
+
+        {/* Colored folder icon */}
+        <span
+          onClick={() => onToggle(cat.id)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            background: color.bg,
+            flexShrink: 0,
+          }}
+        >
+          <IconFolder color={color.icon} size={13} />
         </span>
-        <span className="wiki-cat-name" onClick={() => onToggle(cat.id)}>
+
+        {/* Category name */}
+        <span
+          className="wiki-cat-name"
+          onClick={() => onToggle(cat.id)}
+          style={{ fontSize: 13, fontWeight: 600, color: "#2c2c2c" }}
+        >
           {cat.name}
         </span>
+
+        {/* Article count badge */}
+        {catArticles.length > 0 && (
+          <span
+            style={{
+              fontSize: 10,
+              color: color.icon,
+              background: color.bg,
+              borderRadius: 20,
+              padding: "1px 6px",
+              fontWeight: 600,
+              flexShrink: 0,
+              marginLeft: 2,
+            }}
+          >
+            {catArticles.length}
+          </span>
+        )}
+
+        {/* Actions */}
         <div className="wiki-cat-actions">
           <button
             className="wiki-cat-action-btn"
@@ -1155,6 +1524,7 @@ function CategoryNode({
             <CategoryNode
               key={sub.id}
               cat={sub}
+              catIndex={getCatIndex(sub.id)}
               activeArticle={activeArticle}
               expandedCats={expandedCats}
               onToggle={onToggle}
@@ -1165,6 +1535,7 @@ function CategoryNode({
               onDeleteCat={onDeleteCat}
               getSubCats={getSubCats}
               getCatArticles={getCatArticles}
+              getCatIndex={getCatIndex}
               depth={depth + 1}
             />
           ))}
@@ -1175,6 +1546,7 @@ function CategoryNode({
               active={activeArticle?.id === a.id}
               onSelect={onSelectArticle}
               depth={depth + 1}
+              catColor={color}
             />
           ))}
         </div>
@@ -1183,17 +1555,34 @@ function CategoryNode({
   );
 }
 
-function ArticleTreeItem({ article, active, onSelect, depth }) {
-  const indent = 8 + depth * 14;
+// ── Article tree item ──
+function ArticleTreeItem({ article, active, onSelect, depth, catColor }) {
+  const indent = 8 + depth * 12;
+  const pageColor = active ? "#1d4ed8" : catColor ? catColor.icon : "#9ca3af";
+  const pageBg = active ? "#eff6ff" : "transparent";
+
   return (
     <div
       className={`wiki-page-row ${active ? "active" : ""}`}
-      style={{ paddingLeft: 8 + indent }}
+      style={{
+        paddingLeft: 8 + indent,
+        background: pageBg,
+        borderRadius: 7,
+        margin: "1px 4px",
+      }}
       onClick={() => onSelect(article)}
     >
-      <span style={{ width: 16, flexShrink: 0 }} />
-      <span className="wiki-page-icon">📄</span>
-      <span className="wiki-page-name">{article.title}</span>
+      <span style={{ width: 14, flexShrink: 0 }} />
+      <IconPage color={pageColor} size={14} />
+      <span
+        className="wiki-page-name"
+        style={{
+          color: active ? "#1d4ed8" : "#555",
+          fontWeight: active ? 600 : 400,
+        }}
+      >
+        {article.title}
+      </span>
     </div>
   );
 }
