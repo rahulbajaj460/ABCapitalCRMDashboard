@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 
 const SPACE_COLORS = [
@@ -128,7 +128,7 @@ export default function Sidebar({
   taskCounts = {},
   width = 240,
 }) {
-  // ── Space modal state ──
+  // ── Space modal ──
   const [showAddSpace, setShowAddSpace] = useState(false);
   const [spaceStep, setSpaceStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState("business");
@@ -146,13 +146,28 @@ export default function Sidebar({
   const [editingStatusName, setEditingStatusName] = useState("");
   const [showColorPickerFor, setShowColorPickerFor] = useState(null);
 
-  // ── Folder modal state ──
-  const [showAddFolderModal, setShowAddFolderModal] = useState(null); // spaceId
-  const [folderModalSpace, setFolderModalSpace] = useState(null); // full space object
+  // ── Edit space modal ──
+  const [editSpaceModal, setEditSpaceModal] = useState(null); // space object
+  const [editSpaceName, setEditSpaceName] = useState("");
+  const [editSpaceColor, setEditSpaceColor] = useState("#378ADD");
+  const [editSpaceIcon, setEditSpaceIcon] = useState("🏢");
+  const [showEditIconPicker, setShowEditIconPicker] = useState(false);
+
+  // ── Edit folder modal ──
+  const [editFolderModal, setEditFolderModal] = useState(null); // folder object
+  const [editFolderName, setEditFolderName] = useState("");
+
+  // ── Context menus ──
+  const [spaceMenu, setSpaceMenu] = useState(null); // { id, x, y }
+  const [folderMenu, setFolderMenu] = useState(null); // { id, spaceId, x, y }
+  const menuRef = useRef(null);
+
+  // ── Folder modal ──
+  const [showAddFolderModal, setShowAddFolderModal] = useState(null);
+  const [folderModalSpace, setFolderModalSpace] = useState(null);
   const [newFolder, setNewFolder] = useState("");
   const [newFolderDesc, setNewFolderDesc] = useState("");
   const [folderUseSpaceStatuses, setFolderUseSpaceStatuses] = useState(true);
-  // Custom statuses for folder
   const [folderCustomStatuses, setFolderCustomStatuses] = useState([]);
   const [folderNewStatusName, setFolderNewStatusName] = useState("");
   const [folderNewStatusColor, setFolderNewStatusColor] = useState("#378ADD");
@@ -163,6 +178,18 @@ export default function Sidebar({
 
   const [expandedSpaces, setExpandedSpaces] = useState({});
 
+  // Close menus on outside click
+  useEffect(() => {
+    function handler(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setSpaceMenu(null);
+        setFolderMenu(null);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   // ── Space helpers ──
   function closeSpaceModal() {
     setShowAddSpace(false);
@@ -172,17 +199,14 @@ export default function Sidebar({
     setShowColorPickerFor(null);
     setNewStatusName("");
   }
-
   function toggleSpace(spaceId) {
     setExpandedSpaces((prev) => ({ ...prev, [spaceId]: !prev[spaceId] }));
   }
-
   function selectTemplate(key) {
     setSelectedTemplate(key);
     const tmpl = BASE_TEMPLATES.find((t) => t.key === key);
     setEditableStatuses(tmpl ? tmpl.statuses.map((s) => ({ ...s })) : []);
   }
-
   function addStatus() {
     if (!newStatusName.trim()) return;
     if (
@@ -198,27 +222,22 @@ export default function Sidebar({
     setNewStatusName("");
     setNewStatusColor("#378ADD");
   }
-
   function deleteStatus(idx) {
     setEditableStatuses((prev) => prev.filter((_, i) => i !== idx));
   }
-
   function startEditStatus(idx) {
     setEditingStatusIdx(idx);
     setEditingStatusName(editableStatuses[idx].name);
   }
-
   function saveEditStatus(idx) {
-    if (editingStatusName.trim()) {
+    if (editingStatusName.trim())
       setEditableStatuses((prev) =>
         prev.map((s, i) =>
           i === idx ? { ...s, name: editingStatusName.trim() } : s,
         ),
       );
-    }
     setEditingStatusIdx(null);
   }
-
   function updateStatusColor(idx, color) {
     setEditableStatuses((prev) =>
       prev.map((s, i) => (i === idx ? { ...s, color } : s)),
@@ -239,15 +258,17 @@ export default function Sidebar({
       .single();
     if (!error && data) {
       if (editableStatuses.length > 0) {
-        await supabase.from("space_statuses").insert(
-          editableStatuses.map((s, i) => ({
-            space_id: data.id,
-            folder_id: null,
-            name: s.name,
-            color: s.color,
-            status_order: i + 1,
-          })),
-        );
+        await supabase
+          .from("space_statuses")
+          .insert(
+            editableStatuses.map((s, i) => ({
+              space_id: data.id,
+              folder_id: null,
+              name: s.name,
+              color: s.color,
+              status_order: i + 1,
+            })),
+          );
       }
       setNewSpace({ name: "", color: "#378ADD", icon: "💼", description: "" });
       setSpaceStep(1);
@@ -258,143 +279,61 @@ export default function Sidebar({
     }
   }
 
+  // ── Edit space ──
+  function openEditSpace(space, e) {
+    e.stopPropagation();
+    setSpaceMenu(null);
+    setEditSpaceModal(space);
+    setEditSpaceName(space.name);
+    setEditSpaceColor(space.color || "#378ADD");
+    setEditSpaceIcon(space.icon || "🏢");
+    setShowEditIconPicker(false);
+  }
+
+  async function saveEditSpace() {
+    if (!editSpaceName.trim() || !editSpaceModal) return;
+    await supabase
+      .from("spaces")
+      .update({
+        name: editSpaceName.trim(),
+        color: editSpaceColor,
+        icon: editSpaceIcon,
+      })
+      .eq("id", editSpaceModal.id);
+    setEditSpaceModal(null);
+    onSpaceCreated();
+  }
+
   async function deleteSpace(spaceId, e) {
     e.stopPropagation();
+    setSpaceMenu(null);
     if (!confirm("Delete this space and all its data? This cannot be undone."))
       return;
     await supabase.from("spaces").delete().eq("id", spaceId);
     onSpaceCreated();
   }
 
-  // ── Folder helpers ──
-  function openFolderModal(space) {
-    setFolderModalSpace(space);
-    setShowAddFolderModal(space.id);
-    setNewFolder("");
-    setNewFolderDesc("");
-    setFolderUseSpaceStatuses(true);
-    setFolderTemplate("business");
-    // Pre-load the space's statuses as the custom starting point
-    const spaceStatuses = (space.space_statuses || [])
-      .filter((s) => !s.folder_id)
-      .sort((a, b) => a.status_order - b.status_order)
-      .map((s) => ({ name: s.name, color: s.color }));
-    setFolderCustomStatuses(
-      spaceStatuses.length > 0
-        ? spaceStatuses
-        : BASE_TEMPLATES[0].statuses.map((s) => ({ ...s })),
-    );
-    setFolderNewStatusName("");
-    setFolderNewStatusColor("#378ADD");
-    setFolderEditingIdx(null);
-    setFolderColorPickerFor(null);
+  // ── Edit folder ──
+  function openEditFolder(folder, e) {
+    e.stopPropagation();
+    setFolderMenu(null);
+    setEditFolderModal(folder);
+    setEditFolderName(folder.name);
   }
 
-  function selectFolderTemplate(key) {
-    setFolderTemplate(key);
-    const tmpl = BASE_TEMPLATES.find((t) => t.key === key);
-    setFolderCustomStatuses(tmpl ? tmpl.statuses.map((s) => ({ ...s })) : []);
-  }
-
-  function addFolderStatus() {
-    if (!folderNewStatusName.trim()) return;
-    if (
-      folderCustomStatuses.find(
-        (s) =>
-          s.name.toLowerCase() === folderNewStatusName.trim().toLowerCase(),
-      )
-    )
-      return;
-    setFolderCustomStatuses((prev) => [
-      ...prev,
-      { name: folderNewStatusName.trim(), color: folderNewStatusColor },
-    ]);
-    setFolderNewStatusName("");
-    setFolderNewStatusColor("#378ADD");
-  }
-
-  function deleteFolderStatus(idx) {
-    setFolderCustomStatuses((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  function startEditFolderStatus(idx) {
-    setFolderEditingIdx(idx);
-    setFolderEditingName(folderCustomStatuses[idx].name);
-  }
-
-  function saveEditFolderStatus(idx) {
-    if (folderEditingName.trim()) {
-      setFolderCustomStatuses((prev) =>
-        prev.map((s, i) =>
-          i === idx ? { ...s, name: folderEditingName.trim() } : s,
-        ),
-      );
-    }
-    setFolderEditingIdx(null);
-  }
-
-  function updateFolderStatusColor(idx, color) {
-    setFolderCustomStatuses((prev) =>
-      prev.map((s, i) => (i === idx ? { ...s, color } : s)),
-    );
-    setFolderColorPickerFor(null);
-  }
-
-  async function createFolder() {
-    if (!newFolder.trim() || !showAddFolderModal) return;
-    const spaceId = showAddFolderModal;
-    const { data, error } = await supabase
+  async function saveEditFolder() {
+    if (!editFolderName.trim() || !editFolderModal) return;
+    await supabase
       .from("folders")
-      .insert({ space_id: spaceId, name: newFolder.trim() })
-      .select()
-      .single();
-
-    if (!error && data) {
-      // Determine which statuses to seed
-      let statusesToSeed;
-      if (folderUseSpaceStatuses) {
-        // Use the parent space's statuses
-        statusesToSeed = (folderModalSpace?.space_statuses || [])
-          .filter((s) => !s.folder_id)
-          .sort((a, b) => a.status_order - b.status_order)
-          .map((s) => ({ name: s.name, color: s.color }));
-        // Fall back to defaults if space has no statuses
-        if (statusesToSeed.length === 0) {
-          statusesToSeed = [
-            { name: "To Do", color: "#888780" },
-            { name: "In Progress", color: "#7c3aed" },
-            { name: "In Review", color: "#d97706" },
-            { name: "Done", color: "#16a34a" },
-          ];
-        }
-      } else {
-        // Use the custom statuses the user defined
-        statusesToSeed = folderCustomStatuses;
-      }
-
-      if (statusesToSeed.length > 0) {
-        await supabase.from("space_statuses").insert(
-          statusesToSeed.map((s, i) => ({
-            space_id: spaceId,
-            folder_id: data.id,
-            name: s.name,
-            color: s.color,
-            status_order: i + 1,
-          })),
-        );
-      }
-
-      setNewFolder("");
-      setNewFolderDesc("");
-      setFolderUseSpaceStatuses(true);
-      setFolderModalSpace(null);
-      setShowAddFolderModal(null);
-      onSpaceCreated();
-    }
+      .update({ name: editFolderName.trim() })
+      .eq("id", editFolderModal.id);
+    setEditFolderModal(null);
+    onSpaceCreated();
   }
 
   async function deleteFolder(folderId, e) {
     e.stopPropagation();
+    setFolderMenu(null);
     const { count } = await supabase
       .from("tasks")
       .select("id", { count: "exact", head: true })
@@ -412,8 +351,120 @@ export default function Sidebar({
     onSpaceCreated();
   }
 
+  // ── Folder creation ──
+  function openFolderModal(space) {
+    setFolderModalSpace(space);
+    setShowAddFolderModal(space.id);
+    setNewFolder("");
+    setNewFolderDesc("");
+    setFolderUseSpaceStatuses(true);
+    setFolderTemplate("business");
+    const spaceStatuses = (space.space_statuses || [])
+      .filter((s) => !s.folder_id)
+      .sort((a, b) => a.status_order - b.status_order)
+      .map((s) => ({ name: s.name, color: s.color }));
+    setFolderCustomStatuses(
+      spaceStatuses.length > 0
+        ? spaceStatuses
+        : BASE_TEMPLATES[0].statuses.map((s) => ({ ...s })),
+    );
+    setFolderNewStatusName("");
+    setFolderNewStatusColor("#378ADD");
+    setFolderEditingIdx(null);
+    setFolderColorPickerFor(null);
+  }
+  function selectFolderTemplate(key) {
+    setFolderTemplate(key);
+    const tmpl = BASE_TEMPLATES.find((t) => t.key === key);
+    setFolderCustomStatuses(tmpl ? tmpl.statuses.map((s) => ({ ...s })) : []);
+  }
+  function addFolderStatus() {
+    if (!folderNewStatusName.trim()) return;
+    if (
+      folderCustomStatuses.find(
+        (s) =>
+          s.name.toLowerCase() === folderNewStatusName.trim().toLowerCase(),
+      )
+    )
+      return;
+    setFolderCustomStatuses((prev) => [
+      ...prev,
+      { name: folderNewStatusName.trim(), color: folderNewStatusColor },
+    ]);
+    setFolderNewStatusName("");
+    setFolderNewStatusColor("#378ADD");
+  }
+  function deleteFolderStatus(idx) {
+    setFolderCustomStatuses((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function startEditFolderStatus(idx) {
+    setFolderEditingIdx(idx);
+    setFolderEditingName(folderCustomStatuses[idx].name);
+  }
+  function saveEditFolderStatus(idx) {
+    if (folderEditingName.trim())
+      setFolderCustomStatuses((prev) =>
+        prev.map((s, i) =>
+          i === idx ? { ...s, name: folderEditingName.trim() } : s,
+        ),
+      );
+    setFolderEditingIdx(null);
+  }
+  function updateFolderStatusColor(idx, color) {
+    setFolderCustomStatuses((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, color } : s)),
+    );
+    setFolderColorPickerFor(null);
+  }
+
+  async function createFolder() {
+    if (!newFolder.trim() || !showAddFolderModal) return;
+    const spaceId = showAddFolderModal;
+    const { data, error } = await supabase
+      .from("folders")
+      .insert({ space_id: spaceId, name: newFolder.trim() })
+      .select()
+      .single();
+    if (!error && data) {
+      let statusesToSeed = folderUseSpaceStatuses
+        ? (folderModalSpace?.space_statuses || [])
+            .filter((s) => !s.folder_id)
+            .sort((a, b) => a.status_order - b.status_order)
+            .map((s) => ({ name: s.name, color: s.color }))
+        : folderCustomStatuses;
+      if (statusesToSeed.length === 0) {
+        statusesToSeed = [
+          { name: "To Do", color: "#888780" },
+          { name: "In Progress", color: "#7c3aed" },
+          { name: "In Review", color: "#d97706" },
+          { name: "Done", color: "#16a34a" },
+        ];
+      }
+      await supabase
+        .from("space_statuses")
+        .insert(
+          statusesToSeed.map((s, i) => ({
+            space_id: spaceId,
+            folder_id: data.id,
+            name: s.name,
+            color: s.color,
+            status_order: i + 1,
+          })),
+        );
+      setNewFolder("");
+      setNewFolderDesc("");
+      setFolderUseSpaceStatuses(true);
+      setFolderModalSpace(null);
+      setShowAddFolderModal(null);
+      onSpaceCreated();
+    }
+  }
+
   const selectedTmpl =
     BASE_TEMPLATES.find((t) => t.key === selectedTemplate) || BASE_TEMPLATES[0];
+  const parentSpaceStatuses = (folderModalSpace?.space_statuses || [])
+    .filter((s) => !s.folder_id)
+    .sort((a, b) => a.status_order - b.status_order);
 
   const inputStyle = {
     width: "100%",
@@ -427,7 +478,7 @@ export default function Sidebar({
     fontFamily: "inherit",
   };
 
-  // Status row renderer for both modals
+  // ── Status editor components ──
   function StatusRow({
     s,
     idx,
@@ -436,11 +487,11 @@ export default function Sidebar({
     onStartEdit,
     onSaveName,
     onChangeName,
+    onCancelEdit,
     onDelete,
     onColorClick,
     showColorPicker,
     onColorSelect,
-    onCancelEdit,
   }) {
     return (
       <div
@@ -651,10 +702,63 @@ export default function Sidebar({
     );
   }
 
-  // Get space statuses for display in folder modal
-  const parentSpaceStatuses = (folderModalSpace?.space_statuses || [])
-    .filter((s) => !s.folder_id)
-    .sort((a, b) => a.status_order - b.status_order);
+  // ── Context menu component ──
+  function ContextMenu({ items, onClose }) {
+    return (
+      <div
+        ref={menuRef}
+        style={{
+          position: "fixed",
+          background: "#fff",
+          borderRadius: 10,
+          boxShadow: "0 8px 28px rgba(0,0,0,0.16)",
+          border: "1px solid #e8e8e8",
+          zIndex: 9999,
+          minWidth: 180,
+          padding: "4px 0",
+          left: spaceMenu?.x || folderMenu?.x,
+          top: spaceMenu?.y || folderMenu?.y,
+        }}
+      >
+        {items.map((item, i) =>
+          item === "divider" ? (
+            <div
+              key={i}
+              style={{ height: 1, background: "#f0f0f0", margin: "4px 0" }}
+            />
+          ) : (
+            <button
+              key={i}
+              onClick={item.action}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                width: "100%",
+                padding: "9px 14px",
+                fontSize: 13,
+                color: item.danger ? "#ef4444" : "#333",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = item.danger
+                  ? "#fef2f2"
+                  : "#f5f5f4")
+              }
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <span style={{ fontSize: 15, flexShrink: 0 }}>{item.icon}</span>
+              {item.label}
+            </button>
+          ),
+        )}
+      </div>
+    );
+  }
 
   return (
     <aside
@@ -716,6 +820,7 @@ export default function Sidebar({
             const isActive = activeSpace?.id === space.id && !activeFolder;
             return (
               <div key={space.id}>
+                {/* Space row */}
                 <div
                   className={`space-item ${isActive ? "active" : ""}`}
                   onClick={() => {
@@ -759,21 +864,31 @@ export default function Sidebar({
                       {taskCounts[space.id]}
                     </span>
                   )}
+                  {/* Three dot menu */}
                   <span
                     className="space-delete-btn"
-                    onClick={(e) => deleteSpace(space.id, e)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setSpaceMenu({ id: space.id, x: r.right + 4, y: r.top });
+                      setFolderMenu(null);
+                    }}
                     style={{
                       opacity: 0,
-                      fontSize: 12,
-                      color: "#aaa",
-                      padding: "0 4px",
+                      fontSize: 14,
+                      color: "#888",
+                      padding: "1px 4px",
                       borderRadius: 4,
                       marginLeft: 2,
+                      cursor: "pointer",
+                      lineHeight: 1,
                     }}
                   >
-                    ✕
+                    •••
                   </span>
                 </div>
+
+                {/* Folder rows */}
                 {isExpanded && (
                   <div>
                     {(space.folders || []).map((folder) => (
@@ -801,18 +916,32 @@ export default function Sidebar({
                             {taskCounts[folder.id]}
                           </span>
                         )}
+                        {/* Three dot menu for folder */}
                         <span
                           className="space-delete-btn"
-                          onClick={(e) => deleteFolder(folder.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setFolderMenu({
+                              id: folder.id,
+                              space,
+                              folder,
+                              x: r.right + 4,
+                              y: r.top,
+                            });
+                            setSpaceMenu(null);
+                          }}
                           style={{
                             opacity: 0,
-                            fontSize: 12,
-                            color: "#aaa",
-                            padding: "0 4px",
+                            fontSize: 14,
+                            color: "#888",
+                            padding: "1px 4px",
                             borderRadius: 4,
+                            cursor: "pointer",
+                            lineHeight: 1,
                           }}
                         >
-                          ✕
+                          •••
                         </span>
                       </div>
                     ))}
@@ -917,9 +1046,514 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* ══════════════════════════════════════
-          FOLDER CREATION MODAL
-          ══════════════════════════════════════ */}
+      {/* ── SPACE CONTEXT MENU ── */}
+      {spaceMenu &&
+        (() => {
+          const space = spaces.find((s) => s.id === spaceMenu.id);
+          return (
+            <ContextMenu
+              items={[
+                {
+                  icon: "✏️",
+                  label: "Rename space",
+                  action: (e) =>
+                    openEditSpace(space, { stopPropagation: () => {} }),
+                },
+                {
+                  icon: "🎨",
+                  label: "Edit icon & color",
+                  action: (e) =>
+                    openEditSpace(space, { stopPropagation: () => {} }),
+                },
+                "divider",
+                {
+                  icon: "📁",
+                  label: "Add folder",
+                  action: () => {
+                    setSpaceMenu(null);
+                    openFolderModal(space);
+                  },
+                },
+                "divider",
+                {
+                  icon: "🗑️",
+                  label: "Delete space",
+                  danger: true,
+                  action: (e) =>
+                    deleteSpace(spaceMenu.id, {
+                      stopPropagation: () => {
+                        setSpaceMenu(null);
+                      },
+                    }),
+                },
+              ]}
+              onClose={() => setSpaceMenu(null)}
+            />
+          );
+        })()}
+
+      {/* ── FOLDER CONTEXT MENU ── */}
+      {folderMenu && (
+        <ContextMenu
+          items={[
+            {
+              icon: "✏️",
+              label: "Rename folder",
+              action: () =>
+                openEditFolder(folderMenu.folder, {
+                  stopPropagation: () => {},
+                }),
+            },
+            "divider",
+            {
+              icon: "🗑️",
+              label: "Delete folder",
+              danger: true,
+              action: (e) =>
+                deleteFolder(folderMenu.id, {
+                  stopPropagation: () => {
+                    setFolderMenu(null);
+                  },
+                }),
+            },
+          ]}
+          onClose={() => setFolderMenu(null)}
+        />
+      )}
+
+      {/* ── EDIT SPACE MODAL ── */}
+      {editSpaceModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            padding: 20,
+          }}
+          onClick={(e) =>
+            e.target === e.currentTarget && setEditSpaceModal(null)
+          }
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 480,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "22px 26px 16px",
+                borderBottom: "1px solid #f0f0f0",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a" }}
+                >
+                  Edit Space
+                </div>
+                <button
+                  onClick={() => setEditSpaceModal(null)}
+                  style={{
+                    background: "#f5f5f4",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: 30,
+                    height: 30,
+                    cursor: "pointer",
+                    fontSize: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#666",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div style={{ padding: "18px 26px" }}>
+              {/* Icon + Name */}
+              <div style={{ marginBottom: 18 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#999",
+                    marginBottom: 8,
+                    textTransform: "uppercase",
+                    letterSpacing: ".06em",
+                  }}
+                >
+                  Icon & name
+                </label>
+                <div
+                  style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
+                >
+                  <button
+                    onClick={() => setShowEditIconPicker((v) => !v)}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 10,
+                      background: editSpaceColor,
+                      border: showEditIconPicker ? "2px solid #1d4ed8" : "none",
+                      fontSize: 22,
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                      position: "relative",
+                      outline: "none",
+                    }}
+                  >
+                    {editSpaceIcon}
+                    <span
+                      style={{
+                        position: "absolute",
+                        bottom: -3,
+                        right: -3,
+                        background: "#fff",
+                        borderRadius: "50%",
+                        width: 16,
+                        height: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 8,
+                        border: "1px solid #e0e0e0",
+                        color: "#555",
+                      }}
+                    >
+                      ✎
+                    </span>
+                  </button>
+                  <input
+                    autoFocus
+                    value={editSpaceName}
+                    onChange={(e) => setEditSpaceName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveEditSpace()}
+                    style={{
+                      flex: 1,
+                      fontSize: 14,
+                      padding: "11px 14px",
+                      border: "1.5px solid #e0e0e0",
+                      borderRadius: 9,
+                      outline: "none",
+                      fontWeight: 500,
+                      marginTop: 2,
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "#1d4ed8")}
+                    onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
+                  />
+                </div>
+                {showEditIconPicker && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      background: "#f9f9f9",
+                      borderRadius: 10,
+                      padding: "12px 12px 8px",
+                      border: "1px solid #e8e8e8",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "#999",
+                        marginBottom: 8,
+                        textTransform: "uppercase",
+                        letterSpacing: ".06em",
+                      }}
+                    >
+                      Choose icon
+                    </div>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(10, 1fr)",
+                        gap: 3,
+                      }}
+                    >
+                      {SPACE_ICONS.map((icon) => (
+                        <button
+                          key={icon}
+                          onClick={() => {
+                            setEditSpaceIcon(icon);
+                            setShowEditIconPicker(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            aspectRatio: "1",
+                            fontSize: 18,
+                            cursor: "pointer",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: 0,
+                            background:
+                              editSpaceIcon === icon
+                                ? editSpaceColor + "28"
+                                : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            outline:
+                              editSpaceIcon === icon
+                                ? `2px solid ${editSpaceColor}`
+                                : "none",
+                            transition: "background 0.1s",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (editSpaceIcon !== icon)
+                              e.currentTarget.style.background = "#efefef";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (editSpaceIcon !== icon)
+                              e.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          {icon}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Color */}
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#999",
+                    marginBottom: 8,
+                    textTransform: "uppercase",
+                    letterSpacing: ".06em",
+                  }}
+                >
+                  Color
+                </label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {SPACE_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => setEditSpaceColor(color)}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: color,
+                        border:
+                          editSpaceColor === color
+                            ? "2.5px solid #1a1a1a"
+                            : "2px solid transparent",
+                        cursor: "pointer",
+                        outline: "none",
+                        transition: "all 0.12s",
+                        boxShadow:
+                          editSpaceColor === color
+                            ? `0 0 0 3px #fff, 0 0 0 5px ${color}66`
+                            : "none",
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div
+              style={{
+                padding: "14px 26px 20px",
+                display: "flex",
+                justifyContent: "space-between",
+                borderTop: "1px solid #f0f0f0",
+                background: "#fafaf9",
+              }}
+            >
+              <button
+                onClick={() => setEditSpaceModal(null)}
+                style={{
+                  fontSize: 13,
+                  color: "#888",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEditSpace}
+                style={{
+                  padding: "9px 28px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#1a1a1a",
+                  color: "#fff",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT FOLDER MODAL ── */}
+      {editFolderModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            padding: 20,
+          }}
+          onClick={(e) =>
+            e.target === e.currentTarget && setEditFolderModal(null)
+          }
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 420,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "22px 26px 16px",
+                borderBottom: "1px solid #f0f0f0",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a" }}
+                >
+                  Rename Folder
+                </div>
+                <button
+                  onClick={() => setEditFolderModal(null)}
+                  style={{
+                    background: "#f5f5f4",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: 30,
+                    height: 30,
+                    cursor: "pointer",
+                    fontSize: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#666",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div style={{ padding: "18px 26px" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#555",
+                  marginBottom: 6,
+                }}
+              >
+                Folder name
+              </label>
+              <input
+                autoFocus
+                value={editFolderName}
+                onChange={(e) => setEditFolderName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveEditFolder()}
+                style={inputStyle}
+                onFocus={(e) => (e.target.style.borderColor = "#1d4ed8")}
+                onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
+              />
+            </div>
+            <div
+              style={{
+                padding: "14px 26px 20px",
+                display: "flex",
+                justifyContent: "space-between",
+                borderTop: "1px solid #f0f0f0",
+                background: "#fafaf9",
+              }}
+            >
+              <button
+                onClick={() => setEditFolderModal(null)}
+                style={{
+                  fontSize: 13,
+                  color: "#888",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEditFolder}
+                disabled={!editFolderName.trim()}
+                style={{
+                  padding: "9px 28px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: editFolderName.trim() ? "#1a1a1a" : "#e0e0e0",
+                  color: editFolderName.trim() ? "#fff" : "#aaa",
+                  fontSize: 13,
+                  cursor: editFolderName.trim() ? "pointer" : "not-allowed",
+                  fontWeight: 600,
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FOLDER CREATION MODAL ── */}
       {showAddFolderModal && (
         <div
           style={{
@@ -950,7 +1584,6 @@ export default function Sidebar({
               transition: "max-width 0.25s ease",
             }}
           >
-            {/* Header */}
             <div
               style={{
                 padding: "22px 26px 16px",
@@ -1000,13 +1633,11 @@ export default function Sidebar({
                 </button>
               </div>
             </div>
-
-            {/* Body — two panel when custom statuses */}
             <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-              {/* Left / Main form */}
+              {/* Left form */}
               <div
                 style={{
-                  flex: folderUseSpaceStatuses ? "1" : "0 0 320px",
+                  flex: folderUseSpaceStatuses ? "1" : "0 0 300px",
                   padding: "18px 24px",
                   overflowY: "auto",
                   borderRight: folderUseSpaceStatuses
@@ -1014,7 +1645,6 @@ export default function Sidebar({
                     : "1px solid #f0f0f0",
                 }}
               >
-                {/* Name */}
                 <div style={{ marginBottom: 14 }}>
                   <label
                     style={{
@@ -1041,8 +1671,6 @@ export default function Sidebar({
                     onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                   />
                 </div>
-
-                {/* Description */}
                 <div style={{ marginBottom: 20 }}>
                   <label
                     style={{
@@ -1064,8 +1692,6 @@ export default function Sidebar({
                     onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                   />
                 </div>
-
-                {/* Settings — statuses toggle */}
                 <div>
                   <label
                     style={{
@@ -1127,7 +1753,7 @@ export default function Sidebar({
                       >
                         {folderUseSpaceStatuses ? (
                           <>
-                            Inherit from space:&nbsp;
+                            Inherit:{" "}
                             {parentSpaceStatuses.length > 0
                               ? parentSpaceStatuses
                                   .map((s) => s.name)
@@ -1135,11 +1761,10 @@ export default function Sidebar({
                               : "To Do, In Progress, In Review, Done"}
                           </>
                         ) : (
-                          "Custom statuses — define below →"
+                          "Custom statuses →"
                         )}
                       </div>
                     </div>
-                    {/* Toggle switch */}
                     <div
                       style={{
                         width: 40,
@@ -1168,13 +1793,11 @@ export default function Sidebar({
                   </div>
                 </div>
               </div>
-
-              {/* Right — custom status editor (only when toggle is OFF) */}
+              {/* Right custom status editor */}
               {!folderUseSpaceStatuses && (
                 <div
                   style={{ flex: 1, overflowY: "auto", padding: "18px 22px" }}
                 >
-                  {/* Template picker */}
                   <div style={{ marginBottom: 14 }}>
                     <div
                       style={{
@@ -1248,7 +1871,6 @@ export default function Sidebar({
                       ))}
                     </div>
                   </div>
-
                   <div
                     style={{ borderTop: "1px solid #f0f0f0", paddingTop: 14 }}
                   >
@@ -1282,7 +1904,6 @@ export default function Sidebar({
                         {folderCustomStatuses.length} statuses
                       </span>
                     </div>
-
                     {folderCustomStatuses.length === 0 && (
                       <div
                         style={{
@@ -1295,7 +1916,6 @@ export default function Sidebar({
                         No statuses yet — add one below
                       </div>
                     )}
-
                     {folderCustomStatuses.map((s, idx) => (
                       <StatusRow
                         key={idx}
@@ -1317,7 +1937,6 @@ export default function Sidebar({
                         onColorSelect={updateFolderStatusColor}
                       />
                     ))}
-
                     <AddStatusRow
                       value={folderNewStatusName}
                       color={folderNewStatusColor}
@@ -1329,15 +1948,12 @@ export default function Sidebar({
                 </div>
               )}
             </div>
-
-            {/* Footer */}
             <div
               style={{
                 padding: "14px 24px 18px",
                 borderTop: "1px solid #f0f0f0",
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
                 background: "#fafaf9",
               }}
             >
@@ -1375,9 +1991,7 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* ══════════════════════════════════════
-          SPACE CREATION MODAL
-          ══════════════════════════════════════ */}
+      {/* ── SPACE CREATION MODAL ── */}
       {showAddSpace && (
         <div
           style={{
@@ -1406,7 +2020,6 @@ export default function Sidebar({
               transition: "max-width 0.25s ease",
             }}
           >
-            {/* Step 1 */}
             {spaceStep === 1 && (
               <>
                 <div
@@ -1461,11 +2074,9 @@ export default function Sidebar({
                     </button>
                   </div>
                 </div>
-
                 <div
                   style={{ padding: "22px 28px", flex: 1, overflowY: "auto" }}
                 >
-                  {/* Icon + Name */}
                   <div style={{ marginBottom: 20 }}>
                     <label
                       style={{
@@ -1522,7 +2133,6 @@ export default function Sidebar({
                             fontSize: 9,
                             border: "1px solid #e0e0e0",
                             color: "#555",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                           }}
                         >
                           ✎
@@ -1570,7 +2180,6 @@ export default function Sidebar({
                           borderRadius: 12,
                           padding: "14px 14px 10px",
                           border: "1px solid #e8e8e8",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
                         }}
                       >
                         <div
@@ -1637,8 +2246,6 @@ export default function Sidebar({
                       </div>
                     )}
                   </div>
-
-                  {/* Color */}
                   <div style={{ marginBottom: 20 }}>
                     <label
                       style={{
@@ -1681,8 +2288,6 @@ export default function Sidebar({
                       ))}
                     </div>
                   </div>
-
-                  {/* Description */}
                   <div>
                     <label
                       style={{
@@ -1738,7 +2343,6 @@ export default function Sidebar({
                     />
                   </div>
                 </div>
-
                 <div
                   style={{
                     padding: "16px 28px",
@@ -1783,8 +2387,6 @@ export default function Sidebar({
                 </div>
               </>
             )}
-
-            {/* Step 2 */}
             {spaceStep === 2 && (
               <>
                 <div
@@ -1852,9 +2454,7 @@ export default function Sidebar({
                     ×
                   </button>
                 </div>
-
                 <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-                  {/* Left */}
                   <div
                     style={{
                       width: 220,
@@ -1942,8 +2542,6 @@ export default function Sidebar({
                       </button>
                     ))}
                   </div>
-
-                  {/* Right */}
                   <div
                     style={{ flex: 1, overflowY: "auto", padding: "20px 22px" }}
                   >
@@ -1989,7 +2587,6 @@ export default function Sidebar({
                         {editableStatuses.length} statuses
                       </span>
                     </div>
-
                     {editableStatuses.length === 0 && (
                       <div
                         style={{
@@ -2002,7 +2599,6 @@ export default function Sidebar({
                         No statuses yet — add one below
                       </div>
                     )}
-
                     {editableStatuses.map((s, idx) => (
                       <StatusRow
                         key={idx}
@@ -2024,7 +2620,6 @@ export default function Sidebar({
                         onColorSelect={updateStatusColor}
                       />
                     ))}
-
                     <AddStatusRow
                       value={newStatusName}
                       color={newStatusColor}
@@ -2034,7 +2629,6 @@ export default function Sidebar({
                     />
                   </div>
                 </div>
-
                 <div
                   style={{
                     padding: "14px 28px",
