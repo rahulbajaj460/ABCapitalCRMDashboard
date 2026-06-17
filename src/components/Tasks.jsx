@@ -795,9 +795,34 @@ export default function Tasks({
       {/* Header */}
       <div className="page-header">
         <div>
-          <div className="page-title">{pageTitle}</div>
+          <div
+            className="page-title"
+            style={{ display: "flex", alignItems: "center", gap: 10 }}
+          >
+            {activeSpace && (
+              <span
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: activeSpace.color || "#378ADD",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 18,
+                  flexShrink: 0,
+                }}
+              >
+                {activeSpace.icon || "🏢"}
+              </span>
+            )}
+            {pageTitle}
+          </div>
           {activeSpace && (
-            <div className="page-subtitle">
+            <div
+              className="page-subtitle"
+              style={{ marginLeft: activeSpace ? 42 : 0 }}
+            >
               {activeSpace.name}
               {activeFolder ? ` / ${activeFolder.name}` : ""}
             </div>

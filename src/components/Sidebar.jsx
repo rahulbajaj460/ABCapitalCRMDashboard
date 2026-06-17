@@ -147,14 +147,13 @@ export default function Sidebar({
   const [showColorPickerFor, setShowColorPickerFor] = useState(null);
 
   // Folder modal state
-  const [showAddFolderModal, setShowAddFolderModal] = useState(null); // spaceId
+  const [showAddFolderModal, setShowAddFolderModal] = useState(null);
   const [newFolder, setNewFolder] = useState("");
   const [newFolderDesc, setNewFolderDesc] = useState("");
   const [folderUseSpaceStatuses, setFolderUseSpaceStatuses] = useState(true);
 
   const [expandedSpaces, setExpandedSpaces] = useState({});
 
-  // ── Space modal helpers ──
   function closeSpaceModal() {
     setShowAddSpace(false);
     setSpaceStep(1);
@@ -221,9 +220,14 @@ export default function Sidebar({
     if (!newSpace.name.trim()) return;
     const { data, error } = await supabase
       .from("spaces")
-      .insert({ name: newSpace.name.trim(), color: newSpace.color })
+      .insert({
+        name: newSpace.name.trim(),
+        color: newSpace.color,
+        icon: newSpace.icon, // ← save icon
+      })
       .select()
       .single();
+
     if (!error && data) {
       if (editableStatuses.length > 0) {
         await supabase.from("space_statuses").insert(
@@ -253,7 +257,6 @@ export default function Sidebar({
     onSpaceCreated();
   }
 
-  // ── Folder helpers ──
   async function createFolder(spaceId) {
     if (!newFolder.trim()) return;
     const { data, error } = await supabase
@@ -262,7 +265,6 @@ export default function Sidebar({
       .select()
       .single();
     if (!error && data) {
-      // Always seed default statuses at folder level
       await supabase.from("space_statuses").insert([
         {
           space_id: spaceId,
@@ -323,7 +325,6 @@ export default function Sidebar({
   const selectedTmpl =
     BASE_TEMPLATES.find((t) => t.key === selectedTemplate) || BASE_TEMPLATES[0];
 
-  // ── Shared modal styles ──
   const inputStyle = {
     width: "100%",
     fontSize: 14,
@@ -341,7 +342,7 @@ export default function Sidebar({
       className="sidebar"
       style={{ width, minWidth: width, maxWidth: width }}
     >
-      {/* ── Header ── */}
+      {/* Header */}
       <div
         style={{ padding: "16px 16px 12px", borderBottom: "1px solid #ebebeb" }}
       >
@@ -353,7 +354,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* ── Nav ── */}
+      {/* Nav */}
       <div style={{ padding: "8px 0 4px" }}>
         <div className="sidebar-section">Main</div>
         {[
@@ -372,7 +373,7 @@ export default function Sidebar({
         ))}
       </div>
 
-      {/* ── Spaces ── */}
+      {/* Spaces */}
       <div
         style={{
           flex: 1,
@@ -407,10 +408,24 @@ export default function Sidebar({
                   <span style={{ fontSize: 10, color: "#aaa", marginRight: 2 }}>
                     {isExpanded ? "▾" : "▸"}
                   </span>
+
+                  {/* Space icon badge — shows emoji icon with color background */}
                   <span
-                    className="space-dot"
-                    style={{ background: space.color || "#378ADD" }}
-                  />
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 5,
+                      background: space.color || "#378ADD",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {space.icon || "🏢"}
+                  </span>
+
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
                     {space.name}
                   </span>
@@ -486,8 +501,6 @@ export default function Sidebar({
                         </span>
                       </div>
                     ))}
-
-                    {/* Add folder button — opens modal */}
                     <div
                       className="add-btn-sidebar"
                       style={{ paddingLeft: 28 }}
@@ -507,7 +520,6 @@ export default function Sidebar({
             );
           })}
 
-          {/* Add space button */}
           <button
             className="add-btn-sidebar"
             onClick={() => {
@@ -532,7 +544,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* ── Profile ── */}
+      {/* Profile */}
       <div
         style={{
           padding: "12px 14px",
@@ -594,9 +606,7 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* ════════════════════════════════════════
-          FOLDER CREATION MODAL
-          ════════════════════════════════════════ */}
+      {/* ══ FOLDER CREATION MODAL ══ */}
       {showAddFolderModal && (
         <div
           style={{
@@ -625,7 +635,6 @@ export default function Sidebar({
               overflow: "hidden",
             }}
           >
-            {/* Header */}
             <div style={{ padding: "24px 28px 18px" }}>
               <div
                 style={{
@@ -671,9 +680,7 @@ export default function Sidebar({
               </div>
             </div>
 
-            {/* Body */}
             <div style={{ padding: "0 28px 4px" }}>
-              {/* Name */}
               <div style={{ marginBottom: 14 }}>
                 <label
                   style={{
@@ -702,7 +709,6 @@ export default function Sidebar({
                 />
               </div>
 
-              {/* Description */}
               <div style={{ marginBottom: 20 }}>
                 <label
                   style={{
@@ -725,7 +731,6 @@ export default function Sidebar({
                 />
               </div>
 
-              {/* Settings */}
               <div style={{ marginBottom: 24 }}>
                 <label
                   style={{
@@ -738,8 +743,6 @@ export default function Sidebar({
                 >
                   Settings
                 </label>
-
-                {/* Statuses card */}
                 <div
                   onClick={() => setFolderUseSpaceStatuses((v) => !v)}
                   style={{
@@ -754,7 +757,6 @@ export default function Sidebar({
                     background: folderUseSpaceStatuses ? "#f0f7ff" : "#fafaf9",
                     cursor: "pointer",
                     transition: "all 0.12s",
-                    marginBottom: 8,
                   }}
                 >
                   <div
@@ -786,10 +788,9 @@ export default function Sidebar({
                     <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
                       {folderUseSpaceStatuses
                         ? "Use Space statuses (To Do, In Progress, In Review, Done)"
-                        : "Custom statuses — you can edit after creating"}
+                        : "Custom statuses — edit after creating"}
                     </div>
                   </div>
-                  {/* Toggle */}
                   <div
                     style={{
                       width: 40,
@@ -819,7 +820,6 @@ export default function Sidebar({
               </div>
             </div>
 
-            {/* Footer */}
             <div
               style={{
                 padding: "14px 28px 20px",
@@ -837,7 +837,6 @@ export default function Sidebar({
                   border: "none",
                   cursor: "pointer",
                   fontWeight: 500,
-                  padding: "4px 0",
                 }}
               >
                 Cancel
@@ -854,7 +853,6 @@ export default function Sidebar({
                   fontSize: 13,
                   cursor: newFolder.trim() ? "pointer" : "not-allowed",
                   fontWeight: 600,
-                  transition: "all 0.12s",
                 }}
               >
                 Create
@@ -864,9 +862,7 @@ export default function Sidebar({
         </div>
       )}
 
-      {/* ════════════════════════════════════════
-          SPACE CREATION MODAL
-          ════════════════════════════════════════ */}
+      {/* ══ SPACE CREATION MODAL ══ */}
       {showAddSpace && (
         <div
           style={{
@@ -895,7 +891,7 @@ export default function Sidebar({
               transition: "max-width 0.25s ease",
             }}
           >
-            {/* ── STEP 1 ── */}
+            {/* Step 1 */}
             {spaceStep === 1 && (
               <>
                 <div
@@ -1053,7 +1049,6 @@ export default function Sidebar({
                       />
                     </div>
 
-                    {/* Inline icon grid */}
                     {showIconPicker && (
                       <div
                         style={{
@@ -1098,6 +1093,7 @@ export default function Sidebar({
                                 cursor: "pointer",
                                 border: "none",
                                 borderRadius: 8,
+                                padding: 0,
                                 background:
                                   newSpace.icon === icon
                                     ? newSpace.color + "28"
@@ -1109,7 +1105,6 @@ export default function Sidebar({
                                   newSpace.icon === icon
                                     ? `2px solid ${newSpace.color}`
                                     : "none",
-                                padding: 0,
                                 transition: "background 0.1s",
                               }}
                               onMouseEnter={(e) => {
@@ -1276,7 +1271,7 @@ export default function Sidebar({
               </>
             )}
 
-            {/* ── STEP 2 — two-panel ── */}
+            {/* Step 2 */}
             {spaceStep === 2 && (
               <>
                 <div
@@ -1346,7 +1341,7 @@ export default function Sidebar({
                 </div>
 
                 <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-                  {/* Left panel — templates */}
+                  {/* Left panel */}
                   <div
                     style={{
                       width: 220,
@@ -1435,7 +1430,7 @@ export default function Sidebar({
                     ))}
                   </div>
 
-                  {/* Right panel — status editor */}
+                  {/* Right panel */}
                   <div
                     style={{ flex: 1, overflowY: "auto", padding: "20px 22px" }}
                   >
@@ -1520,8 +1515,6 @@ export default function Sidebar({
                         >
                           ⠿
                         </span>
-
-                        {/* Color dot */}
                         <div style={{ position: "relative", flexShrink: 0 }}>
                           <button
                             onClick={() =>
@@ -1538,9 +1531,7 @@ export default function Sidebar({
                               cursor: "pointer",
                               boxShadow: "0 0 0 1.5px #ddd",
                               outline: "none",
-                              flexShrink: 0,
                             }}
-                            title="Change color"
                           />
                           {showColorPickerFor === idx && (
                             <div
@@ -1590,8 +1581,6 @@ export default function Sidebar({
                             </div>
                           )}
                         </div>
-
-                        {/* Name */}
                         {editingStatusIdx === idx ? (
                           <input
                             autoFocus
@@ -1629,14 +1618,11 @@ export default function Sidebar({
                               display: "inline-block",
                               flexShrink: 0,
                             }}
-                            title="Click to rename"
                           >
                             {s.name}
                           </span>
                         )}
-
                         <span style={{ flex: 1 }} />
-
                         <button
                           onClick={() => deleteStatus(idx)}
                           style={{
@@ -1656,14 +1642,12 @@ export default function Sidebar({
                           onMouseLeave={(e) =>
                             (e.currentTarget.style.color = "#d0d0d0")
                           }
-                          title="Delete"
                         >
                           ×
                         </button>
                       </div>
                     ))}
 
-                    {/* Add status */}
                     <div
                       style={{
                         display: "flex",
@@ -1732,7 +1716,6 @@ export default function Sidebar({
                   </div>
                 </div>
 
-                {/* Footer */}
                 <div
                   style={{
                     padding: "14px 28px",
