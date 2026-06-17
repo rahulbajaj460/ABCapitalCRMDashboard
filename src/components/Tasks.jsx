@@ -1137,7 +1137,36 @@ export default function Tasks({
                         <span
                           style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
                         >
-                          📁 {folder.name}
+                          {(() => {
+                            return (
+                              <span
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 7,
+                                }}
+                              >
+                                <svg
+                                  width="15"
+                                  height="13"
+                                  viewBox="0 0 16 14"
+                                  fill="none"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  style={{ flexShrink: 0 }}
+                                >
+                                  <path
+                                    d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
+                                    fill="#9ca3af"
+                                  />
+                                  <path
+                                    d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
+                                    fill="#6b7280"
+                                  />
+                                </svg>
+                                {folder.name}
+                              </span>
+                            );
+                          })()}
                         </span>
                         <span
                           style={{

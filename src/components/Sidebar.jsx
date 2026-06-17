@@ -898,7 +898,25 @@ export default function Sidebar({
                         onClick={() => onFolderSelect(space, folder)}
                         style={{ position: "relative" }}
                       >
-                        <span style={{ fontSize: 12 }}>📁</span>
+                        <svg
+                          width="15"
+                          height="13"
+                          viewBox="0 0 16 14"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          style={{ flexShrink: 0, marginTop: 1 }}
+                        >
+                          <path
+                            d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
+                            fill="currentColor"
+                            opacity="0.7"
+                            strokeWidth="0"
+                          />
+                          <path
+                            d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
+                            fill="currentColor"
+                          />
+                        </svg>
                         <span style={{ flex: 1, fontSize: 12 }}>
                           {folder.name}
                         </span>
