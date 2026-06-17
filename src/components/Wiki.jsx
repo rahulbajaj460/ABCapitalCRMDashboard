@@ -12,20 +12,12 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
 
-// ── Category accent colors cycling through a palette ──
-const CAT_COLORS = [
-  { bg: "#eff6ff", icon: "#3b82f6", text: "#1d4ed8" }, // blue
-  { bg: "#f0fdf4", icon: "#22c55e", text: "#15803d" }, // green
-  { bg: "#fdf4ff", icon: "#a855f7", text: "#7e22ce" }, // purple
-  { bg: "#fff7ed", icon: "#f97316", text: "#c2410c" }, // orange
-  { bg: "#fef2f2", icon: "#ef4444", text: "#b91c1c" }, // red
-  { bg: "#f0fdfa", icon: "#14b8a6", text: "#0f766e" }, // teal
-  { bg: "#fefce8", icon: "#eab308", text: "#a16207" }, // yellow
-  { bg: "#fff1f2", icon: "#f43f5e", text: "#be123c" }, // rose
-];
+// Single clean theme — consistent with task folders
+const CAT_COLOR = { bg: "#f0f0ef", icon: "#6b7280" };
+const CAT_COLOR_ACTIVE = { bg: "#eff6ff", icon: "#1d4ed8" };
 
-function getCatColor(index) {
-  return CAT_COLORS[index % CAT_COLORS.length];
+function getCatColor() {
+  return CAT_COLOR;
 }
 
 // ── SVG Icons ──
@@ -874,7 +866,6 @@ export default function Wiki() {
                 <CategoryNode
                   key={cat.id}
                   cat={cat}
-                  catIndex={getCatIndex(cat.id)}
                   activeArticle={activeArticle}
                   expandedCats={expandedCats}
                   onToggle={toggleCat}
@@ -911,7 +902,6 @@ export default function Wiki() {
                       active={activeArticle?.id === a.id}
                       onSelect={setActiveArticle}
                       depth={0}
-                      catColor={null}
                     />
                   ))}
                 </div>
@@ -1389,7 +1379,6 @@ export default function Wiki() {
 // ── Category node ──
 function CategoryNode({
   cat,
-  catIndex,
   activeArticle,
   expandedCats,
   onToggle,
@@ -1408,7 +1397,7 @@ function CategoryNode({
   const catArticles = getCatArticles(cat.id);
   const hasChildren = subCats.length > 0 || catArticles.length > 0;
   const indent = depth * 12;
-  const color = getCatColor(catIndex);
+  const color = getCatColor();
 
   return (
     <div>
@@ -1429,21 +1418,19 @@ function CategoryNode({
           {hasChildren ? (isExpanded ? "▾" : "▸") : ""}
         </span>
 
-        {/* Colored folder icon */}
+        {/* Folder icon — grey default, blue when any child is active */}
         <span
           onClick={() => onToggle(cat.id)}
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            width: 22,
-            height: 22,
-            borderRadius: 6,
-            background: color.bg,
+            width: 20,
+            height: 20,
             flexShrink: 0,
           }}
         >
-          <IconFolder color={color.icon} size={13} />
+          <IconFolder color={isExpanded ? "#374151" : "#9ca3af"} size={14} />
         </span>
 
         {/* Category name */}
@@ -1459,14 +1446,13 @@ function CategoryNode({
         {catArticles.length > 0 && (
           <span
             style={{
-              fontSize: 10,
-              color: color.icon,
-              background: color.bg,
+              fontSize: 11,
+              color: "#aaa",
+              background: "#f0f0ef",
               borderRadius: 20,
-              padding: "1px 6px",
-              fontWeight: 600,
+              padding: "0 6px",
+              fontWeight: 500,
               flexShrink: 0,
-              marginLeft: 2,
             }}
           >
             {catArticles.length}
@@ -1524,7 +1510,6 @@ function CategoryNode({
             <CategoryNode
               key={sub.id}
               cat={sub}
-              catIndex={getCatIndex(sub.id)}
               activeArticle={activeArticle}
               expandedCats={expandedCats}
               onToggle={onToggle}
@@ -1546,7 +1531,6 @@ function CategoryNode({
               active={activeArticle?.id === a.id}
               onSelect={onSelectArticle}
               depth={depth + 1}
-              catColor={color}
             />
           ))}
         </div>
@@ -1556,9 +1540,9 @@ function CategoryNode({
 }
 
 // ── Article tree item ──
-function ArticleTreeItem({ article, active, onSelect, depth, catColor }) {
+function ArticleTreeItem({ article, active, onSelect, depth }) {
   const indent = 8 + depth * 12;
-  const pageColor = active ? "#1d4ed8" : catColor ? catColor.icon : "#9ca3af";
+  const pageColor = active ? "#1d4ed8" : "#b0b7c3";
   const pageBg = active ? "#eff6ff" : "transparent";
 
   return (
