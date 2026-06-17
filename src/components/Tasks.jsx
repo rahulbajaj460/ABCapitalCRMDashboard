@@ -105,11 +105,20 @@ export default function Tasks({
 
   function getStatuses() {
     if (activeFolder) {
+      // Folder-specific statuses first
       const folderStatuses = (activeSpace?.space_statuses || [])
         .filter((s) => s.folder_id === activeFolder.id)
         .sort((a, b) => a.status_order - b.status_order);
       if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
+      // Fall back to space-level statuses
+      const spaceLevelForFolder = (activeSpace?.space_statuses || [])
+        .filter((s) => !s.folder_id)
+        .sort((a, b) => a.status_order - b.status_order);
+      if (spaceLevelForFolder.length > 0)
+        return spaceLevelForFolder.map((s) => s.name);
     }
+
+    // Space level — union of all folder statuses
     const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
     const seen = new Set();
     const unique = [];
@@ -123,6 +132,13 @@ export default function Tasks({
         }
       });
     if (unique.length > 0) return unique;
+
+    // Fall back to space-level statuses (no folders created yet)
+    const spaceLevel = (activeSpace?.space_statuses || [])
+      .filter((s) => !s.folder_id)
+      .sort((a, b) => a.status_order - b.status_order);
+    if (spaceLevel.length > 0) return spaceLevel.map((s) => s.name);
+
     return ["To Do", "In Progress", "In Review", "Done"];
   }
 
@@ -136,9 +152,12 @@ export default function Tasks({
 
   function getUniqueStatuses() {
     if (activeFolder) return getStatuses();
+
     const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
     const seen = new Set();
     const unique = [];
+
+    // First try folder-level statuses (union across all folders)
     (activeSpace?.space_statuses || [])
       .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
       .sort((a, b) => a.status_order - b.status_order)
@@ -148,6 +167,20 @@ export default function Tasks({
           unique.push(s.name);
         }
       });
+
+    if (unique.length > 0) return unique;
+
+    // Fall back to space-level statuses (no folders yet)
+    (activeSpace?.space_statuses || [])
+      .filter((s) => !s.folder_id)
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => {
+        if (!seen.has(s.name)) {
+          seen.add(s.name);
+          unique.push(s.name);
+        }
+      });
+
     return unique.length > 0
       ? unique
       : ["To Do", "In Progress", "In Review", "Done"];
