@@ -38,18 +38,55 @@ function computeFormula(field, task) {
   if (field.field_type !== "formula") return null;
   const opts = field.field_options || [];
   const key = opts[0] || "days_since_created";
-  const preset = FORMULA_PRESETS.find((p) => p.key === key);
-  if (!preset) return null;
-  if (key === "custom") return opts[1] || "—";
-  const val = preset.fn(task);
-  if (val === null || val === undefined) return "—";
-  if (key === "days_until_due")
-    return val < 0
-      ? `${Math.abs(val)} days overdue`
-      : val === 0
-        ? "Due today"
-        : `${val} days left`;
-  return `${val} day${val !== 1 ? "s" : ""}`;
+  const now = Date.now();
+
+  if (key === "days_since_created") {
+    if (!task.created_at) return "—";
+    const days = Math.floor((now - new Date(task.created_at)) / 86400000);
+    return `${days} day${days !== 1 ? "s" : ""}`;
+  }
+  if (key === "days_since_updated") {
+    const ref = task.updated_at || task.created_at;
+    if (!ref) return "—";
+    const days = Math.floor((now - new Date(ref)) / 86400000);
+    return `${days} day${days !== 1 ? "s" : ""}`;
+  }
+  if (key === "days_until_due") {
+    if (!task.due_date) return "No due date";
+    const days = Math.ceil((new Date(task.due_date) - now) / 86400000);
+    if (days < 0)
+      return `${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} overdue`;
+    if (days === 0) return "Due today";
+    return `${days} day${days !== 1 ? "s" : ""} left`;
+  }
+  if (key === "custom") {
+    const expr = (opts[1] || "").trim();
+    if (!expr) return "—";
+    // Evaluate supported expressions
+    if (expr.includes("days_since(created_at)")) {
+      const days = Math.floor((now - new Date(task.created_at)) / 86400000);
+      return expr.replace("days_since(created_at)", `${days} days`);
+    }
+    if (
+      expr.includes("days_until(due_date)") ||
+      expr.includes("days_between(created_at, due_date)")
+    ) {
+      if (!task.due_date) return "No due date";
+      const days = Math.ceil((new Date(task.due_date) - now) / 86400000);
+      const label =
+        days < 0
+          ? `${Math.abs(days)} days overdue`
+          : days === 0
+            ? "Due today"
+            : `${days} days left`;
+      return expr
+        .replace("days_until(due_date)", label)
+        .replace("days_between(created_at, due_date)", label);
+    }
+    // Fall back — return expression as-is (static text)
+    return expr;
+  }
+  return "—";
 }
 
 function PriorityDot({ priority }) {
@@ -2845,23 +2882,29 @@ export default function Tasks({
                     {[
                       {
                         key: "days_since_created",
-                        label: "Days since created",
-                        hint: "e.g. 5 days, 12 days",
+                        label: "Days since task created",
+                        hint: "Auto-computed — e.g. shows '5 days', '12 days'",
+                        example:
+                          "Useful for tracking how long a task has been open",
                       },
                       {
                         key: "days_since_updated",
                         label: "Days since last updated",
-                        hint: "e.g. 2 days",
+                        hint: "Auto-computed — resets to 0 each time the task is saved",
+                        example: "Useful for spotting stale tasks",
                       },
                       {
                         key: "days_until_due",
                         label: "Days until due date",
-                        hint: "e.g. 3 days left / 2 days overdue",
+                        hint: "Auto-computed — e.g. '3 days left' or '2 days overdue'",
+                        example: "Requires a due date to be set on the task",
                       },
                       {
                         key: "custom",
-                        label: "Custom / manual text",
-                        hint: "Store a fixed label or note",
+                        label: "Custom formula expression",
+                        hint: "Write your own expression — stored and displayed as-is",
+                        example:
+                          "e.g. days_since(created_at), date_diff(due_date, today), or any text",
                       },
                     ].map((opt) => {
                       const isSelected =
@@ -2877,10 +2920,7 @@ export default function Tasks({
                             }))
                           }
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "9px 12px",
+                            padding: "10px 14px",
                             borderRadius: 8,
                             cursor: "pointer",
                             border: `1.5px solid ${isSelected ? "#1d4ed8" : "#e0e0e0"}`,
@@ -2890,29 +2930,35 @@ export default function Tasks({
                         >
                           <div
                             style={{
-                              width: 16,
-                              height: 16,
-                              borderRadius: "50%",
-                              flexShrink: 0,
-                              border: `2px solid ${isSelected ? "#1d4ed8" : "#ccc"}`,
-                              background: isSelected ? "#1d4ed8" : "#fff",
                               display: "flex",
                               alignItems: "center",
-                              justifyContent: "center",
+                              gap: 10,
                             }}
                           >
-                            {isSelected && (
-                              <div
-                                style={{
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: "50%",
-                                  background: "#fff",
-                                }}
-                              />
-                            )}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                width: 16,
+                                height: 16,
+                                borderRadius: "50%",
+                                flexShrink: 0,
+                                border: `2px solid ${isSelected ? "#1d4ed8" : "#ccc"}`,
+                                background: isSelected ? "#1d4ed8" : "#fff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              {isSelected && (
+                                <div
+                                  style={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: "50%",
+                                    background: "#fff",
+                                  }}
+                                />
+                              )}
+                            </div>
                             <div
                               style={{
                                 fontSize: 13,
@@ -2922,27 +2968,115 @@ export default function Tasks({
                             >
                               {opt.label}
                             </div>
-                            <div style={{ fontSize: 11, color: "#888" }}>
+                          </div>
+                          <div style={{ marginLeft: 26, marginTop: 3 }}>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#7c3aed",
+                                fontWeight: 500,
+                              }}
+                            >
                               {opt.hint}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#aaa",
+                                marginTop: 1,
+                              }}
+                            >
+                              {opt.example}
                             </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
+
+                  {/* Custom formula expression input */}
                   {(newField.formula_key || "days_since_created") ===
                     "custom" && (
-                    <input
-                      placeholder="e.g. Q1 2026, Pending review..."
-                      value={newField.custom_formula || ""}
-                      onChange={(e) =>
-                        setNewField((prev) => ({
-                          ...prev,
-                          custom_formula: e.target.value,
-                        }))
-                      }
-                      style={{ marginTop: 8 }}
-                    />
+                    <div
+                      style={{
+                        marginTop: 10,
+                        padding: "12px 14px",
+                        background: "#faf5ff",
+                        borderRadius: 8,
+                        border: "1px solid #e9d5ff",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#7c3aed",
+                          marginBottom: 6,
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                        }}
+                      >
+                        Formula expression
+                      </div>
+                      <input
+                        placeholder="e.g. days_since(created_at) or days_between(created_at, due_date)"
+                        value={newField.custom_formula || ""}
+                        onChange={(e) =>
+                          setNewField((prev) => ({
+                            ...prev,
+                            custom_formula: e.target.value,
+                          }))
+                        }
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: 12,
+                          background: "#fff",
+                          borderColor: "#e9d5ff",
+                        }}
+                      />
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "#aaa",
+                          marginTop: 6,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        Supported expressions:{" "}
+                        <code
+                          style={{
+                            background: "#f0e7ff",
+                            padding: "1px 5px",
+                            borderRadius: 4,
+                            fontSize: 11,
+                          }}
+                        >
+                          days_since(created_at)
+                        </code>{" "}
+                        ·{" "}
+                        <code
+                          style={{
+                            background: "#f0e7ff",
+                            padding: "1px 5px",
+                            borderRadius: 4,
+                            fontSize: 11,
+                          }}
+                        >
+                          days_between(created_at, due_date)
+                        </code>{" "}
+                        ·{" "}
+                        <code
+                          style={{
+                            background: "#f0e7ff",
+                            padding: "1px 5px",
+                            borderRadius: 4,
+                            fontSize: 11,
+                          }}
+                        >
+                          days_until(due_date)
+                        </code>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
