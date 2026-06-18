@@ -58,6 +58,7 @@ export default function Tasks({
   const [drawerTask, setDrawerTask] = useState(null); // task being viewed
   const [drawerEdits, setDrawerEdits] = useState({}); // unsaved edits
   const [drawerFieldValues, setDrawerFieldValues] = useState({});
+  const [drawerSaving, setDrawerSaving] = useState(false);
   const [drawerSaved, setDrawerSaved] = useState(false);
   const drawerRef = useRef(null);
 

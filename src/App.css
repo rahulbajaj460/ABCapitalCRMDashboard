@@ -1215,21 +1215,6 @@ textarea:focus {
   box-shadow: none;
 }
 
-/* ── Task drawer layout ── */
-.app-main {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Ensure the Tasks root div fills height for drawer */
-.app-main > div {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
-}
-
 /* Task drawer scrollbar */
 .task-drawer-body::-webkit-scrollbar {
   width: 5px;
