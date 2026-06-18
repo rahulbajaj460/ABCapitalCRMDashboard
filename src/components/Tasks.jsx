@@ -1,6 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
+
+const PRIORITY_STYLES = {
+  High: { bg: "#fee2e2", color: "#b91c1c", dot: "#ef4444" },
+  Medium: { bg: "#fef9c3", color: "#854d0e", dot: "#eab308" },
+  Low: { bg: "#dcfce7", color: "#15803d", dot: "#22c55e" },
+};
+
+function PriorityDot({ priority }) {
+  const s = PRIORITY_STYLES[priority] || PRIORITY_STYLES.Medium;
+  return (
+    <span
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: "50%",
+        background: s.dot,
+        display: "inline-block",
+        flexShrink: 0,
+      }}
+    />
+  );
+}
 
 export default function Tasks({
   spaces,
@@ -13,10 +35,8 @@ export default function Tasks({
   const [viewMode, setViewMode] = useState("list");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [showTaskModal, setShowTaskModal] = useState(false);
   const [showFieldModal, setShowFieldModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [groupBy, setGroupBy] = useState("status");
   const [newField, setNewField] = useState({
@@ -34,12 +54,15 @@ export default function Tasks({
     }
   });
 
-  function updateVisibleColumns(cols) {
-    setVisibleColumns(cols);
-    localStorage.setItem("abc_visible_columns", JSON.stringify(cols));
-  }
+  // ── Task drawer state ──
+  const [drawerTask, setDrawerTask] = useState(null); // task being viewed
+  const [drawerEdits, setDrawerEdits] = useState({}); // unsaved edits
+  const [drawerFieldValues, setDrawerFieldValues] = useState({});
+  const [drawerSaving, setDrawerSaving] = useState(false);
+  const drawerRef = useRef(null);
 
-  const [newStatus, setNewStatus] = useState({ name: "", color: "#378ADD" });
+  // ── New task quick-create (inline at bottom of group) ──
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -53,10 +76,17 @@ export default function Tasks({
     due_date: "",
   });
   const [taskFieldValues, setTaskFieldValues] = useState({});
+
+  const [newStatus, setNewStatus] = useState({ name: "", color: "#378ADD" });
   const [showImport, setShowImport] = useState(false);
   const [modalSpaceStatuses, setModalSpaceStatuses] = useState([]);
   const [statusActionMsg, setStatusActionMsg] = useState("");
   const [statusLoading, setStatusLoading] = useState(false);
+
+  function updateVisibleColumns(cols) {
+    setVisibleColumns(cols);
+    localStorage.setItem("abc_visible_columns", JSON.stringify(cols));
+  }
 
   useEffect(() => {
     fetchTasks();
@@ -69,14 +99,21 @@ export default function Tasks({
       setNewTask((prev) => ({ ...prev, space_id: activeSpace.id }));
   }, [activeSpace]);
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (showColumnPicker && !e.target.closest(".column-picker-wrap")) {
+    function handler(e) {
+      if (showColumnPicker && !e.target.closest(".column-picker-wrap"))
         setShowColumnPicker(false);
-      }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [showColumnPicker]);
+  // Close drawer on Escape
+  useEffect(() => {
+    function handler(e) {
+      if (e.key === "Escape") setDrawerTask(null);
+    }
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   async function fetchMembers() {
     const { data } = await supabase
@@ -91,34 +128,32 @@ export default function Tasks({
       .from("tasks")
       .select("*, task_field_values(*)")
       .order("created_at", { ascending: false });
-    if (activeFolder) {
-      query = query.eq("folder_id", activeFolder.id);
-    } else if (activeSpace) {
-      query = query.eq("space_id", activeSpace.id);
-    }
-    if (profile?.role === "member") {
-      query = query.eq("assignee_id", profile.id);
-    }
+    if (activeFolder) query = query.eq("folder_id", activeFolder.id);
+    else if (activeSpace) query = query.eq("space_id", activeSpace.id);
+    if (profile?.role === "member") query = query.eq("assignee_id", profile.id);
     const { data } = await query;
-    if (data) setTasks(data);
+    if (data) {
+      setTasks(data);
+      // Refresh drawer task if open
+      if (drawerTask) {
+        const updated = data.find((t) => t.id === drawerTask.id);
+        if (updated) setDrawerTask(updated);
+      }
+    }
   }
 
+  // ── Status helpers ──
   function getStatuses() {
     if (activeFolder) {
-      // Folder-specific statuses first
-      const folderStatuses = (activeSpace?.space_statuses || [])
+      const fs = (activeSpace?.space_statuses || [])
         .filter((s) => s.folder_id === activeFolder.id)
         .sort((a, b) => a.status_order - b.status_order);
-      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
-      // Fall back to space-level statuses
-      const spaceLevelForFolder = (activeSpace?.space_statuses || [])
+      if (fs.length > 0) return fs.map((s) => s.name);
+      const sl = (activeSpace?.space_statuses || [])
         .filter((s) => !s.folder_id)
         .sort((a, b) => a.status_order - b.status_order);
-      if (spaceLevelForFolder.length > 0)
-        return spaceLevelForFolder.map((s) => s.name);
+      if (sl.length > 0) return sl.map((s) => s.name);
     }
-
-    // Space level — union of all folder statuses
     const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
     const seen = new Set();
     const unique = [];
@@ -132,32 +167,26 @@ export default function Tasks({
         }
       });
     if (unique.length > 0) return unique;
-
-    // Fall back to space-level statuses (no folders created yet)
     const spaceLevel = (activeSpace?.space_statuses || [])
       .filter((s) => !s.folder_id)
       .sort((a, b) => a.status_order - b.status_order);
     if (spaceLevel.length > 0) return spaceLevel.map((s) => s.name);
-
     return ["To Do", "In Progress", "In Review", "Done"];
   }
 
   function getFolderStatuses(folder) {
-    const folderStatuses = (activeSpace?.space_statuses || [])
+    const fs = (activeSpace?.space_statuses || [])
       .filter((s) => s.folder_id === folder.id)
       .sort((a, b) => a.status_order - b.status_order);
-    if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
+    if (fs.length > 0) return fs.map((s) => s.name);
     return getStatuses();
   }
 
   function getUniqueStatuses() {
     if (activeFolder) return getStatuses();
-
     const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
     const seen = new Set();
     const unique = [];
-
-    // First try folder-level statuses (union across all folders)
     (activeSpace?.space_statuses || [])
       .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
       .sort((a, b) => a.status_order - b.status_order)
@@ -167,10 +196,7 @@ export default function Tasks({
           unique.push(s.name);
         }
       });
-
     if (unique.length > 0) return unique;
-
-    // Fall back to space-level statuses (no folders yet)
     (activeSpace?.space_statuses || [])
       .filter((s) => !s.folder_id)
       .sort((a, b) => a.status_order - b.status_order)
@@ -180,7 +206,6 @@ export default function Tasks({
           unique.push(s.name);
         }
       });
-
     return unique.length > 0
       ? unique
       : ["To Do", "In Progress", "In Review", "Done"];
@@ -188,9 +213,9 @@ export default function Tasks({
 
   function getFields() {
     if (activeFolder) {
-      const folderFields = activeFolder.space_fields || [];
-      if (folderFields.length > 0)
-        return folderFields.sort((a, b) => a.field_order - b.field_order);
+      const ff = activeFolder.space_fields || [];
+      if (ff.length > 0)
+        return ff.sort((a, b) => a.field_order - b.field_order);
     }
     return (activeSpace?.space_fields || []).sort(
       (a, b) => a.field_order - b.field_order,
@@ -198,9 +223,8 @@ export default function Tasks({
   }
 
   function getFolderFields(folder) {
-    const folderFields = folder.space_fields || [];
-    if (folderFields.length > 0)
-      return folderFields.sort((a, b) => a.field_order - b.field_order);
+    const ff = folder.space_fields || [];
+    if (ff.length > 0) return ff.sort((a, b) => a.field_order - b.field_order);
     return (activeSpace?.space_fields || []).sort(
       (a, b) => a.field_order - b.field_order,
     );
@@ -217,49 +241,50 @@ export default function Tasks({
       (s) => s.name === status,
     );
     if (found) return found.color;
-    const defaults = {
-      "To Do": "#888",
-      "In Progress": "#7c3aed",
-      "In Review": "#d97706",
-      Done: "#16a34a",
-      "Client Cancelled": "#f59e0b",
-    };
-    return defaults[status] || "#888";
+    return (
+      {
+        "To Do": "#888",
+        "In Progress": "#7c3aed",
+        "In Review": "#d97706",
+        Done: "#16a34a",
+        "Client Cancelled": "#f59e0b",
+      }[status] || "#888"
+    );
   }
 
   function getStatusColorForFolder(status, folder) {
     const found = (activeSpace?.space_statuses || [])
       .filter((s) => s.folder_id === folder.id)
       .find((s) => s.name === status);
-    if (found) return found.color;
-    return getStatusColor(status);
+    return found ? found.color : getStatusColor(status);
   }
 
   function getPriorityStyle(priority) {
-    if (priority === "High") return { background: "#fee2e2", color: "#b91c1c" };
-    if (priority === "Low") return { background: "#dcfce7", color: "#15803d" };
-    return { background: "#fef9c3", color: "#854d0e" };
+    const s = PRIORITY_STYLES[priority] || PRIORITY_STYLES.Medium;
+    return { background: s.bg, color: s.color };
   }
 
   function getSelectedSpaceFolders() {
-    const space = spaces.find((s) => s.id === newTask.space_id);
-    return space?.folders || [];
+    return spaces.find((s) => s.id === newTask.space_id)?.folders || [];
   }
 
   function getSelectedSpaceStatuses() {
     const space = spaces.find((s) => s.id === newTask.space_id);
     if (!space) return ["To Do", "In Progress", "In Review", "Done"];
     if (newTask.folder_id) {
-      const folderStatuses = (space.space_statuses || [])
+      const fs = (space.space_statuses || [])
         .filter((s) => s.folder_id === newTask.folder_id)
         .sort((a, b) => a.status_order - b.status_order);
-      if (folderStatuses.length > 0) return folderStatuses.map((s) => s.name);
+      if (fs.length > 0) return fs.map((s) => s.name);
     }
-    const allFolderIds = (space.folders || []).map((f) => f.id);
     const seen = new Set();
     const unique = [];
     (space.space_statuses || [])
-      .filter((s) => s.folder_id && allFolderIds.includes(s.folder_id))
+      .filter(
+        (s) =>
+          s.folder_id &&
+          (space.folders || []).map((f) => f.id).includes(s.folder_id),
+      )
       .sort((a, b) => a.status_order - b.status_order)
       .forEach((s) => {
         if (!seen.has(s.name)) {
@@ -277,9 +302,9 @@ export default function Tasks({
     if (!space) return [];
     if (newTask.folder_id) {
       const folder = space.folders?.find((f) => f.id === newTask.folder_id);
-      const folderFields = folder?.space_fields || [];
-      if (folderFields.length > 0)
-        return folderFields.sort((a, b) => a.field_order - b.field_order);
+      const ff = folder?.space_fields || [];
+      if (ff.length > 0)
+        return ff.sort((a, b) => a.field_order - b.field_order);
     }
     return (space.space_fields || []).sort(
       (a, b) => a.field_order - b.field_order,
@@ -295,50 +320,102 @@ export default function Tasks({
 
   function getGroupedTasks() {
     const taskList = filteredTasks;
-    if (groupBy === "status") {
-      return getStatuses().reduce((acc, status) => {
-        acc[status] = taskList.filter((t) => t.status === status);
+    if (groupBy === "status")
+      return getStatuses().reduce((acc, s) => {
+        acc[s] = taskList.filter((t) => t.status === s);
         return acc;
       }, {});
-    }
     if (groupBy === "folder") {
       const groups = {};
-      if (activeSpace) {
-        (activeSpace.folders || []).forEach((f) => {
-          groups[f.name] = taskList.filter((t) => t.folder_id === f.id);
-        });
-      }
-      const ungrouped = taskList.filter((t) => !t.folder_id);
-      if (ungrouped.length > 0) groups["No folder"] = ungrouped;
+      (activeSpace?.folders || []).forEach((f) => {
+        groups[f.name] = taskList.filter((t) => t.folder_id === f.id);
+      });
+      const ug = taskList.filter((t) => !t.folder_id);
+      if (ug.length > 0) groups["No folder"] = ug;
       return groups;
     }
     if (groupBy === "assignee") {
       const groups = {};
       taskList.forEach((task) => {
-        const assignees =
+        const names =
           task.assignees?.length > 0
             ? task.assignees
             : task.assignee
               ? [task.assignee]
               : ["Unassigned"];
-        assignees.forEach((name) => {
-          if (!groups[name]) groups[name] = [];
-          groups[name].push(task);
+        names.forEach((n) => {
+          if (!groups[n]) groups[n] = [];
+          groups[n].push(task);
         });
       });
       return Object.fromEntries(
         Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)),
       );
     }
-    if (groupBy === "priority") {
+    if (groupBy === "priority")
       return ["High", "Medium", "Low"].reduce((acc, p) => {
         acc[p] = taskList.filter((t) => t.priority === p);
         return acc;
       }, {});
-    }
     return { "All tasks": taskList };
   }
 
+  // ── Drawer open/close ──
+  function openDrawer(task) {
+    setDrawerTask(task);
+    const fvMap = {};
+    (task.task_field_values || []).forEach((fv) => {
+      fvMap[fv.field_id] = fv.value;
+    });
+    setDrawerFieldValues(fvMap);
+    setDrawerEdits({
+      title: task.title,
+      description: task.description || "",
+      status: task.status,
+      priority: task.priority,
+      assignees: task.assignees || [],
+      due_date: task.due_date || "",
+    });
+  }
+
+  function closeDrawer() {
+    setDrawerTask(null);
+    setDrawerEdits({});
+  }
+
+  async function saveDrawer() {
+    if (!drawerTask) return;
+    setDrawerSaving(true);
+    const payload = {
+      title: drawerEdits.title?.trim() || drawerTask.title,
+      description: drawerEdits.description ?? drawerTask.description,
+      status: drawerEdits.status ?? drawerTask.status,
+      priority: drawerEdits.priority ?? drawerTask.priority,
+      assignees: drawerEdits.assignees ?? drawerTask.assignees,
+      assignee: (drawerEdits.assignees ?? drawerTask.assignees)?.[0] || "",
+      due_date: drawerEdits.due_date ?? drawerTask.due_date,
+    };
+    await supabase.from("tasks").update(payload).eq("id", drawerTask.id);
+    // Save field values
+    for (const [fieldId, value] of Object.entries(drawerFieldValues)) {
+      const existing = drawerTask.task_field_values?.find(
+        (v) => v.field_id === fieldId,
+      );
+      if (existing)
+        await supabase
+          .from("task_field_values")
+          .update({ value })
+          .eq("id", existing.id);
+      else
+        await supabase
+          .from("task_field_values")
+          .insert({ task_id: drawerTask.id, field_id: fieldId, value });
+    }
+    setDrawerSaving(false);
+    fetchTasks();
+  }
+
+  // ── Task CRUD ──
   async function saveTask() {
     if (!newTask.title.trim()) return;
     if (!newTask.space_id) {
@@ -358,71 +435,55 @@ export default function Tasks({
       assignees: newTask.assignees,
       due_date: newTask.due_date || null,
     };
-    let taskId;
-    if (editingTask) {
-      await supabase.from("tasks").update(payload).eq("id", editingTask.id);
-      taskId = editingTask.id;
-    } else {
-      const { data } = await supabase
-        .from("tasks")
-        .insert(payload)
-        .select()
-        .single();
-      if (data) taskId = data.id;
-    }
-    if (taskId && Object.keys(taskFieldValues).length > 0) {
+    const { data } = await supabase
+      .from("tasks")
+      .insert(payload)
+      .select()
+      .single();
+    if (data && Object.keys(taskFieldValues).length > 0) {
       for (const [fieldId, value] of Object.entries(taskFieldValues)) {
-        const existing = editingTask?.task_field_values?.find(
-          (v) => v.field_id === fieldId,
-        );
-        if (existing) {
-          await supabase
-            .from("task_field_values")
-            .update({ value })
-            .eq("id", existing.id);
-        } else {
-          await supabase
-            .from("task_field_values")
-            .insert({ task_id: taskId, field_id: fieldId, value });
-        }
+        await supabase
+          .from("task_field_values")
+          .insert({ task_id: data.id, field_id: fieldId, value });
       }
     }
-    closeTaskModal();
+    setShowNewTaskModal(false);
+    setTaskFieldValues({});
     fetchTasks();
   }
 
   async function deleteTask(taskId) {
     if (!confirm("Delete this task?")) return;
+    if (drawerTask?.id === taskId) closeDrawer();
     await supabase.from("tasks").delete().eq("id", taskId);
     fetchTasks();
   }
 
-  async function updateTaskStatus(taskId, newStatus) {
-    await supabase.from("tasks").update({ status: newStatus }).eq("id", taskId);
+  async function updateTaskStatus(taskId, newSt) {
+    await supabase.from("tasks").update({ status: newSt }).eq("id", taskId);
+    if (drawerTask?.id === taskId)
+      setDrawerEdits((prev) => ({ ...prev, status: newSt }));
     fetchTasks();
   }
 
   async function addCustomField() {
     if (!newField.field_name.trim() || !activeSpace) return;
-    const fields = getFields();
-    await supabase.from("space_fields").insert({
-      space_id: activeSpace.id,
-      folder_id: activeFolder?.id || null,
-      field_name: newField.field_name.trim(),
-      field_type: newField.field_type,
-      field_order: fields.length + 1,
-    });
+    await supabase
+      .from("space_fields")
+      .insert({
+        space_id: activeSpace.id,
+        folder_id: activeFolder?.id || null,
+        field_name: newField.field_name.trim(),
+        field_type: newField.field_type,
+        field_order: getFields().length + 1,
+      });
     setNewField({ field_name: "", field_type: "text" });
     setShowFieldModal(false);
     onRefreshSpaces();
   }
 
   async function deleteCustomField(fieldId) {
-    if (
-      !confirm(
-        "Delete this custom field? All values stored in this field will also be deleted.",
-      )
-    )
+    if (!confirm("Delete this custom field? All values will also be deleted."))
       return;
     await supabase.from("space_fields").delete().eq("id", fieldId);
     onRefreshSpaces();
@@ -433,62 +494,60 @@ export default function Tasks({
     if (!newStatus.name.trim() || !activeSpace) return;
     setStatusLoading(true);
     setStatusActionMsg("");
-
     if (activeFolder) {
-      const { data: existingFolderStatuses } = await supabase
+      const { data: eFS } = await supabase
         .from("space_statuses")
         .select("*")
         .eq("folder_id", activeFolder.id);
-      if (!existingFolderStatuses || existingFolderStatuses.length === 0) {
-        const { data: spaceStatuses } = await supabase
+      if (!eFS || eFS.length === 0) {
+        const { data: sS } = await supabase
           .from("space_statuses")
           .select("*")
           .eq("space_id", activeSpace.id)
           .is("folder_id", null)
           .order("status_order");
-        if (spaceStatuses && spaceStatuses.length > 0) {
-          await supabase.from("space_statuses").insert(
-            spaceStatuses.map((s) => ({
-              space_id: activeSpace.id,
-              folder_id: activeFolder.id,
-              name: s.name,
-              color: s.color,
-              status_order: s.status_order,
-            })),
-          );
-        }
+        if (sS?.length > 0)
+          await supabase
+            .from("space_statuses")
+            .insert(
+              sS.map((s) => ({
+                space_id: activeSpace.id,
+                folder_id: activeFolder.id,
+                name: s.name,
+                color: s.color,
+                status_order: s.status_order,
+              })),
+            );
       }
     }
-
-    let dupQuery = supabase.from("space_statuses").select("name");
-    if (activeFolder) {
-      dupQuery = dupQuery.eq("folder_id", activeFolder.id);
-    } else {
-      dupQuery = dupQuery.eq("space_id", activeSpace.id).is("folder_id", null);
-    }
-    const { data: existing } = await dupQuery;
-    const existingNames = (existing || []).map((s) => s.name.toLowerCase());
-
-    if (existingNames.includes(newStatus.name.trim().toLowerCase())) {
+    let dupQ = supabase.from("space_statuses").select("name");
+    if (activeFolder) dupQ = dupQ.eq("folder_id", activeFolder.id);
+    else dupQ = dupQ.eq("space_id", activeSpace.id).is("folder_id", null);
+    const { data: existing } = await dupQ;
+    if (
+      (existing || [])
+        .map((s) => s.name.toLowerCase())
+        .includes(newStatus.name.trim().toLowerCase())
+    ) {
       setStatusActionMsg("⚠️ A status with this name already exists.");
       setStatusLoading(false);
       return;
     }
-
-    const { error } = await supabase.from("space_statuses").insert({
-      space_id: activeSpace.id,
-      folder_id: activeFolder?.id || null,
-      name: newStatus.name.trim(),
-      color: newStatus.color,
-      status_order: (existing?.length || 0) + 1,
-    });
-
+    const { error } = await supabase
+      .from("space_statuses")
+      .insert({
+        space_id: activeSpace.id,
+        folder_id: activeFolder?.id || null,
+        name: newStatus.name.trim(),
+        color: newStatus.color,
+        status_order: (existing?.length || 0) + 1,
+      });
     if (error) {
-      setStatusActionMsg("❌ Failed to add status. Please try again.");
+      setStatusActionMsg("❌ Failed to add status.");
     } else {
-      const addedName = newStatus.name.trim();
+      const n = newStatus.name.trim();
       setNewStatus({ name: "", color: "#378ADD" });
-      setStatusActionMsg(`✅ "${addedName}" added successfully.`);
+      setStatusActionMsg(`✅ "${n}" added successfully.`);
       await fetchModalStatuses();
       await onRefreshSpaces();
       fetchTasks();
@@ -499,7 +558,7 @@ export default function Tasks({
   async function deleteCustomStatus(statusId, statusName) {
     if (
       !confirm(
-        `Delete "${statusName}"? Tasks with this status will be moved to the next available status.`,
+        `Delete "${statusName}"? Tasks will be moved to the next available status.`,
       )
     )
       return;
@@ -507,19 +566,18 @@ export default function Tasks({
     setStatusActionMsg("");
     const remaining = modalSpaceStatuses.filter((s) => s.id !== statusId);
     const fallback = remaining.length > 0 ? remaining[0].name : null;
-    if (fallback) {
+    if (fallback)
       await supabase
         .from("tasks")
         .update({ status: fallback })
         .eq("space_id", activeSpace.id)
         .eq("status", statusName);
-    }
     const { error } = await supabase
       .from("space_statuses")
       .delete()
       .eq("id", statusId);
     if (error) {
-      setStatusActionMsg("❌ Failed to delete status. Please try again.");
+      setStatusActionMsg("❌ Failed to delete status.");
       setStatusLoading(false);
       return;
     }
@@ -544,36 +602,34 @@ export default function Tasks({
         .order("status_order");
       setModalSpaceStatuses(data || []);
       return data || [];
-    } else {
-      const folderIds = (activeSpace.folders || []).map((f) => f.id);
-      if (folderIds.length === 0) {
-        const { data } = await supabase
-          .from("space_statuses")
-          .select("*")
-          .eq("space_id", activeSpace.id)
-          .is("folder_id", null)
-          .order("status_order");
-        setModalSpaceStatuses(data || []);
-        return data || [];
-      }
+    }
+    const folderIds = (activeSpace.folders || []).map((f) => f.id);
+    if (folderIds.length === 0) {
       const { data } = await supabase
         .from("space_statuses")
         .select("*")
-        .in("folder_id", folderIds)
+        .eq("space_id", activeSpace.id)
+        .is("folder_id", null)
         .order("status_order");
-      const seen = new Set();
-      const unique = (data || []).filter((s) => {
-        if (seen.has(s.name)) return false;
-        seen.add(s.name);
-        return true;
-      });
-      setModalSpaceStatuses(unique);
-      return unique;
+      setModalSpaceStatuses(data || []);
+      return data || [];
     }
+    const { data } = await supabase
+      .from("space_statuses")
+      .select("*")
+      .in("folder_id", folderIds)
+      .order("status_order");
+    const seen = new Set();
+    const unique = (data || []).filter((s) => {
+      if (seen.has(s.name)) return false;
+      seen.add(s.name);
+      return true;
+    });
+    setModalSpaceStatuses(unique);
+    return unique;
   }
 
   function openNewTask() {
-    setEditingTask(null);
     setTaskFieldValues({});
     setNewTask({
       title: "",
@@ -587,46 +643,15 @@ export default function Tasks({
       assignees: [],
       due_date: "",
     });
-    setShowTaskModal(true);
+    setShowNewTaskModal(true);
   }
 
-  function openEditTask(task) {
-    setEditingTask(task);
-    const fvMap = {};
-    if (task.task_field_values) {
-      task.task_field_values.forEach((fv) => {
-        fvMap[fv.field_id] = fv.value;
-      });
-    }
-    setTaskFieldValues(fvMap);
-    setNewTask({
-      title: task.title,
-      description: task.description || "",
-      space_id: task.space_id,
-      folder_id: task.folder_id || "",
-      status: task.status,
-      priority: task.priority,
-      assignee: task.assignee || "",
-      assignee_id: task.assignee_id || "",
-      assignees: task.assignees || [],
-      due_date: task.due_date || "",
-    });
-    setShowTaskModal(true);
-  }
-
-  function closeTaskModal() {
-    setShowTaskModal(false);
-    setEditingTask(null);
-    setTaskFieldValues({});
-  }
-
-  // ─── Reusable table header ───
+  // ─── Table head ───
   function renderTableHead(fieldList, indented = false) {
     return (
       <thead>
         <tr>
           <th style={indented ? { paddingLeft: 32 } : {}}>Name</th>
-          {/* Status badge column — only visible when NOT grouping by status */}
           {groupBy !== "status" && <th>Status</th>}
           {visibleColumns.includes("priority") && <th>Priority</th>}
           {visibleColumns.includes("assignees") && <th>Assignees</th>}
@@ -637,13 +662,13 @@ export default function Tasks({
               <th key={f.id}>{f.field_name}</th>
             ))}
           <th style={{ minWidth: 140 }}>Status</th>
-          <th style={{ width: 80 }}></th>
+          <th style={{ width: 60 }}></th>
         </tr>
       </thead>
     );
   }
 
-  // ─── Reusable task row ───
+  // ─── Task row — clicking name opens drawer ───
   function renderTaskRow(task, statusList, fieldList, folderCtx = null) {
     const statusColor = folderCtx
       ? getStatusColorForFolder(task.status, folderCtx)
@@ -652,17 +677,19 @@ export default function Tasks({
       task.due_date &&
       new Date(task.due_date) < new Date() &&
       task.status !== "Done";
+    const isActive = drawerTask?.id === task.id;
 
     return (
-      <tr key={task.id}>
-        {/* Name */}
+      <tr
+        key={task.id}
+        style={{
+          background: isActive ? "#f0f7ff" : undefined,
+          cursor: "pointer",
+        }}
+        onClick={() => openDrawer(task)}
+      >
         <td style={folderCtx ? { paddingLeft: 32 } : {}}>
-          <span
-            style={{ fontWeight: 500, cursor: "pointer" }}
-            onClick={() => openEditTask(task)}
-          >
-            {task.title}
-          </span>
+          <span style={{ fontWeight: 500 }}>{task.title}</span>
           {task.description && (
             <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
               {task.description.slice(0, 60)}
@@ -670,8 +697,6 @@ export default function Tasks({
             </div>
           )}
         </td>
-
-        {/* Status badge — only when not grouping by status */}
         {groupBy !== "status" && (
           <td>
             <span
@@ -682,8 +707,6 @@ export default function Tasks({
             </span>
           </td>
         )}
-
-        {/* Priority */}
         {visibleColumns.includes("priority") && (
           <td>
             <span className="badge" style={getPriorityStyle(task.priority)}>
@@ -691,8 +714,6 @@ export default function Tasks({
             </span>
           </td>
         )}
-
-        {/* Assignees */}
         {visibleColumns.includes("assignees") && (
           <td>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
@@ -719,8 +740,6 @@ export default function Tasks({
             </div>
           </td>
         )}
-
-        {/* Due date */}
         {visibleColumns.includes("due_date") && (
           <td
             style={{
@@ -736,8 +755,6 @@ export default function Tasks({
               : "—"}
           </td>
         )}
-
-        {/* Custom fields — only visible ones */}
         {fieldList
           .filter((f) => visibleColumns.includes(`field_${f.id}`))
           .map((f) => {
@@ -753,7 +770,6 @@ export default function Tasks({
                         padding: "1px 8px",
                         fontSize: 11,
                         fontWeight: 500,
-                        color: "#333",
                       }}
                     >
                       {fv.value}
@@ -769,9 +785,7 @@ export default function Tasks({
               </td>
             );
           })}
-
-        {/* Status dropdown — always last before actions */}
-        <td style={{ minWidth: 140 }}>
+        <td style={{ minWidth: 140 }} onClick={(e) => e.stopPropagation()}>
           <select
             value={task.status}
             onChange={(e) => updateTaskStatus(task.id, e.target.value)}
@@ -784,20 +798,14 @@ export default function Tasks({
             ))}
           </select>
         </td>
-
-        {/* Actions */}
-        <td style={{ width: 80 }}>
-          <div className="task-row-actions" style={{ display: "flex", gap: 4 }}>
-            <button className="btn btn-sm" onClick={() => openEditTask(task)}>
-              ✏️
-            </button>
-            <button
-              className="btn btn-sm btn-danger"
-              onClick={() => deleteTask(task.id)}
-            >
-              🗑
-            </button>
-          </div>
+        <td style={{ width: 60 }} onClick={(e) => e.stopPropagation()}>
+          <button
+            className="btn btn-sm btn-danger"
+            onClick={() => deleteTask(task.id)}
+            style={{ padding: "3px 8px", fontSize: 11 }}
+          >
+            🗑
+          </button>
         </td>
       </tr>
     );
@@ -823,734 +831,1262 @@ export default function Tasks({
     );
   }
 
-  return (
-    <div>
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <div
-            className="page-title"
-            style={{ display: "flex", alignItems: "center", gap: 10 }}
-          >
-            {activeSpace && (
-              <span
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  background: activeSpace.color || "#378ADD",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 18,
-                  flexShrink: 0,
-                }}
-              >
-                {activeSpace.icon || "🏢"}
-              </span>
-            )}
-            {pageTitle}
-          </div>
-          {activeSpace && (
-            <div
-              className="page-subtitle"
-              style={{ marginLeft: activeSpace ? 42 : 0 }}
-            >
-              {activeSpace.name}
-              {activeFolder ? ` / ${activeFolder.name}` : ""}
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {activeSpace && (
-            <>
-              <button
-                className="btn btn-sm"
-                onClick={() => setShowFieldModal(true)}
-              >
-                + Custom field
-              </button>
-              <button
-                className="btn btn-sm"
-                onClick={async () => {
-                  setStatusActionMsg("");
-                  setStatusLoading(true);
-                  await fetchModalStatuses();
-                  setStatusLoading(false);
-                  setShowStatusModal(true);
-                }}
-              >
-                + Status
-              </button>
-            </>
-          )}
-          <button className="btn btn-sm" onClick={() => setShowImport(true)}>
-            ⬆ Import CSV
-          </button>
-          <button className="btn btn-primary" onClick={openNewTask}>
-            + New Task
-          </button>
-        </div>
-      </div>
+  // ── Task drawer edits ──
+  const dStatus = drawerEdits.status ?? drawerTask?.status;
+  const dPriority = drawerEdits.priority ?? drawerTask?.priority;
+  const dAssignees = drawerEdits.assignees ?? drawerTask?.assignees ?? [];
+  const dDueDate = drawerEdits.due_date ?? drawerTask?.due_date ?? "";
+  const dTitle = drawerEdits.title ?? drawerTask?.title ?? "";
+  const dDesc = drawerEdits.description ?? drawerTask?.description ?? "";
 
-      {/* Toolbar */}
-      <div className="toolbar-row">
-        <div className="tabs" style={{ border: "none", padding: 0 }}>
-          <div
-            className={`tab ${viewMode === "list" ? "active" : ""}`}
-            onClick={() => setViewMode("list")}
-          >
-            📋 List
-          </div>
-          <div
-            className={`tab ${viewMode === "board" ? "active" : ""}`}
-            onClick={() => setViewMode("board")}
-          >
-            📌 Board
-          </div>
-        </div>
-        <div className="toolbar-right">
-          <div className="toolbar-search">
-            <span style={{ color: "#bbb", fontSize: 13 }}>🔍</span>
-            <input
-              placeholder="Search tasks..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          {/* Column picker */}
-          <div style={{ position: "relative" }} className="column-picker-wrap">
-            <button
-              className="toolbar-btn"
-              onClick={() => setShowColumnPicker((prev) => !prev)}
+  const drawerStatuses = getStatuses();
+  const drawerFields = getFields();
+
+  return (
+    <div
+      style={{ display: "flex", flex: 1, overflow: "hidden", height: "100%" }}
+    >
+      {/* ── MAIN PANEL ── */}
+      <div
+        style={{
+          flex: 1,
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+          minWidth: 0,
+        }}
+      >
+        {/* Header */}
+        <div className="page-header">
+          <div>
+            <div
+              className="page-title"
+              style={{ display: "flex", alignItems: "center", gap: 10 }}
             >
-              ⊞ Columns
-            </button>
-            {showColumnPicker && (
+              {activeSpace && (
+                <span
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: activeSpace.color || "#378ADD",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 18,
+                    flexShrink: 0,
+                  }}
+                >
+                  {activeSpace.icon || "🏢"}
+                </span>
+              )}
+              {pageTitle}
+            </div>
+            {activeSpace && (
               <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "110%",
-                  background: "#fff",
-                  border: "1px solid #e8e8e8",
-                  borderRadius: 8,
-                  padding: "12px 14px",
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
-                  zIndex: 100,
-                  minWidth: 200,
-                }}
+                className="page-subtitle"
+                style={{ marginLeft: activeSpace ? 42 : 0 }}
               >
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#888",
-                    marginBottom: 10,
-                    textTransform: "uppercase",
-                    letterSpacing: ".04em",
-                  }}
-                >
-                  Visible columns
-                </div>
-                {[
-                  { key: "priority", label: "Priority" },
-                  { key: "assignees", label: "Assignees" },
-                  { key: "due_date", label: "Due date" },
-                  ...getFields().map((f) => ({
-                    key: `field_${f.id}`,
-                    label: f.field_name,
-                  })),
-                ].map((col) => (
-                  <label
-                    key={col.key}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "5px 0",
-                      cursor: "pointer",
-                      fontSize: 13,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns.includes(col.key)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...visibleColumns, col.key]
-                          : visibleColumns.filter((c) => c !== col.key);
-                        updateVisibleColumns(next);
-                      }}
-                      style={{ width: 14, height: 14, cursor: "pointer" }}
-                    />
-                    {col.label}
-                  </label>
-                ))}
-                <div
-                  style={{
-                    borderTop: "1px solid #e8e8e8",
-                    marginTop: 8,
-                    paddingTop: 8,
-                    display: "flex",
-                    gap: 6,
-                  }}
-                >
-                  <button
-                    className="btn btn-sm"
-                    style={{ fontSize: 11 }}
-                    onClick={() =>
-                      updateVisibleColumns([
-                        "priority",
-                        "assignees",
-                        "due_date",
-                      ])
-                    }
-                  >
-                    Reset
-                  </button>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    style={{ fontSize: 11 }}
-                    onClick={() => setShowColumnPicker(false)}
-                  >
-                    Done
-                  </button>
-                </div>
+                {activeSpace.name}
+                {activeFolder ? ` / ${activeFolder.name}` : ""}
               </div>
             )}
           </div>
-          <select
-            className="toolbar-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All statuses</option>
-            {getUniqueStatuses().map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <select
-            className="toolbar-select"
-            value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value)}
-          >
-            <option value="status">Group by: Status</option>
-            <option value="folder">Group by: Folder</option>
-            <option value="assignee">Group by: Assignee</option>
-            <option value="priority">Group by: Priority</option>
-          </select>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {activeSpace && (
+              <>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => setShowFieldModal(true)}
+                >
+                  + Custom field
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={async () => {
+                    setStatusActionMsg("");
+                    setStatusLoading(true);
+                    await fetchModalStatuses();
+                    setStatusLoading(false);
+                    setShowStatusModal(true);
+                  }}
+                >
+                  + Status
+                </button>
+              </>
+            )}
+            <button className="btn btn-sm" onClick={() => setShowImport(true)}>
+              ⬆ Import CSV
+            </button>
+            <button className="btn btn-primary" onClick={openNewTask}>
+              + New Task
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="content-area">
-        {/* LIST VIEW */}
-        {viewMode === "list" && (
-          <div>
-            {activeSpace && !activeFolder ? (
-              /* SPACE LEVEL */
-              <div>
-                {(activeSpace.folders || []).map((folder) => {
-                  const folderTasks = tasks.filter(
-                    (t) => t.folder_id === folder.id,
-                  );
-                  const filteredFolderTasks = folderTasks.filter((t) => {
-                    if (statusFilter !== "all" && t.status !== statusFilter)
-                      return false;
-                    if (
-                      search &&
-                      !t.title.toLowerCase().includes(search.toLowerCase())
-                    )
-                      return false;
-                    return true;
-                  });
-                  const isExpanded = expandedGroups[folder.id] !== false;
-                  const folderStatusList = getFolderStatuses(folder);
-                  const folderFieldList = getFolderFields(folder);
+        {/* Toolbar */}
+        <div className="toolbar-row">
+          <div className="tabs" style={{ border: "none", padding: 0 }}>
+            <div
+              className={`tab ${viewMode === "list" ? "active" : ""}`}
+              onClick={() => setViewMode("list")}
+            >
+              📋 List
+            </div>
+            <div
+              className={`tab ${viewMode === "board" ? "active" : ""}`}
+              onClick={() => setViewMode("board")}
+            >
+              📌 Board
+            </div>
+          </div>
+          <div className="toolbar-right">
+            <div className="toolbar-search">
+              <span style={{ color: "#bbb", fontSize: 13 }}>🔍</span>
+              <input
+                placeholder="Search tasks..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div
+              style={{ position: "relative" }}
+              className="column-picker-wrap"
+            >
+              <button
+                className="toolbar-btn"
+                onClick={() => setShowColumnPicker((prev) => !prev)}
+              >
+                ⊞ Columns
+              </button>
+              {showColumnPicker && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "110%",
+                    background: "#fff",
+                    border: "1px solid #e8e8e8",
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                    zIndex: 100,
+                    minWidth: 200,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#888",
+                      marginBottom: 10,
+                      textTransform: "uppercase",
+                      letterSpacing: ".04em",
+                    }}
+                  >
+                    Visible columns
+                  </div>
+                  {[
+                    { key: "priority", label: "Priority" },
+                    { key: "assignees", label: "Assignees" },
+                    { key: "due_date", label: "Due date" },
+                    ...getFields().map((f) => ({
+                      key: `field_${f.id}`,
+                      label: f.field_name,
+                    })),
+                  ].map((col) => (
+                    <label
+                      key={col.key}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "5px 0",
+                        cursor: "pointer",
+                        fontSize: 13,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns.includes(col.key)}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? [...visibleColumns, col.key]
+                            : visibleColumns.filter((c) => c !== col.key);
+                          updateVisibleColumns(next);
+                        }}
+                        style={{ width: 14, height: 14, cursor: "pointer" }}
+                      />
+                      {col.label}
+                    </label>
+                  ))}
+                  <div
+                    style={{
+                      borderTop: "1px solid #e8e8e8",
+                      marginTop: 8,
+                      paddingTop: 8,
+                      display: "flex",
+                      gap: 6,
+                    }}
+                  >
+                    <button
+                      className="btn btn-sm"
+                      style={{ fontSize: 11 }}
+                      onClick={() =>
+                        updateVisibleColumns([
+                          "priority",
+                          "assignees",
+                          "due_date",
+                        ])
+                      }
+                    >
+                      Reset
+                    </button>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      style={{ fontSize: 11 }}
+                      onClick={() => setShowColumnPicker(false)}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <select
+              className="toolbar-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All statuses</option>
+              {getUniqueStatuses().map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <select
+              className="toolbar-select"
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value)}
+            >
+              <option value="status">Group by: Status</option>
+              <option value="folder">Group by: Folder</option>
+              <option value="assignee">Group by: Assignee</option>
+              <option value="priority">Group by: Priority</option>
+            </select>
+          </div>
+        </div>
 
-                  const grouped =
-                    groupBy === "status"
-                      ? folderStatusList.reduce((acc, s) => {
-                          acc[s] = filteredFolderTasks.filter(
-                            (t) => t.status === s,
-                          );
-                          return acc;
-                        }, {})
-                      : groupBy === "priority"
-                        ? ["High", "Medium", "Low"].reduce((acc, p) => {
-                            acc[p] = filteredFolderTasks.filter(
-                              (t) => t.priority === p,
+        <div className="content-area">
+          {viewMode === "list" && (
+            <div>
+              {activeSpace && !activeFolder ? (
+                <div>
+                  {(activeSpace.folders || []).map((folder) => {
+                    const folderTasks = tasks.filter(
+                      (t) => t.folder_id === folder.id,
+                    );
+                    const filteredFolderTasks = folderTasks.filter((t) => {
+                      if (statusFilter !== "all" && t.status !== statusFilter)
+                        return false;
+                      if (
+                        search &&
+                        !t.title.toLowerCase().includes(search.toLowerCase())
+                      )
+                        return false;
+                      return true;
+                    });
+                    const isExpanded = expandedGroups[folder.id] !== false;
+                    const folderStatusList = getFolderStatuses(folder);
+                    const folderFieldList = getFolderFields(folder);
+                    const grouped =
+                      groupBy === "status"
+                        ? folderStatusList.reduce((acc, s) => {
+                            acc[s] = filteredFolderTasks.filter(
+                              (t) => t.status === s,
                             );
                             return acc;
                           }, {})
-                        : groupBy === "assignee"
-                          ? filteredFolderTasks.reduce((acc, task) => {
-                              const names =
-                                task.assignees?.length > 0
-                                  ? task.assignees
-                                  : task.assignee
-                                    ? [task.assignee]
-                                    : ["Unassigned"];
-                              names.forEach((n) => {
-                                if (!acc[n]) acc[n] = [];
-                                acc[n].push(task);
-                              });
+                        : groupBy === "priority"
+                          ? ["High", "Medium", "Low"].reduce((acc, p) => {
+                              acc[p] = filteredFolderTasks.filter(
+                                (t) => t.priority === p,
+                              );
                               return acc;
                             }, {})
-                          : { "All tasks": filteredFolderTasks };
+                          : groupBy === "assignee"
+                            ? filteredFolderTasks.reduce((acc, task) => {
+                                const names =
+                                  task.assignees?.length > 0
+                                    ? task.assignees
+                                    : task.assignee
+                                      ? [task.assignee]
+                                      : ["Unassigned"];
+                                names.forEach((n) => {
+                                  if (!acc[n]) acc[n] = [];
+                                  acc[n].push(task);
+                                });
+                                return acc;
+                              }, {})
+                            : { "All tasks": filteredFolderTasks };
 
-                  return (
-                    <div
-                      key={folder.id}
-                      style={{
-                        background: "#fff",
-                        border: "1px solid #e8e8e8",
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "12px 16px",
-                          borderBottom: isExpanded
-                            ? "1px solid #e8e8e8"
-                            : "none",
-                          cursor: "pointer",
-                          background: "#fafaf9",
-                        }}
-                        onClick={() =>
-                          setExpandedGroups((prev) => ({
-                            ...prev,
-                            [folder.id]: !isExpanded,
-                          }))
-                        }
-                      >
-                        <span style={{ fontSize: 12, color: "#aaa" }}>
-                          {isExpanded ? "▾" : "▸"}
-                        </span>
-                        <span
-                          style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
-                        >
-                          {(() => {
-                            return (
-                              <span
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 7,
-                                }}
-                              >
-                                <svg
-                                  width="15"
-                                  height="13"
-                                  viewBox="0 0 16 14"
-                                  fill="none"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  style={{ flexShrink: 0 }}
-                                >
-                                  <path
-                                    d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
-                                    fill="#9ca3af"
-                                  />
-                                  <path
-                                    d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
-                                    fill="#6b7280"
-                                  />
-                                </svg>
-                                {folder.name}
-                              </span>
-                            );
-                          })()}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: "#888",
-                            background: "#f0f0ef",
-                            borderRadius: 20,
-                            padding: "1px 8px",
-                          }}
-                        >
-                          {folderTasks.length} tasks
-                        </span>
-                      </div>
-
-                      {isExpanded && (
-                        <div style={{ padding: "8px 0" }}>
-                          {filteredFolderTasks.length === 0 ? (
-                            <div
-                              style={{
-                                fontSize: 13,
-                                color: "#ccc",
-                                padding: "12px 16px",
-                              }}
-                            >
-                              No tasks in this folder
-                            </div>
-                          ) : (
-                            Object.entries(grouped).map(
-                              ([groupName, groupTasks]) => {
-                                if (groupTasks.length === 0) return null;
-                                const groupKey = `${folder.id}_${groupName}`;
-                                const groupExpanded =
-                                  expandedGroups[groupKey] !== false;
-                                const groupColor =
-                                  groupBy === "status"
-                                    ? getStatusColorForFolder(groupName, folder)
-                                    : "#f0f0ef";
-
-                                return (
-                                  <div
-                                    key={groupName}
-                                    style={{ marginBottom: 4 }}
-                                  >
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 8,
-                                        padding: "6px 16px",
-                                        cursor: "pointer",
-                                      }}
-                                      onClick={() =>
-                                        setExpandedGroups((prev) => ({
-                                          ...prev,
-                                          [groupKey]: !groupExpanded,
-                                        }))
-                                      }
-                                    >
-                                      <span
-                                        style={{ fontSize: 10, color: "#aaa" }}
-                                      >
-                                        {groupExpanded ? "▾" : "▸"}
-                                      </span>
-                                      <span
-                                        style={{
-                                          background: groupColor,
-                                          color:
-                                            groupBy === "status"
-                                              ? "#fff"
-                                              : "#333",
-                                          padding: "2px 10px",
-                                          borderRadius: 20,
-                                          fontSize: 11,
-                                          fontWeight: 600,
-                                        }}
-                                      >
-                                        {groupName}
-                                      </span>
-                                      <span
-                                        style={{ fontSize: 12, color: "#aaa" }}
-                                      >
-                                        {groupTasks.length}
-                                      </span>
-                                    </div>
-                                    {groupExpanded && (
-                                      <table
-                                        className="task-table"
-                                        style={{ marginBottom: 4 }}
-                                      >
-                                        {renderTableHead(folderFieldList, true)}
-                                        <tbody>
-                                          {groupTasks.map((task) =>
-                                            renderTaskRow(
-                                              task,
-                                              folderStatusList,
-                                              folderFieldList,
-                                              folder,
-                                            ),
-                                          )}
-                                        </tbody>
-                                      </table>
-                                    )}
-                                  </div>
-                                );
-                              },
-                            )
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Tasks with no folder */}
-                {(() => {
-                  const noFolderTasks = tasks.filter((t) => !t.folder_id);
-                  if (noFolderTasks.length === 0) return null;
-                  return (
-                    <div
-                      style={{
-                        background: "#fff",
-                        border: "1px solid #e8e8e8",
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "12px 16px",
-                          background: "#fafaf9",
-                          borderBottom: "1px solid #e8e8e8",
-                        }}
-                      >
-                        <span
-                          style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
-                        >
-                          📋 No folder
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: "#888",
-                            background: "#f0f0ef",
-                            borderRadius: 20,
-                            padding: "1px 8px",
-                          }}
-                        >
-                          {noFolderTasks.length} tasks
-                        </span>
-                      </div>
-                      <table className="task-table">
-                        {renderTableHead(getFields())}
-                        <tbody>
-                          {noFolderTasks.map((task) =>
-                            renderTaskRow(task, getStatuses(), getFields()),
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })()}
-
-                {(activeSpace.folders || []).length === 0 &&
-                  tasks.length === 0 && (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        padding: "60px 20px",
-                        color: "#aaa",
-                      }}
-                    >
-                      <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-                      <div style={{ fontSize: 14, marginBottom: 4 }}>
-                        No folders yet
-                      </div>
-                      <div style={{ fontSize: 12 }}>
-                        Add a folder from the sidebar to organise your tasks
-                      </div>
-                    </div>
-                  )}
-              </div>
-            ) : (
-              /* FOLDER LEVEL */
-              <div>
-                {Object.entries(getGroupedTasks()).map(
-                  ([groupName, groupTasks]) => {
-                    const isExpanded = expandedGroups[groupName] !== false;
                     return (
-                      <div key={groupName} style={{ marginBottom: 16 }}>
+                      <div
+                        key={folder.id}
+                        style={{
+                          background: "#fff",
+                          border: "1px solid #e8e8e8",
+                          borderRadius: 8,
+                          marginBottom: 16,
+                          overflow: "hidden",
+                        }}
+                      >
                         <div
-                          className="status-group-header"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "12px 16px",
+                            borderBottom: isExpanded
+                              ? "1px solid #e8e8e8"
+                              : "none",
+                            cursor: "pointer",
+                            background: "#fafaf9",
+                          }}
                           onClick={() =>
                             setExpandedGroups((prev) => ({
                               ...prev,
-                              [groupName]: !isExpanded,
+                              [folder.id]: !isExpanded,
                             }))
                           }
                         >
-                          <span style={{ fontSize: 10 }}>
+                          <span style={{ fontSize: 12, color: "#aaa" }}>
                             {isExpanded ? "▾" : "▸"}
                           </span>
                           <span
-                            style={{
-                              background:
-                                groupBy === "status"
-                                  ? getStatusColor(groupName)
-                                  : "#f0f0ef",
-                              color: groupBy === "status" ? "#fff" : "#333",
-                              padding: "2px 10px",
-                              borderRadius: 20,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              border:
-                                groupBy !== "status"
-                                  ? "1px solid #e8e8e8"
-                                  : "none",
-                            }}
+                            style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
                           >
-                            {groupName}
+                            <span
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 7,
+                              }}
+                            >
+                              <svg
+                                width="15"
+                                height="13"
+                                viewBox="0 0 16 14"
+                                fill="none"
+                                style={{ flexShrink: 0 }}
+                              >
+                                <path
+                                  d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
+                                  fill="#9ca3af"
+                                />
+                                <path
+                                  d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
+                                  fill="#6b7280"
+                                />
+                              </svg>
+                              {folder.name}
+                            </span>
                           </span>
-                          <span style={{ fontSize: 12, color: "#aaa" }}>
-                            {groupTasks.length}
-                          </span>
-                        </div>
-                        {isExpanded && groupTasks.length > 0 && (
-                          <div
-                            style={{
-                              background: "#fff",
-                              border: "1px solid #e8e8e8",
-                              borderRadius: 8,
-                              overflow: "hidden",
-                              marginTop: 4,
-                            }}
-                          >
-                            <table className="task-table">
-                              {renderTableHead(getFields())}
-                              <tbody>
-                                {groupTasks.map((task) =>
-                                  renderTaskRow(
-                                    task,
-                                    getStatuses(),
-                                    getFields(),
-                                  ),
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                        {isExpanded && groupTasks.length === 0 && (
-                          <div
+                          <span
                             style={{
                               fontSize: 12,
-                              color: "#ccc",
-                              padding: "8px 12px",
+                              color: "#888",
+                              background: "#f0f0ef",
+                              borderRadius: 20,
+                              padding: "1px 8px",
                             }}
                           >
-                            No tasks
+                            {folderTasks.length} tasks
+                          </span>
+                        </div>
+                        {isExpanded && (
+                          <div style={{ padding: "8px 0" }}>
+                            {filteredFolderTasks.length === 0 ? (
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: "#ccc",
+                                  padding: "12px 16px",
+                                }}
+                              >
+                                No tasks in this folder
+                              </div>
+                            ) : (
+                              Object.entries(grouped).map(
+                                ([groupName, groupTasks]) => {
+                                  if (groupTasks.length === 0) return null;
+                                  const groupKey = `${folder.id}_${groupName}`;
+                                  const groupExpanded =
+                                    expandedGroups[groupKey] !== false;
+                                  const groupColor =
+                                    groupBy === "status"
+                                      ? getStatusColorForFolder(
+                                          groupName,
+                                          folder,
+                                        )
+                                      : "#f0f0ef";
+                                  return (
+                                    <div
+                                      key={groupName}
+                                      style={{ marginBottom: 4 }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 8,
+                                          padding: "6px 16px",
+                                          cursor: "pointer",
+                                        }}
+                                        onClick={() =>
+                                          setExpandedGroups((prev) => ({
+                                            ...prev,
+                                            [groupKey]: !groupExpanded,
+                                          }))
+                                        }
+                                      >
+                                        <span
+                                          style={{
+                                            fontSize: 10,
+                                            color: "#aaa",
+                                          }}
+                                        >
+                                          {groupExpanded ? "▾" : "▸"}
+                                        </span>
+                                        <span
+                                          style={{
+                                            background: groupColor,
+                                            color:
+                                              groupBy === "status"
+                                                ? "#fff"
+                                                : "#333",
+                                            padding: "2px 10px",
+                                            borderRadius: 20,
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          {groupName}
+                                        </span>
+                                        <span
+                                          style={{
+                                            fontSize: 12,
+                                            color: "#aaa",
+                                          }}
+                                        >
+                                          {groupTasks.length}
+                                        </span>
+                                      </div>
+                                      {groupExpanded && (
+                                        <table
+                                          className="task-table"
+                                          style={{ marginBottom: 4 }}
+                                        >
+                                          {renderTableHead(
+                                            folderFieldList,
+                                            true,
+                                          )}
+                                          <tbody>
+                                            {groupTasks.map((task) =>
+                                              renderTaskRow(
+                                                task,
+                                                folderStatusList,
+                                                folderFieldList,
+                                                folder,
+                                              ),
+                                            )}
+                                          </tbody>
+                                        </table>
+                                      )}
+                                    </div>
+                                  );
+                                },
+                              )
+                            )}
                           </div>
                         )}
                       </div>
                     );
-                  },
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                  })}
 
-        {/* BOARD VIEW */}
-        {viewMode === "board" && (
-          <div className="kanban-board">
-            {Object.entries(getGroupedTasks()).map(
-              ([groupName, groupTasks]) => (
-                <div key={groupName} className="kanban-col">
-                  <div className="kanban-col-header">
-                    <span
-                      style={{
-                        background:
-                          groupBy === "status"
-                            ? getStatusColor(groupName)
-                            : "#f0f0ef",
-                        color: groupBy === "status" ? "#fff" : "#333",
-                        padding: "2px 10px",
-                        borderRadius: 20,
-                        fontSize: 11,
-                      }}
-                    >
-                      {groupName}
-                    </span>
-                    <span style={{ fontSize: 12, color: "#aaa" }}>
-                      {groupTasks.length}
-                    </span>
-                  </div>
-                  {groupTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="kanban-card"
-                      onClick={() => openEditTask(task)}
-                    >
-                      <div className="kanban-card-title">{task.title}</div>
+                  {(() => {
+                    const nft = tasks.filter((t) => !t.folder_id);
+                    if (nft.length === 0) return null;
+                    return (
                       <div
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 4,
+                          background: "#fff",
+                          border: "1px solid #e8e8e8",
+                          borderRadius: 8,
+                          marginBottom: 16,
+                          overflow: "hidden",
                         }}
                       >
-                        <span
-                          className="badge"
-                          style={getPriorityStyle(task.priority)}
-                        >
-                          {task.priority}
-                        </span>
-                        {task.due_date && (
-                          <span style={{ fontSize: 11, color: "#aaa" }}>
-                            {task.due_date}
-                          </span>
-                        )}
-                      </div>
-                      {((task.assignees && task.assignees.length > 0) ||
-                        task.assignee) && (
                         <div
                           style={{
                             display: "flex",
-                            flexWrap: "wrap",
-                            gap: 3,
-                            marginTop: 4,
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "12px 16px",
+                            background: "#fafaf9",
+                            borderBottom: "1px solid #e8e8e8",
                           }}
                         >
-                          {(task.assignees?.length > 0
-                            ? task.assignees
-                            : [task.assignee]
-                          ).map((name) => (
+                          <span
+                            style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
+                          >
+                            📋 No folder
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: "#888",
+                              background: "#f0f0ef",
+                              borderRadius: 20,
+                              padding: "1px 8px",
+                            }}
+                          >
+                            {nft.length} tasks
+                          </span>
+                        </div>
+                        <table className="task-table">
+                          {renderTableHead(getFields())}
+                          <tbody>
+                            {nft.map((task) =>
+                              renderTaskRow(task, getStatuses(), getFields()),
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+
+                  {(activeSpace.folders || []).length === 0 &&
+                    tasks.length === 0 && (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "60px 20px",
+                          color: "#aaa",
+                        }}
+                      >
+                        <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+                        <div style={{ fontSize: 14, marginBottom: 4 }}>
+                          No folders yet
+                        </div>
+                        <div style={{ fontSize: 12 }}>
+                          Add a folder from the sidebar to organise your tasks
+                        </div>
+                      </div>
+                    )}
+                </div>
+              ) : (
+                <div>
+                  {Object.entries(getGroupedTasks()).map(
+                    ([groupName, groupTasks]) => {
+                      const isExpanded = expandedGroups[groupName] !== false;
+                      return (
+                        <div key={groupName} style={{ marginBottom: 16 }}>
+                          <div
+                            className="status-group-header"
+                            onClick={() =>
+                              setExpandedGroups((prev) => ({
+                                ...prev,
+                                [groupName]: !isExpanded,
+                              }))
+                            }
+                          >
+                            <span style={{ fontSize: 10 }}>
+                              {isExpanded ? "▾" : "▸"}
+                            </span>
                             <span
-                              key={name}
                               style={{
-                                background: "#f0f0ef",
+                                background:
+                                  groupBy === "status"
+                                    ? getStatusColor(groupName)
+                                    : "#f0f0ef",
+                                color: groupBy === "status" ? "#fff" : "#333",
+                                padding: "2px 10px",
                                 borderRadius: 20,
-                                padding: "1px 6px",
-                                fontSize: 10,
-                                color: "#333",
+                                fontSize: 11,
+                                fontWeight: 600,
+                                border:
+                                  groupBy !== "status"
+                                    ? "1px solid #e8e8e8"
+                                    : "none",
                               }}
                             >
-                              {name}
+                              {groupName}
                             </span>
-                          ))}
+                            <span style={{ fontSize: 12, color: "#aaa" }}>
+                              {groupTasks.length}
+                            </span>
+                          </div>
+                          {isExpanded && groupTasks.length > 0 && (
+                            <div
+                              style={{
+                                background: "#fff",
+                                border: "1px solid #e8e8e8",
+                                borderRadius: 8,
+                                overflow: "hidden",
+                                marginTop: 4,
+                              }}
+                            >
+                              <table className="task-table">
+                                {renderTableHead(getFields())}
+                                <tbody>
+                                  {groupTasks.map((task) =>
+                                    renderTaskRow(
+                                      task,
+                                      getStatuses(),
+                                      getFields(),
+                                    ),
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                          {isExpanded && groupTasks.length === 0 && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "#ccc",
+                                padding: "8px 12px",
+                              }}
+                            >
+                              No tasks
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      );
+                    },
+                  )}
                 </div>
-              ),
-            )}
-          </div>
-        )}
-
-        {tasks.length === 0 && (
-          <div
-            style={{ textAlign: "center", padding: "60px 20px", color: "#aaa" }}
-          >
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-            <div style={{ fontSize: 14, marginBottom: 4 }}>No tasks yet</div>
-            <div style={{ fontSize: 12 }}>
-              Click "+ New Task" to create your first task
+              )}
             </div>
-          </div>
-        )}
+          )}
+
+          {viewMode === "board" && (
+            <div className="kanban-board">
+              {Object.entries(getGroupedTasks()).map(
+                ([groupName, groupTasks]) => (
+                  <div key={groupName} className="kanban-col">
+                    <div className="kanban-col-header">
+                      <span
+                        style={{
+                          background:
+                            groupBy === "status"
+                              ? getStatusColor(groupName)
+                              : "#f0f0ef",
+                          color: groupBy === "status" ? "#fff" : "#333",
+                          padding: "2px 10px",
+                          borderRadius: 20,
+                          fontSize: 11,
+                        }}
+                      >
+                        {groupName}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#aaa" }}>
+                        {groupTasks.length}
+                      </span>
+                    </div>
+                    {groupTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="kanban-card"
+                        onClick={() => openDrawer(task)}
+                      >
+                        <div className="kanban-card-title">{task.title}</div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span
+                            className="badge"
+                            style={getPriorityStyle(task.priority)}
+                          >
+                            {task.priority}
+                          </span>
+                          {task.due_date && (
+                            <span style={{ fontSize: 11, color: "#aaa" }}>
+                              {task.due_date}
+                            </span>
+                          )}
+                        </div>
+                        {(task.assignees?.length > 0 || task.assignee) && (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: 3,
+                              marginTop: 4,
+                            }}
+                          >
+                            {(task.assignees?.length > 0
+                              ? task.assignees
+                              : [task.assignee]
+                            ).map((name) => (
+                              <span
+                                key={name}
+                                style={{
+                                  background: "#f0f0ef",
+                                  borderRadius: 20,
+                                  padding: "1px 6px",
+                                  fontSize: 10,
+                                  color: "#333",
+                                }}
+                              >
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+
+          {tasks.length === 0 && (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "60px 20px",
+                color: "#aaa",
+              }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+              <div style={{ fontSize: 14, marginBottom: 4 }}>No tasks yet</div>
+              <div style={{ fontSize: 12 }}>
+                Click "+ New Task" to create your first task
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* TASK MODAL */}
-      {showTaskModal && (
+      {/* ══════════════════════════════════════════
+          TASK DETAIL DRAWER — right side panel
+          ══════════════════════════════════════════ */}
+      {drawerTask && (
+        <div
+          ref={drawerRef}
+          style={{
+            width: 420,
+            flexShrink: 0,
+            borderLeft: "1px solid #e8e8e8",
+            background: "#fff",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            height: "100%",
+            boxShadow: "-4px 0 20px rgba(0,0,0,0.06)",
+            animation: "slideInRight 0.18s ease",
+          }}
+        >
+          {/* Drawer header */}
+          <div
+            style={{
+              padding: "14px 18px",
+              borderBottom: "1px solid #ebebeb",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              background: "#fff",
+              flexShrink: 0,
+            }}
+          >
+            <div
+              style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <span style={{ fontSize: 11, color: "#aaa" }}>
+                {activeSpace?.name}
+                {activeFolder ? ` / ${activeFolder.name}` : ""}
+              </span>
+            </div>
+            <button
+              onClick={saveDrawer}
+              disabled={drawerSaving}
+              style={{
+                padding: "5px 14px",
+                borderRadius: 7,
+                border: "none",
+                background: "#1d4ed8",
+                color: "#fff",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {drawerSaving ? "Saving..." : "Save"}
+            </button>
+            <button
+              onClick={closeDrawer}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: "1px solid #e0e0e0",
+                background: "#fff",
+                cursor: "pointer",
+                fontSize: 16,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#999",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Drawer body */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "20px 20px 28px",
+              scrollbarWidth: "thin",
+              scrollbarColor: "#e0e0de transparent",
+            }}
+          >
+            {/* Task title */}
+            <textarea
+              value={dTitle}
+              onChange={(e) =>
+                setDrawerEdits((prev) => ({ ...prev, title: e.target.value }))
+              }
+              style={{
+                width: "100%",
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#1a1a1a",
+                border: "none",
+                outline: "none",
+                resize: "none",
+                background: "transparent",
+                fontFamily: "inherit",
+                lineHeight: 1.35,
+                marginBottom: 20,
+                padding: 0,
+                boxSizing: "border-box",
+                minHeight: 54,
+              }}
+              onFocus={(e) => (e.target.style.background = "#f9f9f9")}
+              onBlur={(e) => (e.target.style.background = "transparent")}
+            />
+
+            {/* Fields grid */}
+            {[
+              {
+                label: "Status",
+                icon: "◎",
+                content: (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {drawerStatuses.map((s) => {
+                      const sc = getStatusColor(s);
+                      const isActive = dStatus === s;
+                      return (
+                        <button
+                          key={s}
+                          onClick={() =>
+                            setDrawerEdits((prev) => ({ ...prev, status: s }))
+                          }
+                          style={{
+                            padding: "4px 12px",
+                            borderRadius: 20,
+                            border: isActive ? "none" : "1.5px solid #e0e0e0",
+                            background: isActive ? sc : "#fff",
+                            color: isActive ? "#fff" : "#555",
+                            fontSize: 12,
+                            fontWeight: isActive ? 600 : 400,
+                            cursor: "pointer",
+                            transition: "all 0.1s",
+                          }}
+                        >
+                          {s}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ),
+              },
+              {
+                label: "Priority",
+                icon: "⚑",
+                content: (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["High", "Medium", "Low"].map((p) => {
+                      const ps = PRIORITY_STYLES[p];
+                      const isActive = dPriority === p;
+                      return (
+                        <button
+                          key={p}
+                          onClick={() =>
+                            setDrawerEdits((prev) => ({ ...prev, priority: p }))
+                          }
+                          style={{
+                            padding: "4px 12px",
+                            borderRadius: 20,
+                            border: isActive ? "none" : "1.5px solid #e0e0e0",
+                            background: isActive ? ps.bg : "#fff",
+                            color: isActive ? ps.color : "#555",
+                            fontSize: 12,
+                            fontWeight: isActive ? 600 : 400,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          {isActive && <PriorityDot priority={p} />}
+                          {p}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ),
+              },
+              {
+                label: "Assignees",
+                icon: "👤",
+                content: (
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 4,
+                        marginBottom: dAssignees.length > 0 ? 8 : 0,
+                      }}
+                    >
+                      {dAssignees.map((name) => (
+                        <span
+                          key={name}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            background: "#eff6ff",
+                            color: "#1d4ed8",
+                            borderRadius: 20,
+                            padding: "3px 10px",
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {name}
+                          <span
+                            style={{
+                              cursor: "pointer",
+                              fontSize: 14,
+                              lineHeight: 1,
+                            }}
+                            onClick={() =>
+                              setDrawerEdits((prev) => ({
+                                ...prev,
+                                assignees: (
+                                  prev.assignees ??
+                                  drawerTask.assignees ??
+                                  []
+                                ).filter((a) => a !== name),
+                              }))
+                            }
+                          >
+                            ×
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        if (name && !dAssignees.includes(name))
+                          setDrawerEdits((prev) => ({
+                            ...prev,
+                            assignees: [
+                              ...(prev.assignees ?? drawerTask.assignees ?? []),
+                              name,
+                            ],
+                          }));
+                      }}
+                      style={{
+                        fontSize: 12,
+                        padding: "5px 8px",
+                        borderRadius: 7,
+                        border: "1px solid #e0e0e0",
+                        background: "#fff",
+                        color: "#555",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="">+ Add assignee</option>
+                      {members
+                        .filter((m) => !dAssignees.includes(m.full_name))
+                        .map((m) => (
+                          <option key={m.id} value={m.full_name}>
+                            {m.full_name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ),
+              },
+              {
+                label: "Due date",
+                icon: "📅",
+                content: (
+                  <input
+                    type="date"
+                    value={dDueDate}
+                    onChange={(e) =>
+                      setDrawerEdits((prev) => ({
+                        ...prev,
+                        due_date: e.target.value,
+                      }))
+                    }
+                    style={{
+                      fontSize: 12,
+                      padding: "5px 10px",
+                      borderRadius: 7,
+                      border: "1px solid #e0e0e0",
+                      background: "#fff",
+                      color: "#555",
+                      cursor: "pointer",
+                      outline: "none",
+                    }}
+                  />
+                ),
+              },
+            ].map(({ label, icon, content }) => (
+              <div key={label} style={{ marginBottom: 18 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#aaa",
+                    textTransform: "uppercase",
+                    letterSpacing: ".06em",
+                    marginBottom: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span>{icon}</span>
+                  {label}
+                </div>
+                {content}
+              </div>
+            ))}
+
+            {/* Custom fields */}
+            {drawerFields.length > 0 && (
+              <div
+                style={{
+                  borderTop: "1px solid #f0f0f0",
+                  paddingTop: 16,
+                  marginTop: 4,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#aaa",
+                    textTransform: "uppercase",
+                    letterSpacing: ".06em",
+                    marginBottom: 12,
+                  }}
+                >
+                  Custom fields
+                </div>
+                {drawerFields.map((field) => {
+                  const val = drawerFieldValues[field.id] || "";
+                  return (
+                    <div key={field.id} style={{ marginBottom: 14 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "#666",
+                          marginBottom: 5,
+                        }}
+                      >
+                        {field.field_name}
+                      </div>
+                      {field.field_type === "dropdown" &&
+                      field.field_options?.length > 0 ? (
+                        <select
+                          value={val}
+                          onChange={(e) =>
+                            setDrawerFieldValues((prev) => ({
+                              ...prev,
+                              [field.id]: e.target.value,
+                            }))
+                          }
+                          style={{
+                            fontSize: 12,
+                            padding: "5px 10px",
+                            borderRadius: 7,
+                            border: "1px solid #e0e0e0",
+                            background: "#fff",
+                            width: "100%",
+                            outline: "none",
+                          }}
+                        >
+                          <option value="">Select {field.field_name}...</option>
+                          {field.field_options.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={
+                            field.field_type === "date"
+                              ? "date"
+                              : field.field_type === "number"
+                                ? "number"
+                                : field.field_type === "email"
+                                  ? "email"
+                                  : "text"
+                          }
+                          placeholder={`Enter ${field.field_name}...`}
+                          value={val}
+                          onChange={(e) =>
+                            setDrawerFieldValues((prev) => ({
+                              ...prev,
+                              [field.id]: e.target.value,
+                            }))
+                          }
+                          style={{
+                            fontSize: 12,
+                            padding: "7px 10px",
+                            borderRadius: 7,
+                            border: "1px solid #e0e0e0",
+                            background: "#fff",
+                            width: "100%",
+                            boxSizing: "border-box",
+                            outline: "none",
+                          }}
+                          onFocus={(e) =>
+                            (e.target.style.borderColor = "#1d4ed8")
+                          }
+                          onBlur={(e) =>
+                            (e.target.style.borderColor = "#e0e0e0")
+                          }
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Description */}
+            <div
+              style={{
+                borderTop: "1px solid #f0f0f0",
+                paddingTop: 16,
+                marginTop: 4,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#aaa",
+                  textTransform: "uppercase",
+                  letterSpacing: ".06em",
+                  marginBottom: 8,
+                }}
+              >
+                📝 Description
+              </div>
+              <textarea
+                value={dDesc}
+                onChange={(e) =>
+                  setDrawerEdits((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
+                placeholder="Add a description..."
+                style={{
+                  width: "100%",
+                  fontSize: 13,
+                  padding: "10px 12px",
+                  border: "1.5px solid #e0e0e0",
+                  borderRadius: 8,
+                  resize: "vertical",
+                  minHeight: 100,
+                  outline: "none",
+                  fontFamily: "inherit",
+                  color: "#333",
+                  lineHeight: 1.6,
+                  boxSizing: "border-box",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#1d4ed8")}
+                onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
+              />
+            </div>
+
+            {/* Delete at bottom */}
+            <div
+              style={{
+                borderTop: "1px solid #f0f0f0",
+                paddingTop: 16,
+                marginTop: 8,
+              }}
+            >
+              <button
+                onClick={() => deleteTask(drawerTask.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 14px",
+                  borderRadius: 7,
+                  border: "1px solid #fca5a5",
+                  background: "#fef2f2",
+                  color: "#b91c1c",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  fontWeight: 500,
+                }}
+              >
+                🗑 Delete task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── NEW TASK MODAL ── */}
+      {showNewTaskModal && (
         <div
           className="modal-overlay"
-          onClick={(e) => e.target === e.currentTarget && closeTaskModal()}
+          onClick={(e) =>
+            e.target === e.currentTarget && setShowNewTaskModal(false)
+          }
         >
           <div className="modal" style={{ maxWidth: 600 }}>
-            <div className="modal-title">
-              {editingTask ? "Edit task" : "New task"}
-            </div>
+            <div className="modal-title">New task</div>
             <div className="form-group">
               <label className="form-label">Task name *</label>
               <input
@@ -1795,43 +2331,17 @@ export default function Tasks({
                             </option>
                           ))}
                         </select>
-                      ) : field.field_type === "date" ? (
-                        <input
-                          type="date"
-                          value={taskFieldValues[field.id] || ""}
-                          onChange={(e) =>
-                            setTaskFieldValues((prev) => ({
-                              ...prev,
-                              [field.id]: e.target.value,
-                            }))
-                          }
-                        />
-                      ) : field.field_type === "number" ? (
-                        <input
-                          type="number"
-                          placeholder={`Enter ${field.field_name}...`}
-                          value={taskFieldValues[field.id] || ""}
-                          onChange={(e) =>
-                            setTaskFieldValues((prev) => ({
-                              ...prev,
-                              [field.id]: e.target.value,
-                            }))
-                          }
-                        />
-                      ) : field.field_type === "email" ? (
-                        <input
-                          type="email"
-                          placeholder={`Enter ${field.field_name}...`}
-                          value={taskFieldValues[field.id] || ""}
-                          onChange={(e) =>
-                            setTaskFieldValues((prev) => ({
-                              ...prev,
-                              [field.id]: e.target.value,
-                            }))
-                          }
-                        />
                       ) : (
                         <input
+                          type={
+                            field.field_type === "date"
+                              ? "date"
+                              : field.field_type === "number"
+                                ? "number"
+                                : field.field_type === "email"
+                                  ? "email"
+                                  : "text"
+                          }
                           placeholder={`Enter ${field.field_name}...`}
                           value={taskFieldValues[field.id] || ""}
                           onChange={(e) =>
@@ -1848,11 +2358,14 @@ export default function Tasks({
               </div>
             )}
             <div className="modal-actions">
-              <button className="btn" onClick={closeTaskModal}>
+              <button
+                className="btn"
+                onClick={() => setShowNewTaskModal(false)}
+              >
                 Cancel
               </button>
               <button className="btn btn-primary" onClick={saveTask}>
-                {editingTask ? "Save changes" : "Create task"}
+                Create task
               </button>
             </div>
           </div>
@@ -2017,11 +2530,13 @@ export default function Tasks({
             <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
               {activeFolder ? (
                 <>
-                  Folder: <strong>{activeFolder.name}</strong>
+                  <span>Folder: </span>
+                  <strong>{activeFolder.name}</strong>
                 </>
               ) : (
                 <>
-                  Space: <strong>{activeSpace?.name}</strong>
+                  <span>Space: </span>
+                  <strong>{activeSpace?.name}</strong>
                   <span
                     style={{
                       marginLeft: 8,
@@ -2115,7 +2630,6 @@ export default function Tasks({
                           borderRadius: "50%",
                           background: s.color,
                           flexShrink: 0,
-                          border: "1px solid rgba(0,0,0,0.1)",
                         }}
                       />
                       <span style={{ fontSize: 13, fontWeight: 500 }}>
@@ -2208,6 +2722,9 @@ export default function Tasks({
           </div>
         </div>
       )}
+
+      {/* Drawer slide-in animation */}
+      <style>{`@keyframes slideInRight { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
     </div>
   );
 }
