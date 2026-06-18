@@ -58,7 +58,7 @@ export default function Tasks({
   const [drawerTask, setDrawerTask] = useState(null); // task being viewed
   const [drawerEdits, setDrawerEdits] = useState({}); // unsaved edits
   const [drawerFieldValues, setDrawerFieldValues] = useState({});
-  const [drawerSaving, setDrawerSaving] = useState(false);
+  const [drawerSaved, setDrawerSaved] = useState(false);
   const drawerRef = useRef(null);
 
   // ── New task quick-create (inline at bottom of group) ──
@@ -368,13 +368,14 @@ export default function Tasks({
       fvMap[fv.field_id] = fv.value;
     });
     setDrawerFieldValues(fvMap);
+    // Initialize edits with current task values — empty string means "no due date" not "today"
     setDrawerEdits({
       title: task.title,
       description: task.description || "",
       status: task.status,
       priority: task.priority,
       assignees: task.assignees || [],
-      due_date: task.due_date || "",
+      due_date: task.due_date || "", // keep empty if not set
     });
   }
 
@@ -386,33 +387,88 @@ export default function Tasks({
   async function saveDrawer() {
     if (!drawerTask) return;
     setDrawerSaving(true);
+
+    const titleVal = (drawerEdits.title ?? drawerTask.title)?.trim();
+    if (!titleVal) {
+      setDrawerSaving(false);
+      return;
+    }
+
     const payload = {
-      title: drawerEdits.title?.trim() || drawerTask.title,
-      description: drawerEdits.description ?? drawerTask.description,
+      title: titleVal,
+      description: drawerEdits.description ?? drawerTask.description ?? "",
       status: drawerEdits.status ?? drawerTask.status,
       priority: drawerEdits.priority ?? drawerTask.priority,
-      assignees: drawerEdits.assignees ?? drawerTask.assignees,
-      assignee: (drawerEdits.assignees ?? drawerTask.assignees)?.[0] || "",
-      due_date: drawerEdits.due_date ?? drawerTask.due_date,
+      assignees: drawerEdits.assignees ?? drawerTask.assignees ?? [],
+      assignee: (drawerEdits.assignees ?? drawerTask.assignees ?? [])[0] || "",
+      due_date:
+        (drawerEdits.due_date !== undefined
+          ? drawerEdits.due_date
+          : drawerTask.due_date) || null,
     };
-    await supabase.from("tasks").update(payload).eq("id", drawerTask.id);
-    // Save field values
+
+    const { error } = await supabase
+      .from("tasks")
+      .update(payload)
+      .eq("id", drawerTask.id);
+    if (error) {
+      console.error("Save task error:", error);
+      setDrawerSaving(false);
+      return;
+    }
+
+    // Save field values — re-fetch current values to avoid stale data
+    const { data: currentFVs } = await supabase
+      .from("task_field_values")
+      .select("*")
+      .eq("task_id", drawerTask.id);
     for (const [fieldId, value] of Object.entries(drawerFieldValues)) {
-      const existing = drawerTask.task_field_values?.find(
-        (v) => v.field_id === fieldId,
-      );
-      if (existing)
+      const existing = (currentFVs || []).find((v) => v.field_id === fieldId);
+      if (existing) {
         await supabase
           .from("task_field_values")
           .update({ value })
           .eq("id", existing.id);
-      else
+      } else {
         await supabase
           .from("task_field_values")
           .insert({ task_id: drawerTask.id, field_id: fieldId, value });
+      }
+    }
+
+    // Refresh tasks and update drawer with latest data
+    let query = supabase
+      .from("tasks")
+      .select("*, task_field_values(*)")
+      .order("created_at", { ascending: false });
+    if (activeFolder) query = query.eq("folder_id", activeFolder.id);
+    else if (activeSpace) query = query.eq("space_id", activeSpace.id);
+    if (profile?.role === "member") query = query.eq("assignee_id", profile.id);
+    const { data: refreshed } = await query;
+    if (refreshed) {
+      setTasks(refreshed);
+      const updated = refreshed.find((t) => t.id === drawerTask.id);
+      if (updated) {
+        setDrawerTask(updated);
+        // Sync drawerEdits with saved values so re-save works correctly
+        setDrawerEdits({
+          title: updated.title,
+          description: updated.description || "",
+          status: updated.status,
+          priority: updated.priority,
+          assignees: updated.assignees || [],
+          due_date: updated.due_date || "",
+        });
+        const fvMap = {};
+        (updated.task_field_values || []).forEach((fv) => {
+          fvMap[fv.field_id] = fv.value;
+        });
+        setDrawerFieldValues(fvMap);
+      }
     }
     setDrawerSaving(false);
-    fetchTasks();
+    setDrawerSaved(true);
+    setTimeout(() => setDrawerSaved(false), 2000);
   }
 
   // ── Task CRUD ──
@@ -1623,14 +1679,16 @@ export default function Tasks({
                 padding: "5px 14px",
                 borderRadius: 7,
                 border: "none",
-                background: "#1d4ed8",
+                background: drawerSaved ? "#16a34a" : "#1d4ed8",
                 color: "#fff",
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
+                transition: "background 0.2s",
+                minWidth: 70,
               }}
             >
-              {drawerSaving ? "Saving..." : "Save"}
+              {drawerSaving ? "Saving..." : drawerSaved ? "Saved ✓" : "Save"}
             </button>
             <button
               onClick={closeDrawer}
