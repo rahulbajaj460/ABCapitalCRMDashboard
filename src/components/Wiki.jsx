@@ -1277,266 +1277,518 @@ export default function Wiki({ profile }) {
       </div>
 
       {/* WIKI HISTORY MODAL */}
-      {showHistoryModal && activeArticle && (
-        <div
-          className="modal-overlay"
-          onClick={(e) =>
-            e.target === e.currentTarget && setShowHistoryModal(false)
+      {showHistoryModal &&
+        activeArticle &&
+        (() => {
+          // Strip HTML tags for text comparison
+          function stripHtml(html) {
+            return (html || "")
+              .replace(/<[^>]*>/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
           }
-        >
-          <div
-            className="modal"
-            style={{
-              maxWidth: 560,
-              maxHeight: "80vh",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
+
+          // Compute word-level diff between two strings
+          function computeDiff(oldText, newText) {
+            const oldWords = oldText.split(/\s+/).filter(Boolean);
+            const newWords = newText.split(/\s+/).filter(Boolean);
+            const removed = oldWords.filter(
+              (w) => !newWords.includes(w),
+            ).length;
+            const added = newWords.filter((w) => !oldWords.includes(w)).length;
+            return {
+              added,
+              removed,
+              oldLen: oldWords.length,
+              newLen: newWords.length,
+            };
+          }
+
+          // Build sentence-level diff for display
+          function buildDiffLines(oldText, newText) {
+            const oldSents = oldText
+              .split(/(?<=[.!?])\s+/)
+              .filter((s) => s.trim().length > 10);
+            const newSents = newText
+              .split(/(?<=[.!?])\s+/)
+              .filter((s) => s.trim().length > 10);
+            const lines = [];
+            const newSet = new Set(newSents.map((s) => s.slice(0, 40)));
+            const oldSet = new Set(oldSents.map((s) => s.slice(0, 40)));
+            // Removed sentences (in old, not in new)
+            oldSents.forEach((s) => {
+              if (!newSet.has(s.slice(0, 40)))
+                lines.push({
+                  type: "removed",
+                  text: s.slice(0, 120) + (s.length > 120 ? "..." : ""),
+                });
+            });
+            // Added sentences (in new, not in old)
+            newSents.forEach((s) => {
+              if (!oldSet.has(s.slice(0, 40)))
+                lines.push({
+                  type: "added",
+                  text: s.slice(0, 120) + (s.length > 120 ? "..." : ""),
+                });
+            });
+            return lines.slice(0, 6); // max 6 diff lines
+          }
+
+          return (
             <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                marginBottom: 16,
-              }}
+              className="modal-overlay"
+              onClick={(e) =>
+                e.target === e.currentTarget && setShowHistoryModal(false)
+              }
             >
-              <div>
-                <div
-                  className="modal-title"
-                  style={{ margin: 0, marginBottom: 4 }}
-                >
-                  🕐 Version history
-                </div>
-                <div style={{ fontSize: 12, color: "#aaa" }}>
-                  {activeArticle.title}
-                </div>
-              </div>
-              <button
-                className="btn btn-sm"
-                onClick={() => setShowHistoryModal(false)}
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: 14,
+                  width: "100%",
+                  maxWidth: 620,
+                  maxHeight: "85vh",
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+                  margin: "auto",
+                }}
               >
-                ✕
-              </button>
-            </div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              {historyLoading ? (
+                {/* Header */}
                 <div
                   style={{
-                    fontSize: 13,
-                    color: "#aaa",
-                    textAlign: "center",
-                    padding: "24px 0",
+                    padding: "20px 24px 16px",
+                    borderBottom: "1px solid #f0f0f0",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    flexShrink: 0,
                   }}
                 >
-                  Loading history...
-                </div>
-              ) : articleHistory.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "32px 0" }}>
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
-                  <div style={{ fontSize: 13, color: "#aaa" }}>
-                    No history yet
-                  </div>
-                  <div style={{ fontSize: 12, color: "#ccc", marginTop: 4 }}>
-                    Previous versions appear here after editing and saving
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  {articleHistory.map((entry, idx) => (
+                  <div>
                     <div
-                      key={entry.id}
                       style={{
-                        border: "1px solid #e8e8e8",
-                        borderRadius: 10,
-                        padding: "14px 16px",
-                        marginBottom: 10,
-                        background: "#fafaf9",
+                        fontSize: 17,
+                        fontWeight: 700,
+                        color: "#1a1a1a",
+                        marginBottom: 3,
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          marginBottom: 8,
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: "50%",
-                              background: "#1d4ed8",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "#fff",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {(entry.changed_by || "?").charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: "#1a1a1a",
-                              }}
-                            >
-                              {entry.changed_by}
-                            </div>
-                            <div style={{ fontSize: 11, color: "#aaa" }}>
-                              {new Date(entry.changed_at).toLocaleString(
-                                "en-GB",
-                                {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                },
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            alignItems: "center",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#aaa",
-                              background: "#f0f0ef",
-                              borderRadius: 20,
-                              padding: "2px 8px",
-                            }}
-                          >
-                            v{articleHistory.length - idx}
-                          </span>
-                          <button
-                            onClick={async () => {
-                              if (
-                                !confirm(
-                                  "Restore this version? Current content will be saved to history first.",
-                                )
-                              )
-                                return;
-                              const now = new Date().toISOString();
-                              await supabase
-                                .from("wiki_history")
-                                .insert({
-                                  article_id: activeArticle.id,
-                                  changed_by: profile?.full_name || "Unknown",
-                                  changed_at: now,
-                                  title: activeArticle.title,
-                                  content: activeArticle.content,
-                                });
-                              const { data } = await supabase
-                                .from("wiki_articles")
-                                .update({
-                                  title: entry.title,
-                                  content: entry.content,
-                                  updated_at: now,
-                                  updated_by: profile?.full_name || "Unknown",
-                                })
-                                .eq("id", activeArticle.id)
-                                .select()
-                                .single();
-                              if (data) {
-                                setActiveArticle(data);
-                                fetchAll();
-                                fetchArticleHistory(activeArticle.id);
-                                alert("Version restored successfully!");
-                              }
-                            }}
-                            style={{
-                              padding: "4px 12px",
-                              borderRadius: 6,
-                              border: "1px solid #1d4ed8",
-                              background: "#eff6ff",
-                              color: "#1d4ed8",
-                              fontSize: 11,
-                              cursor: "pointer",
-                              fontWeight: 500,
-                            }}
-                          >
-                            Restore
-                          </button>
-                        </div>
-                      </div>
-                      {entry.title !== activeArticle.title && (
-                        <div
-                          style={{
-                            fontSize: 12,
-                            marginBottom: 6,
-                            padding: "4px 8px",
-                            background: "#fef9c3",
-                            borderRadius: 6,
-                          }}
-                        >
-                          Title changed from:{" "}
-                          <em style={{ color: "#555" }}>"{entry.title}"</em>
-                        </div>
+                      🕐 Version history
+                    </div>
+                    <div style={{ fontSize: 12, color: "#888" }}>
+                      {activeArticle.title} · {articleHistory.length} saved
+                      version{articleHistory.length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowHistoryModal(false)}
+                    style={{
+                      background: "#f5f5f4",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: 30,
+                      height: 30,
+                      cursor: "pointer",
+                      fontSize: 16,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#666",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Current version chip */}
+                <div
+                  style={{
+                    padding: "10px 24px",
+                    borderBottom: "1px solid #f0f0f0",
+                    background: "#f9fafb",
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        background: "#dcfce7",
+                        color: "#15803d",
+                        borderRadius: 20,
+                        padding: "2px 10px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Current
+                    </span>
+                    <span
+                      style={{ fontSize: 12, color: "#555", fontWeight: 500 }}
+                    >
+                      {activeArticle.updated_by || "—"}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#aaa" }}>·</span>
+                    <span style={{ fontSize: 11, color: "#aaa" }}>
+                      {new Date(activeArticle.updated_at).toLocaleString(
+                        "en-GB",
+                        {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
                       )}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "#aaa",
+                        background: "#f0f0ef",
+                        borderRadius: 20,
+                        padding: "1px 8px",
+                        marginLeft: "auto",
+                      }}
+                    >
+                      v{articleHistory.length + 1}
+                    </span>
+                  </div>
+                </div>
+
+                {/* History list */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: "auto",
+                    padding: "12px 24px 20px",
+                    scrollbarWidth: "thin",
+                  }}
+                >
+                  {historyLoading ? (
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#aaa",
+                        textAlign: "center",
+                        padding: "24px 0",
+                      }}
+                    >
+                      Loading history...
+                    </div>
+                  ) : articleHistory.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px 0" }}>
+                      <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
                       <div
-                        style={{
-                          fontSize: 12,
-                          background: "#fff",
-                          borderRadius: 6,
-                          padding: "8px 10px",
-                          border: "1px solid #e8e8e8",
-                          maxHeight: 80,
-                          overflow: "hidden",
-                          position: "relative",
-                        }}
+                        style={{ fontSize: 13, fontWeight: 600, color: "#555" }}
                       >
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#666",
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {(entry.content || "")
-                            .replace(/<[^>]*>/g, " ")
-                            .slice(0, 200)}
-                          ...
-                        </div>
-                        <div
-                          style={{
-                            position: "absolute",
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            height: 24,
-                            background: "linear-gradient(transparent, #fff)",
-                          }}
-                        />
+                        No previous versions
+                      </div>
+                      <div
+                        style={{ fontSize: 12, color: "#aaa", marginTop: 4 }}
+                      >
+                        History is saved automatically each time you edit and
+                        save this page
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    // Build list with "next version" for diffing
+                    articleHistory.map((entry, idx) => {
+                      // "next" version is the one saved after this one
+                      const nextEntry =
+                        idx === 0
+                          ? {
+                              title: activeArticle.title,
+                              content: activeArticle.content,
+                            }
+                          : articleHistory[idx - 1];
+                      const oldText = stripHtml(entry.content);
+                      const newText = stripHtml(nextEntry.content);
+                      const diff = computeDiff(oldText, newText);
+                      const diffLines = buildDiffLines(oldText, newText);
+                      const titleChanged = entry.title !== nextEntry.title;
+                      const versionNum = articleHistory.length - idx;
+                      const hasChanges =
+                        diff.added > 0 || diff.removed > 0 || titleChanged;
+
+                      return (
+                        <div key={entry.id} style={{ marginBottom: 10 }}>
+                          {/* Version header row */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              padding: "10px 14px",
+                              borderRadius: 10,
+                              border: "1px solid #e8e8e8",
+                              background: "#fafaf9",
+                            }}
+                          >
+                            {/* Avatar */}
+                            <div
+                              style={{
+                                width: 26,
+                                height: 26,
+                                borderRadius: "50%",
+                                background: "#1d4ed8",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#fff",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {(entry.changed_by || "?")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </div>
+                            {/* Who + when */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: "#1a1a1a",
+                                  }}
+                                >
+                                  {entry.changed_by}
+                                </span>
+                                <span style={{ fontSize: 11, color: "#aaa" }}>
+                                  ·
+                                </span>
+                                <span style={{ fontSize: 11, color: "#aaa" }}>
+                                  {new Date(entry.changed_at).toLocaleString(
+                                    "en-GB",
+                                    {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    },
+                                  )}
+                                </span>
+                              </div>
+                              {/* Change summary pills */}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 4,
+                                  marginTop: 4,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                {titleChanged && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      background: "#fef9c3",
+                                      color: "#854d0e",
+                                      borderRadius: 20,
+                                      padding: "1px 7px",
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    Title renamed
+                                  </span>
+                                )}
+                                {diff.added > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      background: "#dcfce7",
+                                      color: "#15803d",
+                                      borderRadius: 20,
+                                      padding: "1px 7px",
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    +{diff.added} words added
+                                  </span>
+                                )}
+                                {diff.removed > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      background: "#fee2e2",
+                                      color: "#b91c1c",
+                                      borderRadius: 20,
+                                      padding: "1px 7px",
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    −{diff.removed} words removed
+                                  </span>
+                                )}
+                                {!hasChanges && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      background: "#f0f0ef",
+                                      color: "#888",
+                                      borderRadius: 20,
+                                      padding: "1px 7px",
+                                    }}
+                                  >
+                                    Minor edit
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Version + restore */}
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "#aaa",
+                                background: "#f0f0ef",
+                                borderRadius: 20,
+                                padding: "1px 8px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              v{versionNum}
+                            </span>
+                            <button
+                              onClick={async () => {
+                                if (
+                                  !confirm(
+                                    `Restore to v${versionNum}? Current version will be saved to history first.`,
+                                  )
+                                )
+                                  return;
+                                const now = new Date().toISOString();
+                                await supabase
+                                  .from("wiki_history")
+                                  .insert({
+                                    article_id: activeArticle.id,
+                                    changed_by: profile?.full_name || "Unknown",
+                                    changed_at: now,
+                                    title: activeArticle.title,
+                                    content: activeArticle.content,
+                                  });
+                                const { data } = await supabase
+                                  .from("wiki_articles")
+                                  .update({
+                                    title: entry.title,
+                                    content: entry.content,
+                                    updated_at: now,
+                                    updated_by: profile?.full_name || "Unknown",
+                                  })
+                                  .eq("id", activeArticle.id)
+                                  .select()
+                                  .single();
+                                if (data) {
+                                  setActiveArticle(data);
+                                  fetchAll();
+                                  fetchArticleHistory(activeArticle.id);
+                                  setShowHistoryModal(false);
+                                }
+                              }}
+                              style={{
+                                padding: "4px 12px",
+                                borderRadius: 6,
+                                border: "1px solid #1d4ed8",
+                                background: "#eff6ff",
+                                color: "#1d4ed8",
+                                fontSize: 11,
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                flexShrink: 0,
+                              }}
+                            >
+                              Restore
+                            </button>
+                          </div>
+
+                          {/* Diff lines — only show if there are meaningful changes */}
+                          {diffLines.length > 0 && (
+                            <div
+                              style={{
+                                marginTop: 4,
+                                padding: "8px 12px",
+                                background: "#fff",
+                                border: "1px solid #e8e8e8",
+                                borderTop: "none",
+                                borderRadius: "0 0 8px 8px",
+                                fontFamily: "monospace",
+                                fontSize: 11,
+                              }}
+                            >
+                              {titleChanged && (
+                                <div style={{ marginBottom: 3 }}>
+                                  <span
+                                    style={{
+                                      background: "#fee2e2",
+                                      color: "#b91c1c",
+                                      padding: "1px 4px",
+                                      borderRadius: 3,
+                                    }}
+                                  >
+                                    − {entry.title}
+                                  </span>
+                                  <span
+                                    style={{
+                                      background: "#dcfce7",
+                                      color: "#15803d",
+                                      padding: "1px 4px",
+                                      borderRadius: 3,
+                                      marginLeft: 4,
+                                    }}
+                                  >
+                                    + {nextEntry.title}
+                                  </span>
+                                </div>
+                              )}
+                              {diffLines.map((line, i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    padding: "2px 6px",
+                                    borderRadius: 3,
+                                    marginBottom: 2,
+                                    background:
+                                      line.type === "added"
+                                        ? "#f0fdf4"
+                                        : "#fef2f2",
+                                    color:
+                                      line.type === "added"
+                                        ? "#15803d"
+                                        : "#b91c1c",
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  <span
+                                    style={{ fontWeight: 700, marginRight: 4 }}
+                                  >
+                                    {line.type === "added" ? "+" : "−"}
+                                  </span>
+                                  {line.text}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {/* LINK TOOLTIP */}
       <div
