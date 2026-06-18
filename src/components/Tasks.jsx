@@ -2544,6 +2544,7 @@ export default function Tasks({
                 <option value="email">Email</option>
                 <option value="phone">Phone</option>
                 <option value="url">URL</option>
+                <option value="username">Username</option>
                 <option value="dropdown">Dropdown</option>
               </select>
             </div>
