@@ -251,6 +251,22 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     );
     const created = {};
     for (const [col, cfg] of toCreate) {
+      // For dropdown type: collect all unique values from CSV column as field_options
+      let fieldOptions = [];
+      if (cfg.fieldType === "dropdown") {
+        const uniqueVals = [
+          ...new Set(rows.map((r) => (r[col] || "").trim()).filter(Boolean)),
+        ];
+        fieldOptions = uniqueVals;
+      }
+      // For formula type: store the formula expression in field_options[0]
+      if (cfg.fieldType === "formula") {
+        fieldOptions = [
+          cfg.formulaKey || "days_since_created",
+          cfg.customFormula || "",
+        ];
+      }
+
       const { data, error } = await supabase
         .from("space_fields")
         .insert({
@@ -260,6 +276,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
           field_type: cfg.fieldType || "text",
           field_order:
             (existingFields.length || 0) + Object.keys(created).length + 1,
+          field_options: fieldOptions.length > 0 ? fieldOptions : null,
         })
         .select()
         .single();
@@ -340,13 +357,46 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
             const row = rows[i + idx];
             if (!row) return;
             for (const [col, fieldId] of Object.entries(fieldIdMap)) {
-              const value = row[col];
-              if (value && value.trim()) {
-                fieldValues.push({
-                  task_id: task.id,
-                  field_id: fieldId,
-                  value: value.trim(),
-                });
+              const cfg = customFieldMappings[col];
+              if (cfg?.fieldType === "formula") {
+                // Compute formula value at import time
+                const createdAt = new Date();
+                let formulaVal = "";
+                const fKey = cfg.formulaKey || "days_since_created";
+                if (fKey === "days_since_created") {
+                  formulaVal = "0"; // just created
+                } else if (fKey === "days_since_updated") {
+                  formulaVal = "0";
+                } else if (fKey === "days_until_due") {
+                  const dueStr = row[mapping.due_date];
+                  if (dueStr) {
+                    const due = new Date(normalizeDate(dueStr));
+                    if (!isNaN(due)) {
+                      formulaVal = String(
+                        Math.ceil((due - createdAt) / (1000 * 60 * 60 * 24)),
+                      );
+                    }
+                  }
+                } else if (fKey === "custom" && cfg.customFormula) {
+                  // Store the raw formula expression — computed at display time
+                  formulaVal = cfg.customFormula;
+                }
+                if (formulaVal !== "") {
+                  fieldValues.push({
+                    task_id: task.id,
+                    field_id: fieldId,
+                    value: formulaVal,
+                  });
+                }
+              } else {
+                const value = row[col];
+                if (value && value.trim()) {
+                  fieldValues.push({
+                    task_id: task.id,
+                    field_id: fieldId,
+                    value: value.trim(),
+                  });
+                }
               }
             }
           });
@@ -689,13 +739,20 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                                 onChange={(e) =>
                                   updateCustomFieldMapping(col, {
                                     fieldType: e.target.value,
+                                    formulaKey: "days_since_created",
+                                    customFormula: "",
                                   })
                                 }
                                 style={{ fontSize: 12, padding: "4px 8px" }}
                               >
                                 {FIELD_TYPES.map((t) => (
                                   <option key={t} value={t}>
-                                    {t.charAt(0).toUpperCase() + t.slice(1)}
+                                    {t === "dropdown"
+                                      ? "Dropdown (auto from CSV)"
+                                      : t === "formula"
+                                        ? "Formula (computed)"
+                                        : t.charAt(0).toUpperCase() +
+                                          t.slice(1)}
                                   </option>
                                 ))}
                               </select>
@@ -711,6 +768,157 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                                 Will be created
                               </span>
                             </>
+                          )}
+                          {/* Dropdown preview — show unique CSV values */}
+                          {action === "new" &&
+                            cfg.fieldType === "dropdown" &&
+                            (() => {
+                              const uniqueVals = [
+                                ...new Set(
+                                  rows
+                                    .map((r) => (r[col] || "").trim())
+                                    .filter(Boolean),
+                                ),
+                              ];
+                              return uniqueVals.length > 0 ? (
+                                <div
+                                  style={{
+                                    width: "100%",
+                                    marginTop: 8,
+                                    padding: "10px 12px",
+                                    background: "#f9f9f9",
+                                    borderRadius: 8,
+                                    border: "1px solid #e8e8e8",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      color: "#888",
+                                      marginBottom: 6,
+                                      textTransform: "uppercase",
+                                      letterSpacing: ".04em",
+                                    }}
+                                  >
+                                    {uniqueVals.length} unique values found in
+                                    CSV — will become dropdown options:
+                                  </div>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      flexWrap: "wrap",
+                                      gap: 4,
+                                    }}
+                                  >
+                                    {uniqueVals.map((v) => (
+                                      <span
+                                        key={v}
+                                        style={{
+                                          fontSize: 11,
+                                          background: "#eff6ff",
+                                          color: "#1d4ed8",
+                                          borderRadius: 20,
+                                          padding: "2px 9px",
+                                          fontWeight: 500,
+                                        }}
+                                      >
+                                        {v}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null;
+                            })()}
+                          {/* Formula selector */}
+                          {action === "new" && cfg.fieldType === "formula" && (
+                            <div
+                              style={{
+                                width: "100%",
+                                marginTop: 8,
+                                padding: "12px 14px",
+                                background: "#f9f9f9",
+                                borderRadius: 8,
+                                border: "1px solid #e8e8e8",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "#888",
+                                  marginBottom: 8,
+                                  textTransform: "uppercase",
+                                  letterSpacing: ".04em",
+                                }}
+                              >
+                                Choose formula
+                              </div>
+                              {FORMULA_PRESETS.map((preset) => (
+                                <label
+                                  key={preset.key}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: 8,
+                                    marginBottom: 8,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`formula_${col}`}
+                                    checked={
+                                      (cfg.formulaKey ||
+                                        "days_since_created") === preset.key
+                                    }
+                                    onChange={() =>
+                                      updateCustomFieldMapping(col, {
+                                        formulaKey: preset.key,
+                                      })
+                                    }
+                                    style={{ marginTop: 2, flexShrink: 0 }}
+                                  />
+                                  <div>
+                                    <div
+                                      style={{
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: "#333",
+                                      }}
+                                    >
+                                      {preset.label}
+                                    </div>
+                                    <div
+                                      style={{ fontSize: 11, color: "#aaa" }}
+                                    >
+                                      {preset.description}
+                                    </div>
+                                  </div>
+                                </label>
+                              ))}
+                              {(cfg.formulaKey || "days_since_created") ===
+                                "custom" && (
+                                <input
+                                  placeholder="e.g. DATEDIFF(today, created_at)"
+                                  value={cfg.customFormula || ""}
+                                  onChange={(e) =>
+                                    updateCustomFieldMapping(col, {
+                                      customFormula: e.target.value,
+                                    })
+                                  }
+                                  style={{
+                                    width: "100%",
+                                    fontSize: 12,
+                                    padding: "6px 10px",
+                                    borderRadius: 7,
+                                    border: "1px solid #e0e0e0",
+                                    marginTop: 6,
+                                    boxSizing: "border-box",
+                                  }}
+                                />
+                              )}
+                            </div>
                           )}
                           {action === "existing" && (
                             <select
