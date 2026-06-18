@@ -2838,77 +2838,102 @@ export default function Tasks({
               {/* Formula selector */}
               {newField.field_type === "formula" && (
                 <div className="form-group">
-                  <label className="form-label">Formula</label>
+                  <label className="form-label">Choose formula type</label>
                   <div
-                    style={{
-                      border: "1px solid #e0e0e0",
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      background: "#fff",
-                    }}
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
                   >
-                    {FORMULA_PRESETS.map((preset) => (
-                      <label
-                        key={preset.key}
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 10,
-                          padding: "10px 12px",
-                          cursor: "pointer",
-                          background:
-                            newField.formula_key === preset.key
-                              ? "#f0f7ff"
-                              : "#fff",
-                          borderBottom: "1px solid #f0f0f0",
-                          transition: "background 0.1s",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="formula_key"
-                          checked={newField.formula_key === preset.key}
-                          onChange={() =>
+                    {[
+                      {
+                        key: "days_since_created",
+                        label: "Days since created",
+                        hint: "e.g. 5 days, 12 days",
+                      },
+                      {
+                        key: "days_since_updated",
+                        label: "Days since last updated",
+                        hint: "e.g. 2 days",
+                      },
+                      {
+                        key: "days_until_due",
+                        label: "Days until due date",
+                        hint: "e.g. 3 days left / 2 days overdue",
+                      },
+                      {
+                        key: "custom",
+                        label: "Custom / manual text",
+                        hint: "Store a fixed label or note",
+                      },
+                    ].map((opt) => {
+                      const isSelected =
+                        (newField.formula_key || "days_since_created") ===
+                        opt.key;
+                      return (
+                        <div
+                          key={opt.key}
+                          onClick={() =>
                             setNewField((prev) => ({
                               ...prev,
-                              formula_key: preset.key,
+                              formula_key: opt.key,
                             }))
                           }
-                          style={{ marginTop: 2, flexShrink: 0 }}
-                        />
-                        <div>
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "9px 12px",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            border: `1.5px solid ${isSelected ? "#1d4ed8" : "#e0e0e0"}`,
+                            background: isSelected ? "#eff6ff" : "#fff",
+                            transition: "all 0.12s",
+                          }}
+                        >
                           <div
                             style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: "#1a1a1a",
+                              width: 16,
+                              height: 16,
+                              borderRadius: "50%",
+                              flexShrink: 0,
+                              border: `2px solid ${isSelected ? "#1d4ed8" : "#ccc"}`,
+                              background: isSelected ? "#1d4ed8" : "#fff",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
                             }}
                           >
-                            {preset.label}
+                            {isSelected && (
+                              <div
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: "50%",
+                                  background: "#fff",
+                                }}
+                              />
+                            )}
                           </div>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: "#888",
-                              marginTop: 1,
-                            }}
-                          >
-                            {preset.key === "days_since_created" &&
-                              "e.g. 5 days, 12 days — updates live"}
-                            {preset.key === "days_since_updated" &&
-                              "e.g. 2 days — resets when task is saved"}
-                            {preset.key === "days_until_due" &&
-                              "e.g. 3 days left, 2 days overdue"}
-                            {preset.key === "custom" &&
-                              "Store any fixed text or expression"}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#1a1a1a",
+                              }}
+                            >
+                              {opt.label}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#888" }}>
+                              {opt.hint}
+                            </div>
                           </div>
                         </div>
-                      </label>
-                    ))}
+                      );
+                    })}
                   </div>
-                  {newField.formula_key === "custom" && (
+                  {(newField.formula_key || "days_since_created") ===
+                    "custom" && (
                     <input
-                      placeholder="e.g. Q1 2026, Pending review, =A2-B2"
+                      placeholder="e.g. Q1 2026, Pending review..."
                       value={newField.custom_formula || ""}
                       onChange={(e) =>
                         setNewField((prev) => ({
