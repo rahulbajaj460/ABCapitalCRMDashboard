@@ -434,11 +434,11 @@ function RichEditor({ content, onChange }) {
   );
 }
 
-export default function Wiki() {
+export default function Wiki({ profile }) {
   const [categories, setCategories] = useState([]);
   const [articles, setArticles] = useState([]);
   const [activeArticle, setActiveArticle] = useState(null);
-  const [expandedCats, setExpandedCats] = useState({});
+  const [expandedCats, setExpandedCats] = useState(null);
   const [search, setSearch] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(270);
   const isResizing = useRef(false);
@@ -448,6 +448,9 @@ export default function Wiki() {
   const [showCatModal, setShowCatModal] = useState(false);
   const [editingArticle, setEditingArticle] = useState(null);
   const [editingCat, setEditingCat] = useState(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [articleHistory, setArticleHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const [newArticle, setNewArticle] = useState({
     title: "",
@@ -509,19 +512,40 @@ export default function Wiki() {
         .select("*")
         .order("updated_at", { ascending: false }),
     ]);
-    if (catsRes.data) setCategories(catsRes.data);
+    if (catsRes.data) {
+      setCategories(catsRes.data);
+      // Initialize all categories as collapsed on first load
+      setExpandedCats((prev) => {
+        if (prev !== null) return prev; // already initialized, don't reset
+        const collapsed = {};
+        catsRes.data.forEach((c) => {
+          collapsed[c.id] = false;
+        });
+        return collapsed;
+      });
+    }
     if (artsRes.data) setArticles(artsRes.data);
   }
 
   async function saveArticle() {
     if (!newArticle.title.trim() || !newArticle.content.trim()) return;
+    const now = new Date().toISOString();
     const payload = {
       title: newArticle.title.trim(),
       content: newArticle.content,
       category_id: newArticle.category_id || null,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
+      updated_by: profile?.full_name || "Unknown",
     };
     if (editingArticle) {
+      // Save current version to history before overwriting
+      await supabase.from("wiki_history").insert({
+        article_id: editingArticle.id,
+        changed_by: profile?.full_name || "Unknown",
+        changed_at: now,
+        title: editingArticle.title,
+        content: editingArticle.content,
+      });
       const { data } = await supabase
         .from("wiki_articles")
         .update(payload)
@@ -539,6 +563,35 @@ export default function Wiki() {
     }
     closeArticleModal();
     fetchAll();
+  }
+
+  async function fetchArticleHistory(articleId) {
+    setHistoryLoading(true);
+    const { data } = await supabase
+      .from("wiki_history")
+      .select("*")
+      .eq("article_id", articleId)
+      .order("changed_at", { ascending: false })
+      .limit(30);
+    setArticleHistory(data || []);
+    setHistoryLoading(false);
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return "";
+    const diff = Date.now() - new Date(dateStr);
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(dateStr).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   }
 
   async function deleteArticle(id) {
@@ -628,7 +681,7 @@ export default function Wiki() {
     setEditingCat(null);
   }
   function toggleCat(id) {
-    setExpandedCats((prev) => ({ ...prev, [id]: !prev[id] }));
+    setExpandedCats((prev) => ({ ...prev, [id]: !(prev?.[id] === true) }));
   }
 
   function getTopCats() {
@@ -1020,6 +1073,7 @@ export default function Wiki() {
                       display: "flex",
                       alignItems: "center",
                       gap: 6,
+                      flexWrap: "wrap",
                     }}
                   >
                     <span
@@ -1031,7 +1085,17 @@ export default function Wiki() {
                         display: "inline-block",
                       }}
                     />
-                    Last updated {formatDate(activeArticle.updated_at)}
+                    {activeArticle.updated_by ? (
+                      <>
+                        Last edited by{" "}
+                        <strong style={{ color: "#555" }}>
+                          {activeArticle.updated_by}
+                        </strong>{" "}
+                        · {formatDate(activeArticle.updated_at)}
+                      </>
+                    ) : (
+                      <>Last updated {formatDate(activeArticle.updated_at)}</>
+                    )}
                   </div>
                 </div>
                 <div
@@ -1042,6 +1106,27 @@ export default function Wiki() {
                     marginTop: 4,
                   }}
                 >
+                  <button
+                    onClick={() => {
+                      fetchArticleHistory(activeArticle.id);
+                      setShowHistoryModal(true);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "7px 14px",
+                      borderRadius: 7,
+                      border: "1px solid #e0e0e0",
+                      background: "#fff",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      color: "#444",
+                      fontWeight: 500,
+                    }}
+                  >
+                    🕐 History
+                  </button>
                   <button
                     onClick={() => openEditArticle(activeArticle)}
                     style={{
@@ -1190,6 +1275,268 @@ export default function Wiki() {
           </div>
         )}
       </div>
+
+      {/* WIKI HISTORY MODAL */}
+      {showHistoryModal && activeArticle && (
+        <div
+          className="modal-overlay"
+          onClick={(e) =>
+            e.target === e.currentTarget && setShowHistoryModal(false)
+          }
+        >
+          <div
+            className="modal"
+            style={{
+              maxWidth: 560,
+              maxHeight: "80vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: 16,
+              }}
+            >
+              <div>
+                <div
+                  className="modal-title"
+                  style={{ margin: 0, marginBottom: 4 }}
+                >
+                  🕐 Version history
+                </div>
+                <div style={{ fontSize: 12, color: "#aaa" }}>
+                  {activeArticle.title}
+                </div>
+              </div>
+              <button
+                className="btn btn-sm"
+                onClick={() => setShowHistoryModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {historyLoading ? (
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#aaa",
+                    textAlign: "center",
+                    padding: "24px 0",
+                  }}
+                >
+                  Loading history...
+                </div>
+              ) : articleHistory.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "32px 0" }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
+                  <div style={{ fontSize: 13, color: "#aaa" }}>
+                    No history yet
+                  </div>
+                  <div style={{ fontSize: 12, color: "#ccc", marginTop: 4 }}>
+                    Previous versions appear here after editing and saving
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {articleHistory.map((entry, idx) => (
+                    <div
+                      key={entry.id}
+                      style={{
+                        border: "1px solid #e8e8e8",
+                        borderRadius: 10,
+                        padding: "14px 16px",
+                        marginBottom: 10,
+                        background: "#fafaf9",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: "50%",
+                              background: "#1d4ed8",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "#fff",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(entry.changed_by || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "#1a1a1a",
+                              }}
+                            >
+                              {entry.changed_by}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#aaa" }}>
+                              {new Date(entry.changed_at).toLocaleString(
+                                "en-GB",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            alignItems: "center",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#aaa",
+                              background: "#f0f0ef",
+                              borderRadius: 20,
+                              padding: "2px 8px",
+                            }}
+                          >
+                            v{articleHistory.length - idx}
+                          </span>
+                          <button
+                            onClick={async () => {
+                              if (
+                                !confirm(
+                                  "Restore this version? Current content will be saved to history first.",
+                                )
+                              )
+                                return;
+                              const now = new Date().toISOString();
+                              await supabase
+                                .from("wiki_history")
+                                .insert({
+                                  article_id: activeArticle.id,
+                                  changed_by: profile?.full_name || "Unknown",
+                                  changed_at: now,
+                                  title: activeArticle.title,
+                                  content: activeArticle.content,
+                                });
+                              const { data } = await supabase
+                                .from("wiki_articles")
+                                .update({
+                                  title: entry.title,
+                                  content: entry.content,
+                                  updated_at: now,
+                                  updated_by: profile?.full_name || "Unknown",
+                                })
+                                .eq("id", activeArticle.id)
+                                .select()
+                                .single();
+                              if (data) {
+                                setActiveArticle(data);
+                                fetchAll();
+                                fetchArticleHistory(activeArticle.id);
+                                alert("Version restored successfully!");
+                              }
+                            }}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #1d4ed8",
+                              background: "#eff6ff",
+                              color: "#1d4ed8",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      </div>
+                      {entry.title !== activeArticle.title && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            marginBottom: 6,
+                            padding: "4px 8px",
+                            background: "#fef9c3",
+                            borderRadius: 6,
+                          }}
+                        >
+                          Title changed from:{" "}
+                          <em style={{ color: "#555" }}>"{entry.title}"</em>
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          fontSize: 12,
+                          background: "#fff",
+                          borderRadius: 6,
+                          padding: "8px 10px",
+                          border: "1px solid #e8e8e8",
+                          maxHeight: 80,
+                          overflow: "hidden",
+                          position: "relative",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#666",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {(entry.content || "")
+                            .replace(/<[^>]*>/g, " ")
+                            .slice(0, 200)}
+                          ...
+                        </div>
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: 24,
+                            background: "linear-gradient(transparent, #fff)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LINK TOOLTIP */}
       <div
@@ -1392,7 +1739,7 @@ function CategoryNode({
   getCatIndex,
   depth,
 }) {
-  const isExpanded = expandedCats[cat.id] !== false;
+  const isExpanded = expandedCats ? expandedCats[cat.id] === true : false;
   const subCats = getSubCats(cat.id);
   const catArticles = getCatArticles(cat.id);
   const hasChildren = subCats.length > 0 || catArticles.length > 0;
