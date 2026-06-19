@@ -10,6 +10,8 @@ const FIELD_TYPES = [
   "phone",
   "url",
   "username",
+  "dropdown",
+  "formula",
 ];
 
 const CORE_FIELDS = [
