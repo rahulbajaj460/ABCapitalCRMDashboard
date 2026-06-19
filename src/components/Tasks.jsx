@@ -154,9 +154,12 @@ export default function Tasks({
   });
   const [editingFieldId, setEditingFieldId] = useState(null);
   const [editingFieldOptions, setEditingFieldOptions] = useState([]);
-  // Local override so dropdown option edits reflect instantly without waiting
-  // on the parent's spaces prop to refresh (onRefreshSpaces can lag).
+  // Local overrides so custom-field create/delete/edit reflect instantly
+  // without waiting on the parent's spaces prop to refresh.
   const [fieldOptionsOverride, setFieldOptionsOverride] = useState({});
+  const [locallyAddedFields, setLocallyAddedFields] = useState([]);
+  const [locallyDeletedFieldIds, setLocallyDeletedFieldIds] = useState([]);
+  const [fieldAddedFlash, setFieldAddedFlash] = useState(false);
   const [members, setMembers] = useState([]);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(() => {
@@ -336,12 +339,26 @@ export default function Tasks({
       ? unique
       : ["To Do", "In Progress", "In Review", "Done"];
   }
-  function applyFieldOverrides(fields) {
-    return fields.map((f) =>
-      fieldOptionsOverride[f.id] !== undefined
-        ? { ...f, field_options: fieldOptionsOverride[f.id] }
-        : f,
+  function applyFieldOverrides(fields, scopeSpaceId, scopeFolderId) {
+    // Start with prop fields, apply option overrides, drop locally-deleted ones
+    let result = fields
+      .filter((f) => !locallyDeletedFieldIds.includes(f.id))
+      .map((f) =>
+        fieldOptionsOverride[f.id] !== undefined
+          ? { ...f, field_options: fieldOptionsOverride[f.id] }
+          : f,
+      );
+    // Merge in any fields added locally that the parent prop doesn't have yet
+    const existingIds = new Set(result.map((f) => f.id));
+    const extras = locallyAddedFields.filter(
+      (f) =>
+        !existingIds.has(f.id) &&
+        !locallyDeletedFieldIds.includes(f.id) &&
+        f.space_id === scopeSpaceId &&
+        (f.folder_id || null) === (scopeFolderId || null),
     );
+    if (extras.length > 0) result = [...result, ...extras];
+    return result;
   }
   function getFields() {
     if (activeFolder) {
@@ -349,12 +366,16 @@ export default function Tasks({
       if (ff.length > 0)
         return applyFieldOverrides(
           ff.sort((a, b) => a.field_order - b.field_order),
+          activeSpace?.id,
+          activeFolder.id,
         );
     }
     return applyFieldOverrides(
       (activeSpace?.space_fields || []).sort(
         (a, b) => a.field_order - b.field_order,
       ),
+      activeSpace?.id,
+      null,
     );
   }
   function getFolderFields(folder) {
@@ -362,11 +383,15 @@ export default function Tasks({
     if (ff.length > 0)
       return applyFieldOverrides(
         ff.sort((a, b) => a.field_order - b.field_order),
+        activeSpace?.id,
+        folder.id,
       );
     return applyFieldOverrides(
       (activeSpace?.space_fields || []).sort(
         (a, b) => a.field_order - b.field_order,
       ),
+      activeSpace?.id,
+      null,
     );
   }
   function getStatusColor(status) {
@@ -440,10 +465,14 @@ export default function Tasks({
       if (ff.length > 0)
         return applyFieldOverrides(
           ff.sort((a, b) => a.field_order - b.field_order),
+          space.id,
+          newTask.folder_id,
         );
     }
     return applyFieldOverrides(
       (space.space_fields || []).sort((a, b) => a.field_order - b.field_order),
+      space.id,
+      null,
     );
   }
 
@@ -725,14 +754,25 @@ export default function Tasks({
       fieldOptions = newField.field_options?.filter((o) => o.trim()) || [];
     else if (newField.field_type === "formula")
       fieldOptions = [newField.formula_key, newField.custom_formula || ""];
-    await supabase.from("space_fields").insert({
+    const payload = {
       space_id: activeSpace.id,
       folder_id: activeFolder?.id || null,
       field_name: newField.field_name.trim(),
       field_type: newField.field_type,
       field_order: getFields().length + 1,
       field_options: fieldOptions,
-    });
+    };
+    const { data, error } = await supabase
+      .from("space_fields")
+      .insert(payload)
+      .select()
+      .single();
+    if (!error && data) {
+      // Reflect instantly in the UI without waiting on the parent prop
+      setLocallyAddedFields((prev) => [...prev, data]);
+      setFieldAddedFlash(true);
+      setTimeout(() => setFieldAddedFlash(false), 1800);
+    }
     setNewField({
       field_name: "",
       field_type: "text",
@@ -740,13 +780,15 @@ export default function Tasks({
       formula_key: "days_since_created",
       custom_formula: "",
     });
-    setShowFieldModal(false);
+    // Keep modal open so the new field is visible in "Existing fields" above
     onRefreshSpaces();
   }
 
   async function deleteCustomField(fieldId) {
     if (!confirm("Delete this custom field? All values will also be deleted."))
       return;
+    // Hide instantly from the UI
+    setLocallyDeletedFieldIds((prev) => [...prev, fieldId]);
     await supabase.from("space_fields").delete().eq("id", fieldId);
     onRefreshSpaces();
     fetchTasks();
@@ -3554,8 +3596,13 @@ export default function Tasks({
                   (newField.field_type === "dropdown" &&
                     !(newField.field_options || []).some((o) => o.trim()))
                 }
+                style={
+                  fieldAddedFlash
+                    ? { background: "#16a34a", transition: "background 0.2s" }
+                    : { transition: "background 0.2s" }
+                }
               >
-                Add field
+                {fieldAddedFlash ? "Added ✓" : "Add field"}
               </button>
             </div>
           </div>
