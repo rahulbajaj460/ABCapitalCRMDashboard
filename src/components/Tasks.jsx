@@ -152,6 +152,8 @@ export default function Tasks({
     formula_key: "days_since_created",
     custom_formula: "",
   });
+  const [editingFieldId, setEditingFieldId] = useState(null);
+  const [editingFieldOptions, setEditingFieldOptions] = useState([]);
   const [members, setMembers] = useState([]);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(() => {
@@ -651,15 +653,13 @@ export default function Tasks({
     }
     // Record creation in history
     if (data) {
-      await supabase
-        .from("task_history")
-        .insert({
-          task_id: data.id,
-          changed_by: profile?.full_name || "Unknown",
-          changed_at: new Date().toISOString(),
-          changes: { created: true },
-          snapshot: data,
-        });
+      await supabase.from("task_history").insert({
+        task_id: data.id,
+        changed_by: profile?.full_name || "Unknown",
+        changed_at: new Date().toISOString(),
+        changes: { created: true },
+        snapshot: data,
+      });
     }
     setShowNewTaskModal(false);
     setTaskFieldValues({});
@@ -685,14 +685,12 @@ export default function Tasks({
       })
       .eq("id", taskId);
     if (task && oldStatus !== newSt) {
-      await supabase
-        .from("task_history")
-        .insert({
-          task_id: taskId,
-          changed_by: profile?.full_name || "Unknown",
-          changed_at: new Date().toISOString(),
-          changes: { status: { from: oldStatus, to: newSt } },
-        });
+      await supabase.from("task_history").insert({
+        task_id: taskId,
+        changed_by: profile?.full_name || "Unknown",
+        changed_at: new Date().toISOString(),
+        changes: { status: { from: oldStatus, to: newSt } },
+      });
     }
     if (drawerTask?.id === taskId)
       setDrawerEdits((p) => ({ ...p, status: newSt }));
@@ -706,16 +704,14 @@ export default function Tasks({
       fieldOptions = newField.field_options?.filter((o) => o.trim()) || [];
     else if (newField.field_type === "formula")
       fieldOptions = [newField.formula_key, newField.custom_formula || ""];
-    await supabase
-      .from("space_fields")
-      .insert({
-        space_id: activeSpace.id,
-        folder_id: activeFolder?.id || null,
-        field_name: newField.field_name.trim(),
-        field_type: newField.field_type,
-        field_order: getFields().length + 1,
-        field_options: fieldOptions,
-      });
+    await supabase.from("space_fields").insert({
+      space_id: activeSpace.id,
+      folder_id: activeFolder?.id || null,
+      field_name: newField.field_name.trim(),
+      field_type: newField.field_type,
+      field_order: getFields().length + 1,
+      field_options: fieldOptions,
+    });
     setNewField({
       field_name: "",
       field_type: "text",
@@ -731,6 +727,28 @@ export default function Tasks({
     if (!confirm("Delete this custom field? All values will also be deleted."))
       return;
     await supabase.from("space_fields").delete().eq("id", fieldId);
+    onRefreshSpaces();
+    fetchTasks();
+  }
+
+  function startEditFieldOptions(field) {
+    setEditingFieldId(field.id);
+    setEditingFieldOptions(field.field_options || []);
+  }
+
+  function cancelEditFieldOptions() {
+    setEditingFieldId(null);
+    setEditingFieldOptions([]);
+  }
+
+  async function saveFieldOptions(fieldId) {
+    const cleaned = editingFieldOptions.map((o) => o.trim()).filter(Boolean);
+    await supabase
+      .from("space_fields")
+      .update({ field_options: cleaned })
+      .eq("id", fieldId);
+    setEditingFieldId(null);
+    setEditingFieldOptions([]);
     onRefreshSpaces();
     fetchTasks();
   }
@@ -752,17 +770,15 @@ export default function Tasks({
           .is("folder_id", null)
           .order("status_order");
         if (sS?.length > 0)
-          await supabase
-            .from("space_statuses")
-            .insert(
-              sS.map((s) => ({
-                space_id: activeSpace.id,
-                folder_id: activeFolder.id,
-                name: s.name,
-                color: s.color,
-                status_order: s.status_order,
-              })),
-            );
+          await supabase.from("space_statuses").insert(
+            sS.map((s) => ({
+              space_id: activeSpace.id,
+              folder_id: activeFolder.id,
+              name: s.name,
+              color: s.color,
+              status_order: s.status_order,
+            })),
+          );
       }
     }
     let dupQ = supabase.from("space_statuses").select("name");
@@ -778,15 +794,13 @@ export default function Tasks({
       setStatusLoading(false);
       return;
     }
-    const { error } = await supabase
-      .from("space_statuses")
-      .insert({
-        space_id: activeSpace.id,
-        folder_id: activeFolder?.id || null,
-        name: newStatus.name.trim(),
-        color: newStatus.color,
-        status_order: (existing?.length || 0) + 1,
-      });
+    const { error } = await supabase.from("space_statuses").insert({
+      space_id: activeSpace.id,
+      folder_id: activeFolder?.id || null,
+      name: newStatus.name.trim(),
+      color: newStatus.color,
+      status_order: (existing?.length || 0) + 1,
+    });
     if (error) {
       setStatusActionMsg("❌ Failed to add status.");
     } else {
@@ -2990,9 +3004,6 @@ export default function Tasks({
                   <div
                     key={f.id}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
                       padding: "8px 12px",
                       background: "#f5f5f4",
                       borderRadius: 7,
@@ -3000,75 +3011,185 @@ export default function Tasks({
                       border: "1px solid #e8e8e8",
                     }}
                   >
-                    <div>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>
-                        {f.field_name}
-                      </span>
-                      {f.field_type === "dropdown" &&
-                        f.field_options?.length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>
+                          {f.field_name}
+                        </span>
+                        {f.field_type === "dropdown" &&
+                          editingFieldId !== f.id &&
+                          f.field_options?.length > 0 && (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 3,
+                                marginTop: 4,
+                              }}
+                            >
+                              {f.field_options.map((o) => (
+                                <span
+                                  key={o}
+                                  style={{
+                                    fontSize: 10,
+                                    background: "#eff6ff",
+                                    color: "#1d4ed8",
+                                    borderRadius: 20,
+                                    padding: "1px 7px",
+                                  }}
+                                >
+                                  {o}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        {f.field_type === "formula" &&
+                          f.field_options?.length > 0 && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#7c3aed",
+                                marginTop: 2,
+                              }}
+                            >
+                              ƒ{" "}
+                              {FORMULA_PRESETS.find(
+                                (p) => p.key === f.field_options[0],
+                              )?.label || f.field_options[0]}
+                            </div>
+                          )}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "#aaa",
+                            background: "#fff",
+                            border: "1px solid #e0e0e0",
+                            borderRadius: 20,
+                            padding: "1px 8px",
+                          }}
+                        >
+                          {f.field_type}
+                        </span>
+                        {f.field_type === "dropdown" &&
+                          editingFieldId !== f.id && (
+                            <button
+                              className="btn btn-sm"
+                              style={{ padding: "2px 8px", fontSize: 11 }}
+                              onClick={() => startEditFieldOptions(f)}
+                            >
+                              ✏️ Edit options
+                            </button>
+                          )}
+                        <button
+                          className="btn btn-sm btn-danger"
+                          style={{ padding: "2px 8px", fontSize: 11 }}
+                          onClick={() => deleteCustomField(f.id)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inline dropdown options editor */}
+                    {f.field_type === "dropdown" && editingFieldId === f.id && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          paddingTop: 10,
+                          borderTop: "1px solid #e0e0e0",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "#888",
+                            marginBottom: 6,
+                          }}
+                        >
+                          Edit options — one per line
+                        </div>
+                        <textarea
+                          autoFocus
+                          value={editingFieldOptions.join("\n")}
+                          onChange={(e) =>
+                            setEditingFieldOptions(e.target.value.split("\n"))
+                          }
+                          style={{
+                            minHeight: 90,
+                            resize: "vertical",
+                            fontFamily: "inherit",
+                            fontSize: 13,
+                            width: "100%",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        {editingFieldOptions.filter((o) => o.trim()).length >
+                          0 && (
                           <div
                             style={{
                               display: "flex",
                               flexWrap: "wrap",
-                              gap: 3,
-                              marginTop: 4,
+                              gap: 4,
+                              marginTop: 8,
                             }}
                           >
-                            {f.field_options.map((o) => (
-                              <span
-                                key={o}
-                                style={{
-                                  fontSize: 10,
-                                  background: "#eff6ff",
-                                  color: "#1d4ed8",
-                                  borderRadius: 20,
-                                  padding: "1px 7px",
-                                }}
-                              >
-                                {o}
-                              </span>
-                            ))}
+                            {editingFieldOptions
+                              .filter((o) => o.trim())
+                              .map((o, i) => (
+                                <span
+                                  key={i}
+                                  style={{
+                                    fontSize: 11,
+                                    background: "#eff6ff",
+                                    color: "#1d4ed8",
+                                    borderRadius: 20,
+                                    padding: "2px 9px",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {o.trim()}
+                                </span>
+                              ))}
                           </div>
                         )}
-                      {f.field_type === "formula" &&
-                        f.field_options?.length > 0 && (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: "#7c3aed",
-                              marginTop: 2,
-                            }}
+                        <div
+                          style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}
+                        >
+                          Removing an option won't change existing tasks already
+                          set to it — it just won't be selectable for new ones.
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                          <button
+                            className="btn btn-sm"
+                            onClick={cancelEditFieldOptions}
                           >
-                            ƒ{" "}
-                            {FORMULA_PRESETS.find(
-                              (p) => p.key === f.field_options[0],
-                            )?.label || f.field_options[0]}
-                          </div>
-                        )}
-                    </div>
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          color: "#aaa",
-                          background: "#fff",
-                          border: "1px solid #e0e0e0",
-                          borderRadius: 20,
-                          padding: "1px 8px",
-                        }}
-                      >
-                        {f.field_type}
-                      </span>
-                      <button
-                        className="btn btn-sm btn-danger"
-                        style={{ padding: "2px 8px", fontSize: 11 }}
-                        onClick={() => deleteCustomField(f.id)}
-                      >
-                        ✕
-                      </button>
-                    </div>
+                            Cancel
+                          </button>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={() => saveFieldOptions(f.id)}
+                          >
+                            Save options
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
