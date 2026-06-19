@@ -1113,6 +1113,25 @@ export default function Tasks({
                     >
                       {fv.value}
                     </span>
+                  ) : f.field_type === "username" ? (
+                    <span
+                      style={{
+                        background: members.some(
+                          (m) => m.full_name === fv.value,
+                        )
+                          ? "#eff6ff"
+                          : "#f0f0ef",
+                        color: members.some((m) => m.full_name === fv.value)
+                          ? "#1d4ed8"
+                          : "#555",
+                        borderRadius: 20,
+                        padding: "1px 8px",
+                        fontSize: 11,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {fv.value}
+                    </span>
                   ) : (
                     <span style={{ fontSize: 12, color: "#555" }}>
                       {fv.value}
@@ -2378,6 +2397,41 @@ export default function Tasks({
                                 }
                               </span>
                             </div>
+                          ) : field.field_type === "username" ? (
+                            <div>
+                              <input
+                                list={`members-list-${field.id}`}
+                                placeholder="Select or type a name..."
+                                value={val}
+                                onChange={(e) =>
+                                  setDrawerFieldValues((p) => ({
+                                    ...p,
+                                    [field.id]: e.target.value,
+                                  }))
+                                }
+                                style={{
+                                  fontSize: 12,
+                                  padding: "7px 10px",
+                                  borderRadius: 7,
+                                  border: "1px solid #e0e0e0",
+                                  background: "#fff",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  outline: "none",
+                                }}
+                                onFocus={(e) =>
+                                  (e.target.style.borderColor = "#1d4ed8")
+                                }
+                                onBlur={(e) =>
+                                  (e.target.style.borderColor = "#e0e0e0")
+                                }
+                              />
+                              <datalist id={`members-list-${field.id}`}>
+                                {members.map((m) => (
+                                  <option key={m.id} value={m.full_name} />
+                                ))}
+                              </datalist>
+                            </div>
                           ) : field.field_type === "dropdown" &&
                             field.field_options?.length > 0 ? (
                             <select
@@ -2951,6 +3005,25 @@ export default function Tasks({
                               (field.field_options?.[0] ||
                                 "days_since_created"),
                           )?.label || "formula"}
+                        </div>
+                      ) : field.field_type === "username" ? (
+                        <div>
+                          <input
+                            list={`members-list-new-${field.id}`}
+                            placeholder="Select or type a name..."
+                            value={taskFieldValues[field.id] || ""}
+                            onChange={(e) =>
+                              setTaskFieldValues((p) => ({
+                                ...p,
+                                [field.id]: e.target.value,
+                              }))
+                            }
+                          />
+                          <datalist id={`members-list-new-${field.id}`}>
+                            {members.map((m) => (
+                              <option key={m.id} value={m.full_name} />
+                            ))}
+                          </datalist>
                         </div>
                       ) : field.field_type === "dropdown" &&
                         field.field_options?.length > 0 ? (
