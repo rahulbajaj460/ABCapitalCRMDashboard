@@ -154,6 +154,9 @@ export default function Tasks({
   });
   const [editingFieldId, setEditingFieldId] = useState(null);
   const [editingFieldOptions, setEditingFieldOptions] = useState([]);
+  // Local override so dropdown option edits reflect instantly without waiting
+  // on the parent's spaces prop to refresh (onRefreshSpaces can lag).
+  const [fieldOptionsOverride, setFieldOptionsOverride] = useState({});
   const [members, setMembers] = useState([]);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(() => {
@@ -333,21 +336,37 @@ export default function Tasks({
       ? unique
       : ["To Do", "In Progress", "In Review", "Done"];
   }
+  function applyFieldOverrides(fields) {
+    return fields.map((f) =>
+      fieldOptionsOverride[f.id] !== undefined
+        ? { ...f, field_options: fieldOptionsOverride[f.id] }
+        : f,
+    );
+  }
   function getFields() {
     if (activeFolder) {
       const ff = activeFolder.space_fields || [];
       if (ff.length > 0)
-        return ff.sort((a, b) => a.field_order - b.field_order);
+        return applyFieldOverrides(
+          ff.sort((a, b) => a.field_order - b.field_order),
+        );
     }
-    return (activeSpace?.space_fields || []).sort(
-      (a, b) => a.field_order - b.field_order,
+    return applyFieldOverrides(
+      (activeSpace?.space_fields || []).sort(
+        (a, b) => a.field_order - b.field_order,
+      ),
     );
   }
   function getFolderFields(folder) {
     const ff = folder.space_fields || [];
-    if (ff.length > 0) return ff.sort((a, b) => a.field_order - b.field_order);
-    return (activeSpace?.space_fields || []).sort(
-      (a, b) => a.field_order - b.field_order,
+    if (ff.length > 0)
+      return applyFieldOverrides(
+        ff.sort((a, b) => a.field_order - b.field_order),
+      );
+    return applyFieldOverrides(
+      (activeSpace?.space_fields || []).sort(
+        (a, b) => a.field_order - b.field_order,
+      ),
     );
   }
   function getStatusColor(status) {
@@ -419,10 +438,12 @@ export default function Tasks({
       const folder = space.folders?.find((f) => f.id === newTask.folder_id);
       const ff = folder?.space_fields || [];
       if (ff.length > 0)
-        return ff.sort((a, b) => a.field_order - b.field_order);
+        return applyFieldOverrides(
+          ff.sort((a, b) => a.field_order - b.field_order),
+        );
     }
-    return (space.space_fields || []).sort(
-      (a, b) => a.field_order - b.field_order,
+    return applyFieldOverrides(
+      (space.space_fields || []).sort((a, b) => a.field_order - b.field_order),
     );
   }
 
@@ -743,6 +764,8 @@ export default function Tasks({
 
   async function saveFieldOptions(fieldId) {
     const cleaned = editingFieldOptions.map((o) => o.trim()).filter(Boolean);
+    // Apply locally first so the UI updates instantly
+    setFieldOptionsOverride((prev) => ({ ...prev, [fieldId]: cleaned }));
     await supabase
       .from("space_fields")
       .update({ field_options: cleaned })
