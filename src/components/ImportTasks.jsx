@@ -124,15 +124,32 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     // Normalize CSV statuses
     const csvStatusesNormalized = csvStatuses.map((s) => normalizeStatus(s));
     const uniqueCsvStatuses = [...new Set(csvStatusesNormalized)];
+    const uniqueCsvStatusesLower = uniqueCsvStatuses.map((s) =>
+      s.toLowerCase().trim(),
+    );
 
     // Find statuses in CSV but not in portal
     const newStatuses = uniqueCsvStatuses.filter(
       (s) => !portalStatusNames.includes(s.toLowerCase().trim()),
     );
 
-    // Find portal statuses with 0 tasks
+    // Count how many CSV rows will land on each status (after normalization)
+    const csvStatusCounts = {};
+    csvStatusesNormalized.forEach((s) => {
+      const key = s.toLowerCase().trim();
+      csvStatusCounts[key] = (csvStatusCounts[key] || 0) + 1;
+    });
+
+    // Find portal statuses that have 0 existing tasks AND won't receive any
+    // tasks from this CSV import either — these are the truly empty ones.
     const emptyStatuses = [];
     for (const ps of portalStatuses) {
+      const psKey = ps.name.toLowerCase().trim();
+      const incomingFromCsv = csvStatusCounts[psKey] || 0;
+
+      // Skip the existing-task check entirely if the CSV will populate it
+      if (incomingFromCsv > 0) continue;
+
       let query = supabase
         .from("tasks")
         .select("id", { count: "exact", head: true })
@@ -1205,11 +1222,14 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  🗑 Empty statuses in portal (
+                  🗑 Will remain empty after import (
                   {statusReview.emptyStatuses.length})
                 </div>
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-                  These statuses have 0 tasks. Keep them or delete them?
+                  These statuses have no existing tasks, and this CSV doesn't
+                  contain any rows matching them either — they'll still be empty
+                  after the import completes. Keep them for future use, or
+                  delete them now if you don't need them.
                 </div>
                 {statusReview.emptyStatuses.map((status) => {
                   const action = emptyStatusActions[status.id] || "keep";
