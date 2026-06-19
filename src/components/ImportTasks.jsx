@@ -14,6 +14,31 @@ const FIELD_TYPES = [
   "formula",
 ];
 
+const FORMULA_PRESETS = [
+  {
+    key: "days_since_created",
+    label: "Days since task created",
+    description:
+      "Calculates how many days have passed since this task was created",
+  },
+  {
+    key: "days_since_updated",
+    label: "Days since last updated",
+    description: "Calculates how many days since the task was last modified",
+  },
+  {
+    key: "days_until_due",
+    label: "Days until due date",
+    description:
+      "Calculates days remaining until the due date (negative = overdue)",
+  },
+  {
+    key: "custom",
+    label: "Custom formula (manual)",
+    description: "Enter your own formula expression",
+  },
+];
+
 const CORE_FIELDS = [
   { key: "title", label: "Task Name *", required: true },
   { key: "status", label: "Status", required: false },
