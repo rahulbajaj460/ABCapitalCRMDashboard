@@ -45,6 +45,7 @@ const CORE_FIELDS = [
   { key: "priority", label: "Priority", required: false },
   { key: "assignee", label: "Assignee", required: false },
   { key: "due_date", label: "Due Date", required: false },
+  { key: "created_at", label: "Date Created", required: false },
   { key: "description", label: "Description", required: false },
 ];
 
@@ -59,6 +60,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     priority: "Priority",
     assignee: "Assignee",
     due_date: "Start Date",
+    created_at: "Date Created",
     description: "Task Content",
   });
 
@@ -240,6 +242,22 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     }
   }
 
+  // Like normalizeDate but keeps full timestamp precision — used for
+  // created_at so "days since created" formulas reflect the real ClickUp date.
+  function normalizeDateTime(dateStr) {
+    if (!dateStr || dateStr.trim() === "") return null;
+    try {
+      const cleaned = dateStr
+        .replace(/(\d+)(st|nd|rd|th)/, "$1")
+        .replace(/,/g, "");
+      const d = new Date(cleaned);
+      if (isNaN(d.getTime())) return null;
+      return d.toISOString();
+    } catch {
+      return null;
+    }
+  }
+
   function normalizeAssignees(assigneeStr) {
     if (!assigneeStr) return [];
     const cleaned = assigneeStr.replace(/[\[\]]/g, "").trim();
@@ -368,6 +386,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
 
     const tasks = rows.map((row) => {
       const assignees = normalizeAssignees(row[mapping.assignee]);
+      const importedCreatedAt = mapping.created_at
+        ? normalizeDateTime(row[mapping.created_at])
+        : null;
       return {
         title: (row[mapping.title] || "").trim(),
         status: normalizeStatus(row[mapping.status]),
@@ -378,6 +399,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         description: (row[mapping.description] || "").trim(),
         space_id: selectedSpace,
         folder_id: selectedFolder || null,
+        // Preserve the original ClickUp creation date if mapped/parseable,
+        // otherwise let Supabase default it to the import time.
+        ...(importedCreatedAt ? { created_at: importedCreatedAt } : {}),
       };
     });
 
