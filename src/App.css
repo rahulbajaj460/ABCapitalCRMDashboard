@@ -387,8 +387,33 @@ textarea:focus {
 }
 
 /* ─── Task table ─── */
+/* Wrapper enables horizontal scroll when columns overflow the viewport,
+   while the table itself only grows as wide as its content needs (so it
+   still shrinks to fit when few columns are selected). */
+.task-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d2 transparent;
+}
+.task-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.task-table-scroll::-webkit-scrollbar-thumb {
+  background: #d4d4d2;
+  border-radius: 20px;
+}
+.task-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+.task-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .task-table {
   width: 100%;
+  min-width: max-content;
   border-collapse: collapse;
 }
 .task-table th {
@@ -401,12 +426,26 @@ textarea:focus {
   letter-spacing: 0.05em;
   border-bottom: 1px solid #ebebeb;
   background: #fafaf9;
+  white-space: nowrap;
 }
 .task-table td {
   padding: 10px 14px;
   border-bottom: 1px solid #f0f0f0;
   vertical-align: middle;
   font-size: 13px;
+}
+/* Name column stays readable width and wraps; every other column hugs its
+   content and never shrinks below it, so values like long dates/usernames
+   don't get crushed — the table just scrolls right instead. */
+.task-table th:first-child,
+.task-table td:first-child {
+  min-width: 220px;
+  max-width: 320px;
+  white-space: normal;
+}
+.task-table th:not(:first-child),
+.task-table td:not(:first-child) {
+  white-space: nowrap;
 }
 .task-table tr:hover td {
   background: #fafaf9;

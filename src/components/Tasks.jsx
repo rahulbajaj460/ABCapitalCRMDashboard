@@ -1851,25 +1851,27 @@ export default function Tasks({
                                         </span>
                                       </div>
                                       {groupExpanded && (
-                                        <table
-                                          className="task-table"
+                                        <div
+                                          className="task-table-scroll"
                                           style={{ marginBottom: 4 }}
                                         >
-                                          {renderTableHead(
-                                            folderFieldList,
-                                            true,
-                                          )}
-                                          <tbody>
-                                            {groupTasks.map((task) =>
-                                              renderTaskRow(
-                                                task,
-                                                folderStatusList,
-                                                folderFieldList,
-                                                folder,
-                                              ),
+                                          <table className="task-table">
+                                            {renderTableHead(
+                                              folderFieldList,
+                                              true,
                                             )}
-                                          </tbody>
-                                        </table>
+                                            <tbody>
+                                              {groupTasks.map((task) =>
+                                                renderTaskRow(
+                                                  task,
+                                                  folderStatusList,
+                                                  folderFieldList,
+                                                  folder,
+                                                ),
+                                              )}
+                                            </tbody>
+                                          </table>
+                                        </div>
                                       )}
                                     </div>
                                   );
@@ -1921,14 +1923,16 @@ export default function Tasks({
                             {nft.length} tasks
                           </span>
                         </div>
-                        <table className="task-table">
-                          {renderTableHead(getFields())}
-                          <tbody>
-                            {nft.map((task) =>
-                              renderTaskRow(task, getStatuses(), getFields()),
-                            )}
-                          </tbody>
-                        </table>
+                        <div className="task-table-scroll">
+                          <table className="task-table">
+                            {renderTableHead(getFields())}
+                            <tbody>
+                              {nft.map((task) =>
+                                renderTaskRow(task, getStatuses(), getFields()),
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     );
                   })()}
@@ -2003,18 +2007,20 @@ export default function Tasks({
                                 marginTop: 4,
                               }}
                             >
-                              <table className="task-table">
-                                {renderTableHead(getFields())}
-                                <tbody>
-                                  {groupTasks.map((task) =>
-                                    renderTaskRow(
-                                      task,
-                                      getStatuses(),
-                                      getFields(),
-                                    ),
-                                  )}
-                                </tbody>
-                              </table>
+                              <div className="task-table-scroll">
+                                <table className="task-table">
+                                  {renderTableHead(getFields())}
+                                  <tbody>
+                                    {groupTasks.map((task) =>
+                                      renderTaskRow(
+                                        task,
+                                        getStatuses(),
+                                        getFields(),
+                                      ),
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
                           )}
                           {isExpanded && groupTasks.length === 0 && (
