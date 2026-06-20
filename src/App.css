@@ -387,9 +387,9 @@ textarea:focus {
 }
 
 /* ─── Task table ─── */
-/* Wrapper enables horizontal scroll when columns overflow the viewport,
-   while the table itself only grows as wide as its content needs (so it
-   still shrinks to fit when few columns are selected). */
+/* Single page-level horizontal scroll wraps the entire List view (all
+   folder sections, status groups, etc.) so every table's columns scroll
+   together in sync, instead of each section having its own scrollbar. */
 .task-table-scroll {
   width: 100%;
   overflow-x: auto;
