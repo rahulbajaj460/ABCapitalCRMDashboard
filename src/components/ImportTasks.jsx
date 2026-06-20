@@ -422,10 +422,21 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
 
     const valid = tasks.filter((t) => t.title.length > 0);
     skipped = tasks.length - valid.length;
+    // Build the matching CSV row list using the exact same filter predicate
+    // (title present) so sourceRows[i] always corresponds to valid[i].
+    const sourceRows = rows.filter(
+      (row) => (row[mapping.title] || "").trim().length > 0,
+    );
 
     const batchSize = 20;
     for (let i = 0; i < valid.length; i += batchSize) {
       const batch = valid.slice(i, i + batchSize);
+      // Keep the original CSV row alongside each task in this batch so we
+      // can look up custom field values by the SAME index used for insert —
+      // using the raw `rows` array here was wrong because `valid` has
+      // already dropped rows with blank titles, which shifts every index
+      // after the first skipped row and pulls mismatched field values.
+      const batchSourceRows = sourceRows.slice(i, i + batchSize);
       const { data: inserted, error } = await supabase
         .from("tasks")
         .insert(batch)
@@ -437,7 +448,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         if (inserted && Object.keys(fieldIdMap).length > 0) {
           const fieldValues = [];
           inserted.forEach((task, idx) => {
-            const row = rows[i + idx];
+            const row = batchSourceRows[idx];
             if (!row) return;
             for (const [col, fieldId] of Object.entries(fieldIdMap)) {
               const cfg = customFieldMappings[col];
