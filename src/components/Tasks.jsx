@@ -145,6 +145,7 @@ export default function Tasks({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
   const [groupBy, setGroupBy] = useState("status");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [newField, setNewField] = useState({
     field_name: "",
     field_type: "text",
@@ -479,6 +480,63 @@ export default function Tasks({
     );
   }
 
+  // ── Sorting ──
+  function handleSort(key) {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        // toggle asc -> desc -> off
+        if (prev.direction === "asc") return { key, direction: "desc" };
+        return { key: null, direction: "asc" };
+      }
+      return { key, direction: "asc" };
+    });
+  }
+
+  function getSortValue(task, key) {
+    if (key === "title") return (task.title || "").toLowerCase();
+    if (key === "priority") {
+      const order = { High: 3, Medium: 2, Low: 1 };
+      return order[task.priority] || 0;
+    }
+    if (key === "assignees")
+      return (
+        task.assignees?.[0]?.toLowerCase() || task.assignee?.toLowerCase() || ""
+      );
+    if (
+      key === "due_date" ||
+      key === "date_done" ||
+      key === "date_closed" ||
+      key === "date_updated_manual"
+    )
+      return task[key] ? new Date(task[key]).getTime() : null;
+    if (key.startsWith("field_")) {
+      const fieldId = key.replace("field_", "");
+      const fv = task.task_field_values?.find((v) => v.field_id === fieldId);
+      const val = fv?.value || "";
+      const num = Number(val);
+      return !isNaN(num) && val.trim() !== "" ? num : val.toLowerCase();
+    }
+    return "";
+  }
+
+  function sortTasks(taskList) {
+    if (!sortConfig.key) return taskList;
+    const sorted = [...taskList].sort((a, b) => {
+      const va = getSortValue(a, sortConfig.key);
+      const vb = getSortValue(b, sortConfig.key);
+      // nulls/empties always sort last regardless of direction
+      const aEmpty = va === null || va === undefined || va === "";
+      const bEmpty = vb === null || vb === undefined || vb === "";
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      if (va < vb) return sortConfig.direction === "asc" ? -1 : 1;
+      if (va > vb) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }
+
   const filteredTasks = tasks.filter((t) => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase()))
@@ -488,21 +546,21 @@ export default function Tasks({
 
   function getGroupedTasks() {
     const tl = filteredTasks;
-    if (groupBy === "status")
-      return getStatuses().reduce((acc, s) => {
+    let result;
+    if (groupBy === "status") {
+      result = getStatuses().reduce((acc, s) => {
         acc[s] = tl.filter((t) => t.status === s);
         return acc;
       }, {});
-    if (groupBy === "folder") {
+    } else if (groupBy === "folder") {
       const g = {};
       (activeSpace?.folders || []).forEach((f) => {
         g[f.name] = tl.filter((t) => t.folder_id === f.id);
       });
       const ug = tl.filter((t) => !t.folder_id);
       if (ug.length > 0) g["No folder"] = ug;
-      return g;
-    }
-    if (groupBy === "assignee") {
+      result = g;
+    } else if (groupBy === "assignee") {
       const g = {};
       tl.forEach((task) => {
         const names =
@@ -516,16 +574,21 @@ export default function Tasks({
           g[n].push(task);
         });
       });
-      return Object.fromEntries(
+      result = Object.fromEntries(
         Object.entries(g).sort(([a], [b]) => a.localeCompare(b)),
       );
-    }
-    if (groupBy === "priority")
-      return ["High", "Medium", "Low"].reduce((acc, p) => {
+    } else if (groupBy === "priority") {
+      result = ["High", "Medium", "Low"].reduce((acc, p) => {
         acc[p] = tl.filter((t) => t.priority === p);
         return acc;
       }, {});
-    return { "All tasks": tl };
+    } else {
+      result = { "All tasks": tl };
+    }
+    // Apply column sort within each group, independent of grouping
+    return Object.fromEntries(
+      Object.entries(result).map(([k, v]) => [k, sortTasks(v)]),
+    );
   }
 
   // Drawer
@@ -997,24 +1060,72 @@ export default function Tasks({
     setShowNewTaskModal(true);
   }
 
+  function SortableHeader({ sortKey, children, style }) {
+    const isActive = sortConfig.key === sortKey;
+    return (
+      <th
+        onClick={() => handleSort(sortKey)}
+        style={{
+          cursor: "pointer",
+          userSelect: "none",
+          color: isActive ? "#1d4ed8" : undefined,
+          ...style,
+        }}
+        title="Click to sort"
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          {children}
+          <span
+            style={{
+              fontSize: 10,
+              color: isActive ? "#1d4ed8" : "#ccc",
+              opacity: isActive ? 1 : 0.6,
+            }}
+          >
+            {isActive ? (sortConfig.direction === "asc" ? "▲" : "▼") : "↕"}
+          </span>
+        </span>
+      </th>
+    );
+  }
+
   function renderTableHead(fieldList, indented = false) {
     return (
       <thead>
         <tr>
-          <th style={indented ? { paddingLeft: 32 } : {}}>Name</th>
+          <SortableHeader
+            sortKey="title"
+            style={indented ? { paddingLeft: 32 } : {}}
+          >
+            Name
+          </SortableHeader>
           {groupBy !== "status" && <th>Status</th>}
-          {visibleColumns.includes("priority") && <th>Priority</th>}
-          {visibleColumns.includes("assignees") && <th>Assignees</th>}
-          {visibleColumns.includes("due_date") && <th>Due date</th>}
-          {visibleColumns.includes("date_done") && <th>Date Done</th>}
-          {visibleColumns.includes("date_closed") && <th>Date Closed</th>}
+          {visibleColumns.includes("priority") && (
+            <SortableHeader sortKey="priority">Priority</SortableHeader>
+          )}
+          {visibleColumns.includes("assignees") && (
+            <SortableHeader sortKey="assignees">Assignees</SortableHeader>
+          )}
+          {visibleColumns.includes("due_date") && (
+            <SortableHeader sortKey="due_date">Due date</SortableHeader>
+          )}
+          {visibleColumns.includes("date_done") && (
+            <SortableHeader sortKey="date_done">Date Done</SortableHeader>
+          )}
+          {visibleColumns.includes("date_closed") && (
+            <SortableHeader sortKey="date_closed">Date Closed</SortableHeader>
+          )}
           {visibleColumns.includes("date_updated_manual") && (
-            <th>Date Updated</th>
+            <SortableHeader sortKey="date_updated_manual">
+              Date Updated
+            </SortableHeader>
           )}
           {fieldList
             .filter((f) => visibleColumns.includes(`field_${f.id}`))
             .map((f) => (
-              <th key={f.id}>{f.field_name}</th>
+              <SortableHeader key={f.id} sortKey={`field_${f.id}`}>
+                {f.field_name}
+              </SortableHeader>
             ))}
           <th style={{ minWidth: 140 }}>Status</th>
           <th style={{ width: 60 }}></th>
@@ -1507,6 +1618,17 @@ export default function Tasks({
               <option value="assignee">Group by: Assignee</option>
               <option value="priority">Group by: Priority</option>
             </select>
+            {sortConfig.key && (
+              <button
+                className="toolbar-btn"
+                onClick={() => setSortConfig({ key: null, direction: "asc" })}
+                title="Clear column sort"
+                style={{ color: "#1d4ed8", fontWeight: 600 }}
+              >
+                ✕ Sort: {sortConfig.key.replace("field_", "")} (
+                {sortConfig.direction === "asc" ? "▲" : "▼"})
+              </button>
+            )}
           </div>
         </div>
 
@@ -1532,7 +1654,7 @@ export default function Tasks({
                     const isExpanded = expandedGroups[folder.id] !== false;
                     const folderStatusList = getFolderStatuses(folder);
                     const folderFieldList = getFolderFields(folder);
-                    const grouped =
+                    const groupedRaw =
                       groupBy === "status"
                         ? folderStatusList.reduce((acc, s) => {
                             acc[s] = filteredFolderTasks.filter(
@@ -1562,6 +1684,12 @@ export default function Tasks({
                                 return acc;
                               }, {})
                             : { "All tasks": filteredFolderTasks };
+                    const grouped = Object.fromEntries(
+                      Object.entries(groupedRaw).map(([k, v]) => [
+                        k,
+                        sortTasks(v),
+                      ]),
+                    );
                     return (
                       <div
                         key={folder.id}
@@ -1746,7 +1874,7 @@ export default function Tasks({
                     );
                   })}
                   {(() => {
-                    const nft = tasks.filter((t) => !t.folder_id);
+                    const nft = sortTasks(tasks.filter((t) => !t.folder_id));
                     if (nft.length === 0) return null;
                     return (
                       <div
