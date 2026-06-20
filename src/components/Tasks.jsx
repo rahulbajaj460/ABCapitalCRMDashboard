@@ -194,6 +194,9 @@ export default function Tasks({
     assignee_id: "",
     assignees: [],
     due_date: "",
+    date_done: "",
+    date_closed: "",
+    date_updated_manual: "",
   });
   const [taskFieldValues, setTaskFieldValues] = useState({});
   const [newStatus, setNewStatus] = useState({ name: "", color: "#378ADD" });
@@ -540,6 +543,9 @@ export default function Tasks({
       priority: task.priority,
       assignees: task.assignees || [],
       due_date: task.due_date || "",
+      date_done: task.date_done || "",
+      date_closed: task.date_closed || "",
+      date_updated_manual: task.date_updated_manual || "",
     });
     setDrawerTab("details");
   }
@@ -591,6 +597,18 @@ export default function Tasks({
         (drawerEdits.due_date !== undefined
           ? drawerEdits.due_date
           : drawerTask.due_date) || null,
+      date_done:
+        (drawerEdits.date_done !== undefined
+          ? drawerEdits.date_done
+          : drawerTask.date_done) || null,
+      date_closed:
+        (drawerEdits.date_closed !== undefined
+          ? drawerEdits.date_closed
+          : drawerTask.date_closed) || null,
+      date_updated_manual:
+        (drawerEdits.date_updated_manual !== undefined
+          ? drawerEdits.date_updated_manual
+          : drawerTask.date_updated_manual) || null,
       updated_by: profile?.full_name || "Unknown",
       updated_at: new Date().toISOString(),
     };
@@ -654,6 +672,9 @@ export default function Tasks({
           priority: updated.priority,
           assignees: updated.assignees || [],
           due_date: updated.due_date || "",
+          date_done: updated.date_done || "",
+          date_closed: updated.date_closed || "",
+          date_updated_manual: updated.date_updated_manual || "",
         });
         const fvMap = {};
         (updated.task_field_values || []).forEach((fv) => {
@@ -687,6 +708,9 @@ export default function Tasks({
       assignee_id: newTask.assignee_id || null,
       assignees: newTask.assignees,
       due_date: newTask.due_date || null,
+      date_done: newTask.date_done || null,
+      date_closed: newTask.date_closed || null,
+      date_updated_manual: newTask.date_updated_manual || null,
       updated_by: profile?.full_name || "Unknown",
       updated_at: new Date().toISOString(),
     };
@@ -966,6 +990,9 @@ export default function Tasks({
       assignee_id: "",
       assignees: [],
       due_date: "",
+      date_done: "",
+      date_closed: "",
+      date_updated_manual: "",
     });
     setShowNewTaskModal(true);
   }
@@ -979,6 +1006,11 @@ export default function Tasks({
           {visibleColumns.includes("priority") && <th>Priority</th>}
           {visibleColumns.includes("assignees") && <th>Assignees</th>}
           {visibleColumns.includes("due_date") && <th>Due date</th>}
+          {visibleColumns.includes("date_done") && <th>Date Done</th>}
+          {visibleColumns.includes("date_closed") && <th>Date Closed</th>}
+          {visibleColumns.includes("date_updated_manual") && (
+            <th>Date Updated</th>
+          )}
           {fieldList
             .filter((f) => visibleColumns.includes(`field_${f.id}`))
             .map((f) => (
@@ -1079,6 +1111,21 @@ export default function Tasks({
                 ? `⚠️ ${task.due_date}`
                 : task.due_date
               : "—"}
+          </td>
+        )}
+        {visibleColumns.includes("date_done") && (
+          <td style={{ fontSize: 12, color: "#555" }}>
+            {task.date_done || "—"}
+          </td>
+        )}
+        {visibleColumns.includes("date_closed") && (
+          <td style={{ fontSize: 12, color: "#555" }}>
+            {task.date_closed || "—"}
+          </td>
+        )}
+        {visibleColumns.includes("date_updated_manual") && (
+          <td style={{ fontSize: 12, color: "#555" }}>
+            {task.date_updated_manual || "—"}
           </td>
         )}
         {fieldList
@@ -1191,6 +1238,10 @@ export default function Tasks({
   const dPriority = drawerEdits.priority ?? drawerTask?.priority;
   const dAssignees = drawerEdits.assignees ?? drawerTask?.assignees ?? [];
   const dDueDate = drawerEdits.due_date ?? drawerTask?.due_date ?? "";
+  const dDateDone = drawerEdits.date_done ?? drawerTask?.date_done ?? "";
+  const dDateClosed = drawerEdits.date_closed ?? drawerTask?.date_closed ?? "";
+  const dDateUpdatedManual =
+    drawerEdits.date_updated_manual ?? drawerTask?.date_updated_manual ?? "";
   const dTitle = drawerEdits.title ?? drawerTask?.title ?? "";
   const dDesc = drawerEdits.description ?? drawerTask?.description ?? "";
   const drawerStatuses = getStatuses();
@@ -1368,6 +1419,9 @@ export default function Tasks({
                     { key: "priority", label: "Priority" },
                     { key: "assignees", label: "Assignees" },
                     { key: "due_date", label: "Due date" },
+                    { key: "date_done", label: "Date Done" },
+                    { key: "date_closed", label: "Date Closed" },
+                    { key: "date_updated_manual", label: "Date Updated" },
                     ...getFields().map((f) => ({
                       key: `field_${f.id}`,
                       label: f.field_name,
@@ -2309,6 +2363,84 @@ export default function Tasks({
                       />
                     ),
                   },
+                  {
+                    label: "Date Done",
+                    icon: "✅",
+                    content: (
+                      <input
+                        type="date"
+                        value={dDateDone}
+                        onChange={(e) =>
+                          setDrawerEdits((p) => ({
+                            ...p,
+                            date_done: e.target.value,
+                          }))
+                        }
+                        style={{
+                          fontSize: 12,
+                          padding: "5px 10px",
+                          borderRadius: 7,
+                          border: "1px solid #e0e0e0",
+                          background: "#fff",
+                          color: "#555",
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
+                      />
+                    ),
+                  },
+                  {
+                    label: "Date Closed",
+                    icon: "🔒",
+                    content: (
+                      <input
+                        type="date"
+                        value={dDateClosed}
+                        onChange={(e) =>
+                          setDrawerEdits((p) => ({
+                            ...p,
+                            date_closed: e.target.value,
+                          }))
+                        }
+                        style={{
+                          fontSize: 12,
+                          padding: "5px 10px",
+                          borderRadius: 7,
+                          border: "1px solid #e0e0e0",
+                          background: "#fff",
+                          color: "#555",
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
+                      />
+                    ),
+                  },
+                  {
+                    label: "Date Updated",
+                    icon: "🔄",
+                    content: (
+                      <input
+                        type="date"
+                        value={dDateUpdatedManual}
+                        onChange={(e) =>
+                          setDrawerEdits((p) => ({
+                            ...p,
+                            date_updated_manual: e.target.value,
+                          }))
+                        }
+                        style={{
+                          fontSize: 12,
+                          padding: "5px 10px",
+                          borderRadius: 7,
+                          border: "1px solid #e0e0e0",
+                          background: "#fff",
+                          color: "#555",
+                          cursor: "pointer",
+                          outline: "none",
+                        }}
+                      />
+                    ),
+                  },
                 ].map(({ label, icon, content }) => (
                   <div key={label} style={{ marginBottom: 18 }}>
                     <div
@@ -2964,6 +3096,39 @@ export default function Tasks({
                   value={newTask.due_date}
                   onChange={(e) =>
                     setNewTask((p) => ({ ...p, due_date: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date Done</label>
+                <input
+                  type="date"
+                  value={newTask.date_done}
+                  onChange={(e) =>
+                    setNewTask((p) => ({ ...p, date_done: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date Closed</label>
+                <input
+                  type="date"
+                  value={newTask.date_closed}
+                  onChange={(e) =>
+                    setNewTask((p) => ({ ...p, date_closed: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Date Updated</label>
+                <input
+                  type="date"
+                  value={newTask.date_updated_manual}
+                  onChange={(e) =>
+                    setNewTask((p) => ({
+                      ...p,
+                      date_updated_manual: e.target.value,
+                    }))
                   }
                 />
               </div>

@@ -46,6 +46,9 @@ const CORE_FIELDS = [
   { key: "assignee", label: "Assignee", required: false },
   { key: "due_date", label: "Due Date", required: false },
   { key: "created_at", label: "Date Created", required: false },
+  { key: "date_done", label: "Date Done", required: false },
+  { key: "date_closed", label: "Date Closed", required: false },
+  { key: "date_updated_manual", label: "Date Updated", required: false },
   { key: "description", label: "Description", required: false },
 ];
 
@@ -61,6 +64,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     assignee: "Assignee",
     due_date: "Start Date",
     created_at: "Date Created",
+    date_done: "Date Done",
+    date_closed: "Date Closed",
+    date_updated_manual: "Date Updated",
     description: "Task Content",
   });
 
@@ -396,6 +402,15 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         assignee: assignees[0] || "",
         assignees,
         due_date: normalizeDate(row[mapping.due_date]),
+        date_done: mapping.date_done
+          ? normalizeDate(row[mapping.date_done])
+          : null,
+        date_closed: mapping.date_closed
+          ? normalizeDate(row[mapping.date_closed])
+          : null,
+        date_updated_manual: mapping.date_updated_manual
+          ? normalizeDate(row[mapping.date_updated_manual])
+          : null,
         description: (row[mapping.description] || "").trim(),
         space_id: selectedSpace,
         folder_id: selectedFolder || null,
