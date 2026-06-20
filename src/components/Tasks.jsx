@@ -251,6 +251,7 @@ export default function Tasks({
     let q = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
     if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
@@ -718,6 +719,7 @@ export default function Tasks({
     let q = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
     if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
@@ -804,9 +806,15 @@ export default function Tasks({
   }
 
   async function deleteTask(taskId) {
-    if (!confirm("Delete this task?")) return;
+    if (!confirm("Move this task to Trash? You can restore it later.")) return;
     if (drawerTask?.id === taskId) closeDrawer();
-    await supabase.from("tasks").delete().eq("id", taskId);
+    await supabase
+      .from("tasks")
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: profile?.full_name || "Unknown",
+      })
+      .eq("id", taskId);
     fetchTasks();
   }
 

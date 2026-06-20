@@ -85,6 +85,8 @@ export default function App() {
   }
 
   async function fetchSpaces() {
+    // Exclude soft-deleted spaces and folders so trashed items disappear
+    // from the sidebar immediately, without waiting for a hard delete.
     const { data, error } = await supabase
       .from("spaces")
       .select(
@@ -92,20 +94,39 @@ export default function App() {
       *,
       space_statuses(*),
       space_fields(*),
-      folders(
+      folders!folders_space_id_fkey(
         *,
         space_statuses(*),
         space_fields(*)
       )
     `,
       )
+      .is("deleted_at", null)
       .order("created_at");
 
     if (data) {
-      setSpaces(data);
+      // Also filter out any soft-deleted folders that came through the
+      // nested select (belt-and-braces in case the FK filter above doesn't
+      // apply server-side depending on your Postgres/PostgREST version).
+      const cleaned = data.map((space) => ({
+        ...space,
+        folders: (space.folders || []).filter((f) => !f.deleted_at),
+      }));
+      setSpaces(cleaned);
       if (activeSpace) {
-        const updated = data.find((s) => s.id === activeSpace.id);
+        const updated = cleaned.find((s) => s.id === activeSpace.id);
         if (updated) setActiveSpace(updated);
+        else {
+          // The active space was just trashed — back out to dashboard
+          setActiveSpace(null);
+          setActiveFolder(null);
+        }
+      }
+      if (activeFolder) {
+        const stillExists = cleaned
+          .find((s) => s.id === activeSpace?.id)
+          ?.folders?.find((f) => f.id === activeFolder.id);
+        if (!stillExists) setActiveFolder(null);
       }
     }
   }
@@ -117,7 +138,10 @@ export default function App() {
   }, [user, spaces]);
 
   async function fetchTaskCounts() {
-    const { data } = await supabase.from("tasks").select("space_id, folder_id");
+    const { data } = await supabase
+      .from("tasks")
+      .select("space_id, folder_id")
+      .is("deleted_at", null);
     if (!data) return;
     const counts = {};
     data.forEach((t) => {

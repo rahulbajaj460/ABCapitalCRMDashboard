@@ -145,6 +145,11 @@ export default function Sidebar({
   const [editingStatusIdx, setEditingStatusIdx] = useState(null);
   const [editingStatusName, setEditingStatusName] = useState("");
   const [showColorPickerFor, setShowColorPickerFor] = useState(null);
+  const [showTrashModal, setShowTrashModal] = useState(false);
+  const [trashedSpaces, setTrashedSpaces] = useState([]);
+  const [trashedFolders, setTrashedFolders] = useState([]);
+  const [trashedTasks, setTrashedTasks] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
 
   // ── Edit space modal ──
   const [editSpaceModal, setEditSpaceModal] = useState(null); // space object
@@ -258,17 +263,15 @@ export default function Sidebar({
       .single();
     if (!error && data) {
       if (editableStatuses.length > 0) {
-        await supabase
-          .from("space_statuses")
-          .insert(
-            editableStatuses.map((s, i) => ({
-              space_id: data.id,
-              folder_id: null,
-              name: s.name,
-              color: s.color,
-              status_order: i + 1,
-            })),
-          );
+        await supabase.from("space_statuses").insert(
+          editableStatuses.map((s, i) => ({
+            space_id: data.id,
+            folder_id: null,
+            name: s.name,
+            color: s.color,
+            status_order: i + 1,
+          })),
+        );
       }
       setNewSpace({ name: "", color: "#378ADD", icon: "💼", description: "" });
       setSpaceStep(1);
@@ -307,9 +310,33 @@ export default function Sidebar({
   async function deleteSpace(spaceId, e) {
     e.stopPropagation();
     setSpaceMenu(null);
-    if (!confirm("Delete this space and all its data? This cannot be undone."))
+    if (
+      !confirm(
+        "Move this space and all its data to Trash? You can restore it later from the Trash.",
+      )
+    )
       return;
-    await supabase.from("spaces").delete().eq("id", spaceId);
+    const now = new Date().toISOString();
+    const deletedBy = profile?.full_name || "Unknown";
+    // Soft-delete the space, its folders, and its tasks together so the
+    // whole thing can be restored as one unit from Trash.
+    const { data: folderRows } = await supabase
+      .from("folders")
+      .select("id")
+      .eq("space_id", spaceId);
+    const folderIds = (folderRows || []).map((f) => f.id);
+    await supabase
+      .from("spaces")
+      .update({ deleted_at: now, deleted_by: deletedBy })
+      .eq("id", spaceId);
+    await supabase
+      .from("folders")
+      .update({ deleted_at: now, deleted_by: deletedBy })
+      .eq("space_id", spaceId);
+    await supabase
+      .from("tasks")
+      .update({ deleted_at: now, deleted_by: deletedBy })
+      .eq("space_id", spaceId);
     onSpaceCreated();
   }
 
@@ -342,13 +369,142 @@ export default function Sidebar({
     if (
       !confirm(
         n > 0
-          ? `Delete folder and all ${n} tasks inside? This cannot be undone.`
-          : "Delete this folder?",
+          ? `Move folder and all ${n} tasks inside to Trash? You can restore them later.`
+          : "Move this folder to Trash? You can restore it later.",
       )
     )
       return;
-    await supabase.from("folders").delete().eq("id", folderId);
+    const now = new Date().toISOString();
+    const deletedBy = profile?.full_name || "Unknown";
+    await supabase
+      .from("folders")
+      .update({ deleted_at: now, deleted_by: deletedBy })
+      .eq("id", folderId);
+    await supabase
+      .from("tasks")
+      .update({ deleted_at: now, deleted_by: deletedBy })
+      .eq("folder_id", folderId);
     onSpaceCreated();
+  }
+
+  // ── Trash management ──
+  async function fetchTrash() {
+    setTrashLoading(true);
+    const [spacesRes, foldersRes, tasksRes] = await Promise.all([
+      supabase
+        .from("spaces")
+        .select("*")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false }),
+      supabase
+        .from("folders")
+        .select("*, spaces(name)")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false }),
+      supabase
+        .from("tasks")
+        .select("*")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false })
+        .limit(200),
+    ]);
+    setTrashedSpaces(spacesRes.data || []);
+    setTrashedFolders(foldersRes.data || []);
+    setTrashedTasks(tasksRes.data || []);
+    setTrashLoading(false);
+  }
+
+  async function restoreSpace(spaceId) {
+    await supabase
+      .from("spaces")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("id", spaceId);
+    // Restore folders/tasks that were deleted as part of this space (not ones independently deleted before)
+    await supabase
+      .from("folders")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("space_id", spaceId);
+    await supabase
+      .from("tasks")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("space_id", spaceId);
+    onSpaceCreated();
+    fetchTrash();
+  }
+
+  async function restoreFolder(folderId) {
+    await supabase
+      .from("folders")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("id", folderId);
+    await supabase
+      .from("tasks")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("folder_id", folderId);
+    onSpaceCreated();
+    fetchTrash();
+  }
+
+  async function restoreTask(taskId) {
+    await supabase
+      .from("tasks")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("id", taskId);
+    onSpaceCreated();
+    fetchTrash();
+  }
+
+  async function permanentlyDeleteSpace(spaceId, name) {
+    if (
+      !confirm(
+        `Permanently delete space "${name}" and everything inside it? This cannot be undone.`,
+      )
+    )
+      return;
+    await supabase.from("tasks").delete().eq("space_id", spaceId);
+    await supabase.from("folders").delete().eq("space_id", spaceId);
+    await supabase.from("space_fields").delete().eq("space_id", spaceId);
+    await supabase.from("space_statuses").delete().eq("space_id", spaceId);
+    await supabase.from("spaces").delete().eq("id", spaceId);
+    fetchTrash();
+  }
+
+  async function permanentlyDeleteFolder(folderId, name) {
+    if (
+      !confirm(
+        `Permanently delete folder "${name}" and its tasks? This cannot be undone.`,
+      )
+    )
+      return;
+    await supabase.from("tasks").delete().eq("folder_id", folderId);
+    await supabase.from("folders").delete().eq("id", folderId);
+    fetchTrash();
+  }
+
+  async function permanentlyDeleteTask(taskId, title) {
+    if (!confirm(`Permanently delete task "${title}"? This cannot be undone.`))
+      return;
+    await supabase.from("task_field_values").delete().eq("task_id", taskId);
+    await supabase.from("task_history").delete().eq("task_id", taskId);
+    await supabase.from("tasks").delete().eq("id", taskId);
+    fetchTrash();
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return "";
+    const diff = Date.now() - new Date(dateStr);
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 30) return `${days}d ago`;
+    return new Date(dateStr).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   }
 
   // ── Folder creation ──
@@ -440,17 +596,15 @@ export default function Sidebar({
           { name: "Done", color: "#16a34a" },
         ];
       }
-      await supabase
-        .from("space_statuses")
-        .insert(
-          statusesToSeed.map((s, i) => ({
-            space_id: spaceId,
-            folder_id: data.id,
-            name: s.name,
-            color: s.color,
-            status_order: i + 1,
-          })),
-        );
+      await supabase.from("space_statuses").insert(
+        statusesToSeed.map((s, i) => ({
+          space_id: spaceId,
+          folder_id: data.id,
+          name: s.name,
+          color: s.color,
+          status_order: i + 1,
+        })),
+      );
       setNewFolder("");
       setNewFolderDesc("");
       setFolderUseSpaceStatuses(true);
@@ -998,6 +1152,23 @@ export default function Sidebar({
             style={{ width: "100%", marginTop: 4 }}
           >
             + Add space
+          </button>
+          <button
+            className="add-btn-sidebar"
+            onClick={() => {
+              fetchTrash();
+              setShowTrashModal(true);
+            }}
+            style={{
+              width: "100%",
+              marginTop: 4,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              color: "#888",
+            }}
+          >
+            🗑 Trash
           </button>
         </div>
       </div>
@@ -2694,6 +2865,369 @@ export default function Sidebar({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── TRASH MODAL ── */}
+      {showTrashModal && (
+        <div
+          className="modal-overlay"
+          onClick={(e) =>
+            e.target === e.currentTarget && setShowTrashModal(false)
+          }
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 680,
+              maxHeight: "85vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div
+              style={{
+                padding: "18px 24px 14px",
+                borderBottom: "1px solid #f0f0f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                flexShrink: 0,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: "#1a1a1a",
+                    marginBottom: 2,
+                  }}
+                >
+                  🗑 Trash
+                </div>
+                <div style={{ fontSize: 12, color: "#888" }}>
+                  Deleted spaces, folders, and tasks — restore anytime
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTrashModal(false)}
+                style={{
+                  background: "#f5f5f4",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: 30,
+                  height: 30,
+                  cursor: "pointer",
+                  fontSize: 16,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#666",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{ flex: 1, overflowY: "auto", padding: "14px 24px 20px" }}
+            >
+              {trashLoading ? (
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#aaa",
+                    textAlign: "center",
+                    padding: "24px 0",
+                  }}
+                >
+                  Loading trash...
+                </div>
+              ) : trashedSpaces.length === 0 &&
+                trashedFolders.length === 0 &&
+                trashedTasks.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>🗑</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
+                    Trash is empty
+                  </div>
+                  <div style={{ fontSize: 12, color: "#aaa", marginTop: 4 }}>
+                    Deleted spaces, folders, and tasks will appear here
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {trashedSpaces.length > 0 && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#888",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Spaces ({trashedSpaces.length})
+                      </div>
+                      {trashedSpaces.map((sp) => (
+                        <div
+                          key={sp.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "9px 12px",
+                            background: "#fafaf9",
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span style={{ fontSize: 16 }}>
+                            {sp.icon || "🏢"}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#333",
+                              }}
+                            >
+                              {sp.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#aaa" }}>
+                              Deleted by {sp.deleted_by || "Unknown"} ·{" "}
+                              {timeAgo(sp.deleted_at)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => restoreSpace(sp.id)}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #1d4ed8",
+                              background: "#eff6ff",
+                              color: "#1d4ed8",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ↺ Restore
+                          </button>
+                          <button
+                            onClick={() =>
+                              permanentlyDeleteSpace(sp.id, sp.name)
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #fca5a5",
+                              background: "#fef2f2",
+                              color: "#b91c1c",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            Delete forever
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {trashedFolders.length > 0 && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#888",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Folders ({trashedFolders.length})
+                      </div>
+                      {trashedFolders.map((f) => (
+                        <div
+                          key={f.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "9px 12px",
+                            background: "#fafaf9",
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>📁</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#333",
+                              }}
+                            >
+                              {f.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#aaa" }}>
+                              {f.spaces?.name ? `In ${f.spaces.name} · ` : ""}
+                              Deleted by {f.deleted_by || "Unknown"} ·{" "}
+                              {timeAgo(f.deleted_at)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => restoreFolder(f.id)}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #1d4ed8",
+                              background: "#eff6ff",
+                              color: "#1d4ed8",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ↺ Restore
+                          </button>
+                          <button
+                            onClick={() =>
+                              permanentlyDeleteFolder(f.id, f.name)
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #fca5a5",
+                              background: "#fef2f2",
+                              color: "#b91c1c",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            Delete forever
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {trashedTasks.length > 0 && (
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#888",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Tasks ({trashedTasks.length}
+                        {trashedTasks.length === 200 ? "+" : ""})
+                      </div>
+                      {trashedTasks.map((t) => (
+                        <div
+                          key={t.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "9px 12px",
+                            background: "#fafaf9",
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>📋</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#333",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {t.title}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#aaa" }}>
+                              Deleted by {t.deleted_by || "Unknown"} ·{" "}
+                              {timeAgo(t.deleted_at)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => restoreTask(t.id)}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #1d4ed8",
+                              background: "#eff6ff",
+                              color: "#1d4ed8",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ↺ Restore
+                          </button>
+                          <button
+                            onClick={() => permanentlyDeleteTask(t.id, t.title)}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #fca5a5",
+                              background: "#fef2f2",
+                              color: "#b91c1c",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            Delete forever
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -451,6 +451,10 @@ export default function Wiki({ profile }) {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [articleHistory, setArticleHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [showTrashModal, setShowTrashModal] = useState(false);
+  const [trashedArticles, setTrashedArticles] = useState([]);
+  const [trashedCategories, setTrashedCategories] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
 
   const [newArticle, setNewArticle] = useState({
     title: "",
@@ -506,10 +510,15 @@ export default function Wiki({ profile }) {
 
   async function fetchAll() {
     const [catsRes, artsRes] = await Promise.all([
-      supabase.from("wiki_categories").select("*").order("category_order"),
+      supabase
+        .from("wiki_categories")
+        .select("*")
+        .is("deleted_at", null)
+        .order("category_order"),
       supabase
         .from("wiki_articles")
         .select("*")
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false }),
     ]);
     if (catsRes.data) {
@@ -525,6 +534,65 @@ export default function Wiki({ profile }) {
       });
     }
     if (artsRes.data) setArticles(artsRes.data);
+  }
+
+  // ── Trash management ──
+  async function fetchTrash() {
+    setTrashLoading(true);
+    const [artsRes, catsRes] = await Promise.all([
+      supabase
+        .from("wiki_articles")
+        .select("*")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false }),
+      supabase
+        .from("wiki_categories")
+        .select("*")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false }),
+    ]);
+    setTrashedArticles(artsRes.data || []);
+    setTrashedCategories(catsRes.data || []);
+    setTrashLoading(false);
+  }
+
+  async function restoreArticle(id) {
+    await supabase
+      .from("wiki_articles")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("id", id);
+    fetchAll();
+    fetchTrash();
+  }
+
+  async function restoreCategory(id) {
+    await supabase
+      .from("wiki_categories")
+      .update({ deleted_at: null, deleted_by: null })
+      .eq("id", id);
+    fetchAll();
+    fetchTrash();
+  }
+
+  async function permanentlyDeleteArticle(id, title) {
+    if (
+      !confirm(
+        `Permanently delete "${title}"? This cannot be undone — version history will also be lost.`,
+      )
+    )
+      return;
+    await supabase.from("wiki_history").delete().eq("article_id", id);
+    await supabase.from("wiki_articles").delete().eq("id", id);
+    fetchTrash();
+  }
+
+  async function permanentlyDeleteCategory(id, name) {
+    if (
+      !confirm(`Permanently delete category "${name}"? This cannot be undone.`)
+    )
+      return;
+    await supabase.from("wiki_categories").delete().eq("id", id);
+    fetchTrash();
   }
 
   async function saveArticle() {
@@ -595,8 +663,15 @@ export default function Wiki({ profile }) {
   }
 
   async function deleteArticle(id) {
-    if (!confirm("Delete this article?")) return;
-    await supabase.from("wiki_articles").delete().eq("id", id);
+    if (!confirm("Move this article to Trash? You can restore it later."))
+      return;
+    await supabase
+      .from("wiki_articles")
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: profile?.full_name || "Unknown",
+      })
+      .eq("id", id);
     if (activeArticle?.id === id) setActiveArticle(null);
     fetchAll();
   }
@@ -640,11 +715,17 @@ export default function Wiki({ profile }) {
   async function deleteCategory(id, name) {
     if (
       !confirm(
-        `Delete category "${name}"? Articles inside will become uncategorised.`,
+        `Move category "${name}" to Trash? Articles inside will become uncategorised. You can restore it later.`,
       )
     )
       return;
-    await supabase.from("wiki_categories").delete().eq("id", id);
+    await supabase
+      .from("wiki_categories")
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: profile?.full_name || "Unknown",
+      })
+      .eq("id", id);
     fetchAll();
   }
 
@@ -786,6 +867,29 @@ export default function Wiki({ profile }) {
             </span>
           </span>
           <div className="wiki-sidebar-actions">
+            <button
+              onClick={() => {
+                fetchTrash();
+                setShowTrashModal(true);
+              }}
+              title="Trash"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 28,
+                height: 28,
+                borderRadius: 7,
+                border: "1px solid #e0e0e0",
+                background: "#fff",
+                fontSize: 13,
+                cursor: "pointer",
+                color: "#888",
+                flexShrink: 0,
+              }}
+            >
+              🗑
+            </button>
             <button
               onClick={() => openNewCat()}
               style={{
@@ -1561,6 +1665,279 @@ export default function Wiki({ profile }) {
             </div>
           );
         })()}
+
+      {/* WIKI TRASH MODAL */}
+      {showTrashModal && (
+        <div
+          className="modal-overlay"
+          onClick={(e) =>
+            e.target === e.currentTarget && setShowTrashModal(false)
+          }
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              width: "100%",
+              maxWidth: 640,
+              maxHeight: "85vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              margin: "auto",
+            }}
+          >
+            <div
+              style={{
+                padding: "18px 24px 14px",
+                borderBottom: "1px solid #f0f0f0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                flexShrink: 0,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: "#1a1a1a",
+                    marginBottom: 2,
+                  }}
+                >
+                  🗑 Trash
+                </div>
+                <div style={{ fontSize: 12, color: "#888" }}>
+                  Deleted pages and categories — restore anytime
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTrashModal(false)}
+                style={{
+                  background: "#f5f5f4",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: 30,
+                  height: 30,
+                  cursor: "pointer",
+                  fontSize: 16,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#666",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "14px 24px 20px",
+              }}
+            >
+              {trashLoading ? (
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#aaa",
+                    textAlign: "center",
+                    padding: "24px 0",
+                  }}
+                >
+                  Loading trash...
+                </div>
+              ) : trashedArticles.length === 0 &&
+                trashedCategories.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>🗑</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
+                    Trash is empty
+                  </div>
+                  <div style={{ fontSize: 12, color: "#aaa", marginTop: 4 }}>
+                    Deleted pages and categories will appear here
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {trashedCategories.length > 0 && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#888",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Categories ({trashedCategories.length})
+                      </div>
+                      {trashedCategories.map((cat) => (
+                        <div
+                          key={cat.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "9px 12px",
+                            background: "#fafaf9",
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <IconFolder color="#9ca3af" size={14} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#333",
+                              }}
+                            >
+                              {cat.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#aaa" }}>
+                              Deleted by {cat.deleted_by || "Unknown"} ·{" "}
+                              {formatDate(cat.deleted_at)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => restoreCategory(cat.id)}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #1d4ed8",
+                              background: "#eff6ff",
+                              color: "#1d4ed8",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ↺ Restore
+                          </button>
+                          <button
+                            onClick={() =>
+                              permanentlyDeleteCategory(cat.id, cat.name)
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #fca5a5",
+                              background: "#fef2f2",
+                              color: "#b91c1c",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            Delete forever
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {trashedArticles.length > 0 && (
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#888",
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Pages ({trashedArticles.length})
+                      </div>
+                      {trashedArticles.map((art) => (
+                        <div
+                          key={art.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "9px 12px",
+                            background: "#fafaf9",
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <IconPage color="#9ca3af" size={14} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#333",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {art.title}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#aaa" }}>
+                              Deleted by {art.deleted_by || "Unknown"} ·{" "}
+                              {formatDate(art.deleted_at)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => restoreArticle(art.id)}
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #1d4ed8",
+                              background: "#eff6ff",
+                              color: "#1d4ed8",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            ↺ Restore
+                          </button>
+                          <button
+                            onClick={() =>
+                              permanentlyDeleteArticle(art.id, art.title)
+                            }
+                            style={{
+                              padding: "4px 12px",
+                              borderRadius: 6,
+                              border: "1px solid #fca5a5",
+                              background: "#fef2f2",
+                              color: "#b91c1c",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            Delete forever
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LINK TOOLTIP */}
       <div
