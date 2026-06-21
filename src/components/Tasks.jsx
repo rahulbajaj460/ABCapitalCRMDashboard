@@ -1619,7 +1619,6 @@ export default function Tasks({
         style={{
           flex: 1,
           overflowY: "auto",
-          overflowX: "hidden",
           display: "flex",
           flexDirection: "column",
           minWidth: 0,
