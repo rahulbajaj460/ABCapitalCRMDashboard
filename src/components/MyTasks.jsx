@@ -12,17 +12,31 @@ export default function MyTasks({ profile }) {
   async function fetchMyTasks() {
     if (!profile) return;
     setLoading(true);
+    // Match either the legacy single assignee_id OR if the user's name
+    // appears anywhere in the assignees array — so tasks with multiple
+    // assignees show up for every co-assignee, not just the "primary" one.
+    const nameFilter = profile.full_name
+      ? `,assignees.cs.{${profile.full_name}}`
+      : "";
     const { data } = await supabase
       .from("tasks")
       .select("*, task_field_values(*)")
-      .eq("assignee_id", profile.id)
+      .is("deleted_at", null)
+      .or(`assignee_id.eq.${profile.id}${nameFilter}`)
       .order("due_date", { ascending: true, nullsFirst: false });
     if (data) setTasks(data);
     setLoading(false);
   }
 
   async function updateStatus(taskId, newStatus) {
-    await supabase.from("tasks").update({ status: newStatus }).eq("id", taskId);
+    await supabase
+      .from("tasks")
+      .update({
+        status: newStatus,
+        updated_by: profile?.full_name || "Unknown",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", taskId);
     fetchMyTasks();
   }
 
@@ -74,81 +88,118 @@ export default function MyTasks({ profile }) {
             background: "#fff",
             border: "1px solid #e8e8e8",
             borderRadius: 8,
-            overflow: "hidden",
+            overflowX: "auto",
           }}
         >
-          <table className="task-table">
+          <table
+            className="task-table"
+            style={{ width: "100%", borderCollapse: "collapse" }}
+          >
             <thead>
               <tr>
-                <th>Task</th>
-                <th>Priority</th>
-                <th>Due date</th>
-                <th>Status</th>
+                <th style={thStyle}>Task</th>
+                <th style={thStyle}>Priority</th>
+                <th style={thStyle}>Assignees</th>
+                <th style={thStyle}>Due date</th>
+                <th style={thStyle}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {groupTasks.map((task) => (
-                <tr key={task.id}>
-                  <td>
-                    <div style={{ fontWeight: 500 }}>{task.title}</div>
-                    {task.description && (
-                      <div
-                        style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}
-                      >
-                        {task.description.slice(0, 60)}
-                        {task.description.length > 60 ? "..." : ""}
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <span
-                      className="badge"
-                      style={getPriorityStyle(task.priority)}
-                    >
-                      {task.priority}
-                    </span>
-                  </td>
-                  <td
-                    style={{
-                      fontSize: 12,
-                      color:
-                        task.due_date &&
-                        new Date(task.due_date) < new Date() &&
-                        task.status !== "Done"
-                          ? "#b91c1c"
-                          : "#555",
-                      fontWeight:
-                        task.due_date &&
-                        new Date(task.due_date) < new Date() &&
-                        task.status !== "Done"
-                          ? 600
-                          : 400,
-                    }}
-                  >
-                    {task.due_date
-                      ? new Date(task.due_date) < new Date() &&
-                        task.status !== "Done"
-                        ? `⚠️ ${task.due_date}`
-                        : task.due_date
-                      : "—"}
-                  </td>
-                  <td>
-                    <select
-                      value={task.status}
-                      onChange={(e) => updateStatus(task.id, e.target.value)}
-                      style={{ fontSize: 11, padding: "3px 6px" }}
-                    >
-                      {["To Do", "In Progress", "In Review", "Done"].map(
-                        (s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ),
+              {groupTasks.map((task) => {
+                const isOverdue =
+                  task.due_date &&
+                  new Date(task.due_date) < new Date() &&
+                  task.status !== "Done";
+                const allAssignees =
+                  task.assignees?.length > 0
+                    ? task.assignees
+                    : task.assignee
+                      ? [task.assignee]
+                      : [];
+                return (
+                  <tr key={task.id}>
+                    <td style={tdStyle}>
+                      <div style={{ fontWeight: 500 }}>{task.title}</div>
+                      {task.description && (
+                        <div
+                          style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}
+                        >
+                          {task.description.slice(0, 60)}
+                          {task.description.length > 60 ? "..." : ""}
+                        </div>
                       )}
-                    </select>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={tdStyle}>
+                      <span
+                        className="badge"
+                        style={getPriorityStyle(task.priority)}
+                      >
+                        {task.priority}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>
+                      <div
+                        style={{ display: "flex", flexWrap: "wrap", gap: 4 }}
+                      >
+                        {allAssignees.length > 0 ? (
+                          allAssignees.map((name) => (
+                            <span
+                              key={name}
+                              style={{
+                                background:
+                                  name === profile?.full_name
+                                    ? "#eff6ff"
+                                    : "#f0f0ef",
+                                color:
+                                  name === profile?.full_name
+                                    ? "#1d4ed8"
+                                    : "#555",
+                                borderRadius: 20,
+                                padding: "1px 8px",
+                                fontSize: 11,
+                                fontWeight: 500,
+                              }}
+                            >
+                              {name}
+                            </span>
+                          ))
+                        ) : (
+                          <span style={{ color: "#ccc" }}>—</span>
+                        )}
+                      </div>
+                    </td>
+                    <td
+                      style={{
+                        ...tdStyle,
+                        fontSize: 12,
+                        color: isOverdue ? "#b91c1c" : "#555",
+                        fontWeight: isOverdue ? 600 : 400,
+                      }}
+                    >
+                      {task.due_date
+                        ? isOverdue
+                          ? `⚠️ ${task.due_date}`
+                          : task.due_date
+                        : "—"}
+                    </td>
+                    <td style={tdStyle}>
+                      <select
+                        value={task.status}
+                        onChange={(e) => updateStatus(task.id, e.target.value)}
+                        style={{ fontSize: 11, padding: "3px 6px" }}
+                      >
+                        {["To Do", "In Progress", "In Review", "Done"].map(
+                          (s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -175,7 +226,11 @@ export default function MyTasks({ profile }) {
           </div>
         ) : tasks.length === 0 ? (
           <div
-            style={{ textAlign: "center", padding: "60px 20px", color: "#aaa" }}
+            style={{
+              textAlign: "center",
+              padding: "60px 20px",
+              color: "#aaa",
+            }}
           >
             <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
             <div style={{ fontSize: 14 }}>No tasks assigned to you yet</div>
@@ -197,3 +252,23 @@ export default function MyTasks({ profile }) {
     </div>
   );
 }
+
+const thStyle = {
+  textAlign: "left",
+  padding: "10px 14px",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#999",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  borderBottom: "1px solid #ebebeb",
+  background: "#fafaf9",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle = {
+  padding: "10px 14px",
+  borderBottom: "1px solid #f0f0f0",
+  verticalAlign: "middle",
+  fontSize: 13,
+};
