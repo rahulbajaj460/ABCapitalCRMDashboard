@@ -361,7 +361,15 @@ export default function Tasks({
       .order("created_at", { ascending: false });
     if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
-    if (profile?.role === "member") q = q.eq("assignee_id", profile.id);
+    if (profile?.role === "member") {
+      // Match either the legacy single assignee_id OR if the member's
+      // name appears anywhere in the assignees array (multi-assignee
+      // tasks), so co-assigned members aren't hidden from their own list.
+      const nameFilter = profile.full_name
+        ? `,assignees.cs.{${profile.full_name}}`
+        : "";
+      q = q.or(`assignee_id.eq.${profile.id}${nameFilter}`);
+    }
     const { data } = await q;
     if (data) {
       setTasks(data);
@@ -651,6 +659,28 @@ export default function Tasks({
     return true;
   });
 
+  // Group tasks by their exact assignee combination — a task with
+  // [Garima, Aishwaraya] gets its own "Garima, Aishwaraya" group rather
+  // than being duplicated into each person's individual group. Matches
+  // ClickUp's behavior. Single-assignee and unassigned tasks behave as
+  // before, just each in their own single-person/Unassigned group.
+  function groupByAssignees(taskList) {
+    const g = {};
+    taskList.forEach((task) => {
+      const names =
+        task.assignees?.length > 0
+          ? [...task.assignees]
+          : task.assignee
+            ? [task.assignee]
+            : [];
+      const key =
+        names.length > 0 ? [...names].sort().join(", ") : "Unassigned";
+      if (!g[key]) g[key] = [];
+      g[key].push(task);
+    });
+    return g;
+  }
+
   function getGroupedTasks() {
     const tl = filteredTasks;
     let result;
@@ -668,19 +698,7 @@ export default function Tasks({
       if (ug.length > 0) g["No folder"] = ug;
       result = g;
     } else if (groupBy === "assignee") {
-      const g = {};
-      tl.forEach((task) => {
-        const names =
-          task.assignees?.length > 0
-            ? task.assignees
-            : task.assignee
-              ? [task.assignee]
-              : ["Unassigned"];
-        names.forEach((n) => {
-          if (!g[n]) g[n] = [];
-          g[n].push(task);
-        });
-      });
+      const g = groupByAssignees(tl);
       result = Object.fromEntries(
         Object.entries(g).sort(([a], [b]) => a.localeCompare(b)),
       );
@@ -829,7 +847,12 @@ export default function Tasks({
       .order("created_at", { ascending: false });
     if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
-    if (profile?.role === "member") q = q.eq("assignee_id", profile.id);
+    if (profile?.role === "member") {
+      const nameFilter = profile.full_name
+        ? `,assignees.cs.{${profile.full_name}}`
+        : "";
+      q = q.or(`assignee_id.eq.${profile.id}${nameFilter}`);
+    }
     const { data: refreshed } = await q;
     if (refreshed) {
       setTasks(refreshed);
@@ -1918,19 +1941,7 @@ export default function Tasks({
                                 return acc;
                               }, {})
                             : groupBy === "assignee"
-                              ? filteredFolderTasks.reduce((acc, task) => {
-                                  const names =
-                                    task.assignees?.length > 0
-                                      ? task.assignees
-                                      : task.assignee
-                                        ? [task.assignee]
-                                        : ["Unassigned"];
-                                  names.forEach((n) => {
-                                    if (!acc[n]) acc[n] = [];
-                                    acc[n].push(task);
-                                  });
-                                  return acc;
-                                }, {})
+                              ? groupByAssignees(filteredFolderTasks)
                               : { "All tasks": filteredFolderTasks };
                       const grouped = Object.fromEntries(
                         Object.entries(groupedRaw).map(([k, v]) => [
