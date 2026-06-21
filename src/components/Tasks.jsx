@@ -1946,7 +1946,6 @@ export default function Tasks({
                             border: "1px solid #e8e8e8",
                             borderRadius: 8,
                             marginBottom: 16,
-                            overflow: "hidden",
                           }}
                         >
                           <div
@@ -2126,7 +2125,6 @@ export default function Tasks({
                             border: "1px solid #e8e8e8",
                             borderRadius: 8,
                             marginBottom: 16,
-                            overflow: "hidden",
                           }}
                         >
                           <div
@@ -2234,7 +2232,6 @@ export default function Tasks({
                                   background: "#fff",
                                   border: "1px solid #e8e8e8",
                                   borderRadius: 8,
-                                  overflow: "hidden",
                                   marginTop: 4,
                                 }}
                               >
