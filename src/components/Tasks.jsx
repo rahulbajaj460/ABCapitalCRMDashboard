@@ -380,6 +380,85 @@ export default function Tasks({
     }
   }
 
+  // ── Export tasks to CSV ──
+  // Mirrors the columns the CSV import understands, so a file exported
+  // here can be re-imported (or imported into another folder) without
+  // needing to remap anything.
+  function csvEscape(val) {
+    if (val === null || val === undefined) return "";
+    const s = String(val);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  }
+
+  function exportTasksToCSV() {
+    const fieldList = getFields();
+    const exportTasks = filteredTasks; // respects current search + status filter
+
+    const headers = [
+      "Task Name",
+      "Status",
+      "Priority",
+      "Assignee",
+      "Due Date",
+      "Date Created",
+      "Date Done",
+      "Date Closed",
+      "Date Updated",
+      "Description",
+      ...fieldList.map((f) => f.field_name),
+    ];
+
+    const rows = exportTasks.map((task) => {
+      const assigneeStr = (
+        task.assignees?.length > 0
+          ? task.assignees
+          : task.assignee
+            ? [task.assignee]
+            : []
+      ).join(", ");
+
+      const customValues = fieldList.map((f) => {
+        if (f.field_type === "formula") return computeFormula(f, task) || "";
+        const fv = task.task_field_values?.find((v) => v.field_id === f.id);
+        return fv?.value || "";
+      });
+
+      return [
+        task.title || "",
+        task.status || "",
+        task.priority || "",
+        assigneeStr,
+        task.due_date || "",
+        task.created_at ? task.created_at.split("T")[0] : "",
+        task.date_done || "",
+        task.date_closed || "",
+        task.date_updated_manual || "",
+        task.description || "",
+        ...customValues,
+      ];
+    });
+
+    const csvLines = [headers, ...rows].map((row) =>
+      row.map(csvEscape).join(","),
+    );
+    const csvContent = csvLines.join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const scopeName = activeFolder?.name || activeSpace?.name || "tasks";
+    const dateStr = new Date().toISOString().split("T")[0];
+    link.href = url;
+    link.download = `${scopeName.replace(/[^a-z0-9]+/gi, "_")}_export_${dateStr}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   async function fetchTaskHistory(taskId) {
     setHistoryLoading(true);
     const { data } = await supabase
@@ -1727,6 +1806,9 @@ export default function Tasks({
             )}
             <button className="btn btn-sm" onClick={() => setShowImport(true)}>
               ⬆ Import CSV
+            </button>
+            <button className="btn btn-sm" onClick={exportTasksToCSV}>
+              ⬇ Export CSV
             </button>
             <button className="btn btn-primary" onClick={openNewTask}>
               + New Task
