@@ -1174,13 +1174,22 @@ export default function Tasks({
     setShowNewTaskModal(true);
   }
 
-  function GridHeaderCell({ colKey, resizeKey, label, sortable, indented }) {
+  function GridHeaderCell({
+    colKey,
+    resizeKey,
+    label,
+    sortable,
+    indented,
+    sticky,
+  }) {
     const isActive = sortConfig.key === colKey;
     const widthKey = resizeKey || colKey;
     return (
       <div
         style={{
-          position: "relative",
+          position: sticky ? "sticky" : "relative",
+          left: sticky ? 0 : undefined,
+          zIndex: sticky ? 3 : undefined,
           display: "flex",
           alignItems: "center",
           padding: "10px 14px",
@@ -1191,7 +1200,9 @@ export default function Tasks({
           textTransform: "uppercase",
           letterSpacing: "0.05em",
           borderBottom: "1px solid #ebebeb",
+          borderRight: sticky ? "1px solid #ebebeb" : undefined,
           background: "#fafaf9",
+          boxShadow: sticky ? "2px 0 4px -2px rgba(0,0,0,0.08)" : undefined,
           cursor: sortable ? "pointer" : "default",
           userSelect: "none",
           overflow: "hidden",
@@ -1261,6 +1272,7 @@ export default function Tasks({
           label="Name"
           sortable
           indented={indented}
+          sticky
         />
         {groupBy !== "status" && (
           <div
@@ -1473,12 +1485,19 @@ export default function Tasks({
         className="task-grid-row"
       >
         <div
+          className="task-name-cell"
           style={{
             ...cellStyle,
             paddingLeft: folderCtx ? 32 : 14,
             flexDirection: "column",
             alignItems: "flex-start",
             justifyContent: "center",
+            position: "sticky",
+            left: 0,
+            zIndex: 1,
+            background: isActive ? "#f0f7ff" : undefined,
+            borderRight: "1px solid #f0f0f0",
+            boxShadow: "2px 0 4px -2px rgba(0,0,0,0.06)",
           }}
         >
           <span

@@ -417,6 +417,12 @@ textarea:focus {
 .task-grid-row:hover {
   background: #fafaf9;
 }
+.task-name-cell {
+  background: #fff;
+}
+.task-grid-row:hover .task-name-cell {
+  background: #fafaf9;
+}
 .task-row-actions {
   display: flex;
   gap: 4px;
