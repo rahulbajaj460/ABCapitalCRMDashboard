@@ -386,10 +386,12 @@ textarea:focus {
   margin-top: 4px;
 }
 
-/* ─── Task table ─── */
+/* ─── Task table (CSS Grid based) ─── */
 /* Single page-level horizontal scroll wraps the entire List view (all
-   folder sections, status groups, etc.) so every table's columns scroll
-   together in sync, instead of each section having its own scrollbar. */
+   folder sections, status groups, etc.) so every group's grid uses the
+   exact same column widths (from columnWidths state) and they all line
+   up and scroll together in sync — no more independent <table> auto-layout
+   per group causing misaligned columns between e.g. "To Do" and "Done". */
 .task-table-scroll {
   width: 100%;
   overflow-x: auto;
@@ -411,43 +413,7 @@ textarea:focus {
   background: transparent;
 }
 
-.task-table {
-  width: 100%;
-  min-width: max-content;
-  border-collapse: collapse;
-}
-.task-table th {
-  text-align: left;
-  padding: 10px 14px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #999;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid #ebebeb;
-  background: #fafaf9;
-  white-space: nowrap;
-}
-.task-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid #f0f0f0;
-  vertical-align: middle;
-  font-size: 13px;
-}
-/* Name column stays readable width and wraps; every other column hugs its
-   content and never shrinks below it, so values like long dates/usernames
-   don't get crushed — the table just scrolls right instead. */
-.task-table th:first-child,
-.task-table td:first-child {
-  min-width: 220px;
-  max-width: 320px;
-  white-space: normal;
-}
-.task-table th:not(:first-child),
-.task-table td:not(:first-child) {
-  white-space: nowrap;
-}
-.task-table tr:hover td {
+.task-grid-row:hover {
   background: #fafaf9;
 }
 .task-row-actions {

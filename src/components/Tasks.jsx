@@ -172,6 +172,112 @@ export default function Tasks({
     }
   });
 
+  // Column widths in px — shared across every group's table so columns
+  // always line up, and resizable by dragging the handle on each header.
+  const DEFAULT_COLUMN_WIDTHS = {
+    name: 280,
+    status_inline: 110,
+    priority: 110,
+    assignees: 160,
+    due_date: 120,
+    date_done: 120,
+    date_closed: 120,
+    date_updated_manual: 120,
+    status_select: 150,
+    actions: 60,
+  };
+  const [columnWidths, setColumnWidths] = useState(() => {
+    try {
+      const s = localStorage.getItem("abc_column_widths");
+      return s
+        ? { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(s) }
+        : { ...DEFAULT_COLUMN_WIDTHS };
+    } catch {
+      return { ...DEFAULT_COLUMN_WIDTHS };
+    }
+  });
+  const resizingCol = useRef(null);
+
+  function getColWidth(key) {
+    return columnWidths[key] || DEFAULT_COLUMN_WIDTHS[key] || 120;
+  }
+
+  // Single source of truth for which data columns are active and in what
+  // order — used by the header, every row, and the grid-template-columns
+  // string, so all three always agree and stay aligned across every group.
+  function getActiveColumns(fieldList) {
+    const cols = [];
+    if (visibleColumns.includes("priority"))
+      cols.push({ key: "priority", label: "Priority", sortable: true });
+    if (visibleColumns.includes("assignees"))
+      cols.push({ key: "assignees", label: "Assignees", sortable: true });
+    if (visibleColumns.includes("due_date"))
+      cols.push({ key: "due_date", label: "Due date", sortable: true });
+    if (visibleColumns.includes("date_done"))
+      cols.push({ key: "date_done", label: "Date Done", sortable: true });
+    if (visibleColumns.includes("date_closed"))
+      cols.push({ key: "date_closed", label: "Date Closed", sortable: true });
+    if (visibleColumns.includes("date_updated_manual"))
+      cols.push({
+        key: "date_updated_manual",
+        label: "Date Updated",
+        sortable: true,
+      });
+    fieldList
+      .filter((f) => visibleColumns.includes(`field_${f.id}`))
+      .forEach((f) =>
+        cols.push({
+          key: `field_${f.id}`,
+          label: f.field_name,
+          sortable: true,
+          field: f,
+        }),
+      );
+    return cols;
+  }
+
+  function buildGridTemplate(fieldList, indented) {
+    const activeCols = getActiveColumns(fieldList);
+    const parts = [];
+    parts.push(
+      `${getColWidth("name")}px`,
+      ...(groupBy !== "status" ? [`${getColWidth("status_inline")}px`] : []),
+      ...activeCols.map((c) => `${getColWidth(c.key)}px`),
+      `${getColWidth("status_select")}px`,
+      `${getColWidth("actions")}px`,
+    );
+    return parts.join(" ");
+  }
+
+  function persistColumnWidths(next) {
+    setColumnWidths(next);
+    localStorage.setItem("abc_column_widths", JSON.stringify(next));
+  }
+
+  function startColumnResize(key, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = getColWidth(key);
+    resizingCol.current = key;
+    function onMove(ev) {
+      const delta = ev.clientX - startX;
+      const newWidth = Math.max(60, startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [key]: newWidth }));
+    }
+    function onUp() {
+      resizingCol.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      setColumnWidths((prev) => {
+        localStorage.setItem("abc_column_widths", JSON.stringify(prev));
+        return prev;
+      });
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   // Drawer
   const [drawerTask, setDrawerTask] = useState(null);
   const [drawerEdits, setDrawerEdits] = useState({});
@@ -1068,102 +1174,325 @@ export default function Tasks({
     setShowNewTaskModal(true);
   }
 
-  function SortableHeader({ sortKey, children, style }) {
-    const isActive = sortConfig.key === sortKey;
+  function GridHeaderCell({ colKey, label, sortable, indented, isFirst }) {
+    const isActive = sortConfig.key === colKey;
     return (
-      <th
-        onClick={() => handleSort(sortKey)}
+      <div
         style={{
-          cursor: "pointer",
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          padding: "10px 14px",
+          paddingLeft: indented ? 32 : 14,
+          fontSize: 11,
+          fontWeight: 700,
+          color: isActive ? "#1d4ed8" : "#999",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          borderBottom: "1px solid #ebebeb",
+          background: "#fafaf9",
+          cursor: sortable ? "pointer" : "default",
           userSelect: "none",
-          color: isActive ? "#1d4ed8" : undefined,
-          ...style,
+          overflow: "hidden",
+          whiteSpace: "nowrap",
         }}
-        title="Click to sort"
+        onClick={sortable ? () => handleSort(colKey) : undefined}
+        title={sortable ? "Click to sort" : undefined}
       >
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-          {children}
-          <span
-            style={{
-              fontSize: 10,
-              color: isActive ? "#1d4ed8" : "#ccc",
-              opacity: isActive ? 1 : 0.6,
-            }}
-          >
-            {isActive ? (sortConfig.direction === "asc" ? "▲" : "▼") : "↕"}
-          </span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+          {sortable && (
+            <span
+              style={{
+                fontSize: 10,
+                color: isActive ? "#1d4ed8" : "#ccc",
+                opacity: isActive ? 1 : 0.6,
+                flexShrink: 0,
+              }}
+            >
+              {isActive ? (sortConfig.direction === "asc" ? "▲" : "▼") : "↕"}
+            </span>
+          )}
         </span>
-      </th>
+        {/* Resize handle */}
+        <div
+          onMouseDown={(e) => startColumnResize(colKey, e)}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 6,
+            cursor: "col-resize",
+            zIndex: 2,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#bfdbfe")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+        />
+      </div>
     );
   }
 
   function renderTableHead(fieldList, indented = false) {
+    const activeCols = getActiveColumns(fieldList);
+    const gridTemplate = buildGridTemplate(fieldList, indented);
     return (
-      <thead>
-        <tr>
-          <SortableHeader
-            sortKey="title"
-            style={indented ? { paddingLeft: 32 } : {}}
+      <div style={{ display: "grid", gridTemplateColumns: gridTemplate }}>
+        <GridHeaderCell
+          colKey="title"
+          label="Name"
+          sortable
+          indented={indented}
+        />
+        {groupBy !== "status" && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "10px 14px",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#999",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              borderBottom: "1px solid #ebebeb",
+              background: "#fafaf9",
+            }}
           >
-            Name
-          </SortableHeader>
-          {groupBy !== "status" && <th>Status</th>}
-          {visibleColumns.includes("priority") && (
-            <SortableHeader sortKey="priority">Priority</SortableHeader>
-          )}
-          {visibleColumns.includes("assignees") && (
-            <SortableHeader sortKey="assignees">Assignees</SortableHeader>
-          )}
-          {visibleColumns.includes("due_date") && (
-            <SortableHeader sortKey="due_date">Due date</SortableHeader>
-          )}
-          {visibleColumns.includes("date_done") && (
-            <SortableHeader sortKey="date_done">Date Done</SortableHeader>
-          )}
-          {visibleColumns.includes("date_closed") && (
-            <SortableHeader sortKey="date_closed">Date Closed</SortableHeader>
-          )}
-          {visibleColumns.includes("date_updated_manual") && (
-            <SortableHeader sortKey="date_updated_manual">
-              Date Updated
-            </SortableHeader>
-          )}
-          {fieldList
-            .filter((f) => visibleColumns.includes(`field_${f.id}`))
-            .map((f) => (
-              <SortableHeader key={f.id} sortKey={`field_${f.id}`}>
-                {f.field_name}
-              </SortableHeader>
-            ))}
-          <th style={{ minWidth: 140 }}>Status</th>
-          <th style={{ width: 60 }}></th>
-        </tr>
-      </thead>
+            Status
+          </div>
+        )}
+        {activeCols.map((c) => (
+          <GridHeaderCell
+            key={c.key}
+            colKey={c.key}
+            label={c.label}
+            sortable={c.sortable}
+          />
+        ))}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "10px 14px",
+            fontSize: 11,
+            fontWeight: 700,
+            color: "#999",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            borderBottom: "1px solid #ebebeb",
+            background: "#fafaf9",
+          }}
+        >
+          Status
+        </div>
+        <div
+          style={{
+            borderBottom: "1px solid #ebebeb",
+            background: "#fafaf9",
+          }}
+        />
+      </div>
     );
+  }
+
+  function renderColumnCell(colKey, task, fieldList) {
+    const isOverdue =
+      task.due_date &&
+      new Date(task.due_date) < new Date() &&
+      task.status !== "Done";
+    if (colKey === "priority")
+      return (
+        <span className="badge" style={getPriorityStyle(task.priority)}>
+          {task.priority}
+        </span>
+      );
+    if (colKey === "assignees")
+      return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+          {(task.assignees?.length > 0
+            ? task.assignees
+            : task.assignee
+              ? [task.assignee]
+              : []
+          ).map((name) => (
+            <span
+              key={name}
+              style={{
+                background: "#f0f0ef",
+                borderRadius: 20,
+                padding: "1px 7px",
+                fontSize: 11,
+                fontWeight: 500,
+              }}
+            >
+              {name}
+            </span>
+          ))}
+          {!task.assignees?.length && !task.assignee && "—"}
+        </div>
+      );
+    if (colKey === "due_date")
+      return (
+        <span
+          style={{
+            fontSize: 12,
+            color: isOverdue ? "#b91c1c" : "#555",
+            fontWeight: isOverdue ? 600 : 400,
+          }}
+        >
+          {task.due_date
+            ? isOverdue
+              ? `⚠️ ${task.due_date}`
+              : task.due_date
+            : "—"}
+        </span>
+      );
+    if (colKey === "date_done")
+      return (
+        <span style={{ fontSize: 12, color: "#555" }}>
+          {task.date_done || "—"}
+        </span>
+      );
+    if (colKey === "date_closed")
+      return (
+        <span style={{ fontSize: 12, color: "#555" }}>
+          {task.date_closed || "—"}
+        </span>
+      );
+    if (colKey === "date_updated_manual")
+      return (
+        <span style={{ fontSize: 12, color: "#555" }}>
+          {task.date_updated_manual || "—"}
+        </span>
+      );
+    if (colKey.startsWith("field_")) {
+      const fieldId = colKey.replace("field_", "");
+      const f = fieldList.find((ff) => ff.id === fieldId);
+      if (!f) return "—";
+      const fv = task.task_field_values?.find((v) => v.field_id === f.id);
+      if (f.field_type === "formula")
+        return (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#7c3aed",
+              background: "#faf5ff",
+              borderRadius: 20,
+              padding: "1px 8px",
+            }}
+          >
+            ƒ {computeFormula(f, task)}
+          </span>
+        );
+      if (!fv?.value) return "—";
+      if (f.field_type === "dropdown")
+        return (
+          <span
+            style={{
+              background: "#f0f0ef",
+              borderRadius: 20,
+              padding: "1px 8px",
+              fontSize: 11,
+              fontWeight: 500,
+            }}
+          >
+            {fv.value}
+          </span>
+        );
+      if (f.field_type === "username")
+        return (
+          <span
+            style={{
+              background: members.some((m) => m.full_name === fv.value)
+                ? "#eff6ff"
+                : "#f0f0ef",
+              color: members.some((m) => m.full_name === fv.value)
+                ? "#1d4ed8"
+                : "#555",
+              borderRadius: 20,
+              padding: "1px 8px",
+              fontSize: 11,
+              fontWeight: 500,
+            }}
+          >
+            {fv.value}
+          </span>
+        );
+      return <span style={{ fontSize: 12, color: "#555" }}>{fv.value}</span>;
+    }
+    return "—";
   }
 
   function renderTaskRow(task, statusList, fieldList, folderCtx = null) {
     const statusColor = folderCtx
       ? getStatusColorForFolder(task.status, folderCtx)
       : getStatusColor(task.status);
-    const isOverdue =
-      task.due_date &&
-      new Date(task.due_date) < new Date() &&
-      task.status !== "Done";
     const isActive = drawerTask?.id === task.id;
+    const activeCols = getActiveColumns(fieldList);
+    const gridTemplate = buildGridTemplate(fieldList, !!folderCtx);
+    const cellStyle = {
+      display: "flex",
+      alignItems: "center",
+      padding: "10px 14px",
+      borderBottom: "1px solid #f0f0f0",
+      fontSize: 13,
+      overflow: "hidden",
+    };
     return (
-      <tr
+      <div
         key={task.id}
         style={{
+          display: "grid",
+          gridTemplateColumns: gridTemplate,
           background: isActive ? "#f0f7ff" : undefined,
           cursor: "pointer",
         }}
         onClick={() => openDrawer(task)}
+        className="task-grid-row"
       >
-        <td style={folderCtx ? { paddingLeft: 32 } : {}}>
-          <span style={{ fontWeight: 500 }}>{task.title}</span>
+        <div
+          style={{
+            ...cellStyle,
+            paddingLeft: folderCtx ? 32 : 14,
+            flexDirection: "column",
+            alignItems: "flex-start",
+            justifyContent: "center",
+          }}
+        >
+          <span
+            style={{
+              fontWeight: 500,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              maxWidth: "100%",
+            }}
+          >
+            {task.title}
+          </span>
           {task.description && (
-            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: "#aaa",
+                marginTop: 2,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: "100%",
+              }}
+            >
               {task.description.slice(0, 60)}
               {task.description.length > 60 ? "..." : ""}
             </div>
@@ -1173,147 +1502,27 @@ export default function Tasks({
               ✎ {task.updated_by} · {timeAgo(task.updated_at)}
             </div>
           )}
-        </td>
+        </div>
         {groupBy !== "status" && (
-          <td>
+          <div style={cellStyle}>
             <span
               className="badge"
               style={{ background: statusColor + "22", color: statusColor }}
             >
               {task.status}
             </span>
-          </td>
+          </div>
         )}
-        {visibleColumns.includes("priority") && (
-          <td>
-            <span className="badge" style={getPriorityStyle(task.priority)}>
-              {task.priority}
-            </span>
-          </td>
-        )}
-        {visibleColumns.includes("assignees") && (
-          <td>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-              {(task.assignees?.length > 0
-                ? task.assignees
-                : task.assignee
-                  ? [task.assignee]
-                  : []
-              ).map((name) => (
-                <span
-                  key={name}
-                  style={{
-                    background: "#f0f0ef",
-                    borderRadius: 20,
-                    padding: "1px 7px",
-                    fontSize: 11,
-                    fontWeight: 500,
-                  }}
-                >
-                  {name}
-                </span>
-              ))}
-              {!task.assignees?.length && !task.assignee && "—"}
-            </div>
-          </td>
-        )}
-        {visibleColumns.includes("due_date") && (
-          <td
-            style={{
-              fontSize: 12,
-              color: isOverdue ? "#b91c1c" : "#555",
-              fontWeight: isOverdue ? 600 : 400,
-            }}
-          >
-            {task.due_date
-              ? isOverdue
-                ? `⚠️ ${task.due_date}`
-                : task.due_date
-              : "—"}
-          </td>
-        )}
-        {visibleColumns.includes("date_done") && (
-          <td style={{ fontSize: 12, color: "#555" }}>
-            {task.date_done || "—"}
-          </td>
-        )}
-        {visibleColumns.includes("date_closed") && (
-          <td style={{ fontSize: 12, color: "#555" }}>
-            {task.date_closed || "—"}
-          </td>
-        )}
-        {visibleColumns.includes("date_updated_manual") && (
-          <td style={{ fontSize: 12, color: "#555" }}>
-            {task.date_updated_manual || "—"}
-          </td>
-        )}
-        {fieldList
-          .filter((f) => visibleColumns.includes(`field_${f.id}`))
-          .map((f) => {
-            const fv = task.task_field_values?.find((v) => v.field_id === f.id);
-            return (
-              <td key={f.id}>
-                {f.field_type === "formula" ? (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "#7c3aed",
-                      background: "#faf5ff",
-                      borderRadius: 20,
-                      padding: "1px 8px",
-                    }}
-                  >
-                    ƒ {computeFormula(f, task)}
-                  </span>
-                ) : fv?.value ? (
-                  f.field_type === "dropdown" ? (
-                    <span
-                      style={{
-                        background: "#f0f0ef",
-                        borderRadius: 20,
-                        padding: "1px 8px",
-                        fontSize: 11,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {fv.value}
-                    </span>
-                  ) : f.field_type === "username" ? (
-                    <span
-                      style={{
-                        background: members.some(
-                          (m) => m.full_name === fv.value,
-                        )
-                          ? "#eff6ff"
-                          : "#f0f0ef",
-                        color: members.some((m) => m.full_name === fv.value)
-                          ? "#1d4ed8"
-                          : "#555",
-                        borderRadius: 20,
-                        padding: "1px 8px",
-                        fontSize: 11,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {fv.value}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 12, color: "#555" }}>
-                      {fv.value}
-                    </span>
-                  )
-                ) : (
-                  "—"
-                )}
-              </td>
-            );
-          })}
-        <td style={{ minWidth: 140 }} onClick={(e) => e.stopPropagation()}>
+        {activeCols.map((c) => (
+          <div key={c.key} style={cellStyle}>
+            {renderColumnCell(c.key, task, fieldList)}
+          </div>
+        ))}
+        <div style={cellStyle} onClick={(e) => e.stopPropagation()}>
           <select
             value={task.status}
             onChange={(e) => updateTaskStatus(task.id, e.target.value)}
-            style={{ fontSize: 11, padding: "3px 6px" }}
+            style={{ fontSize: 11, padding: "3px 6px", width: "100%" }}
           >
             {statusList.map((s) => (
               <option key={s} value={s}>
@@ -1321,8 +1530,8 @@ export default function Tasks({
               </option>
             ))}
           </select>
-        </td>
-        <td style={{ width: 60 }} onClick={(e) => e.stopPropagation()}>
+        </div>
+        <div style={cellStyle} onClick={(e) => e.stopPropagation()}>
           <button
             className="btn btn-sm btn-danger"
             onClick={() => deleteTask(task.id)}
@@ -1330,8 +1539,8 @@ export default function Tasks({
           >
             🗑
           </button>
-        </td>
-      </tr>
+        </div>
+      </div>
     );
   }
 
@@ -1852,25 +2061,20 @@ export default function Tasks({
                                         </span>
                                       </div>
                                       {groupExpanded && (
-                                        <table
-                                          className="task-table"
-                                          style={{ marginBottom: 4 }}
-                                        >
+                                        <div style={{ marginBottom: 4 }}>
                                           {renderTableHead(
                                             folderFieldList,
                                             true,
                                           )}
-                                          <tbody>
-                                            {groupTasks.map((task) =>
-                                              renderTaskRow(
-                                                task,
-                                                folderStatusList,
-                                                folderFieldList,
-                                                folder,
-                                              ),
-                                            )}
-                                          </tbody>
-                                        </table>
+                                          {groupTasks.map((task) =>
+                                            renderTaskRow(
+                                              task,
+                                              folderStatusList,
+                                              folderFieldList,
+                                              folder,
+                                            ),
+                                          )}
+                                        </div>
                                       )}
                                     </div>
                                   );
@@ -1922,14 +2126,12 @@ export default function Tasks({
                             {nft.length} tasks
                           </span>
                         </div>
-                        <table className="task-table">
+                        <div>
                           {renderTableHead(getFields())}
-                          <tbody>
-                            {nft.map((task) =>
-                              renderTaskRow(task, getStatuses(), getFields()),
-                            )}
-                          </tbody>
-                        </table>
+                          {nft.map((task) =>
+                            renderTaskRow(task, getStatuses(), getFields()),
+                          )}
+                        </div>
                       </div>
                     );
                   })()}
@@ -2004,18 +2206,10 @@ export default function Tasks({
                                 marginTop: 4,
                               }}
                             >
-                              <table className="task-table">
-                                {renderTableHead(getFields())}
-                                <tbody>
-                                  {groupTasks.map((task) =>
-                                    renderTaskRow(
-                                      task,
-                                      getStatuses(),
-                                      getFields(),
-                                    ),
-                                  )}
-                                </tbody>
-                              </table>
+                              {renderTableHead(getFields())}
+                              {groupTasks.map((task) =>
+                                renderTaskRow(task, getStatuses(), getFields()),
+                              )}
                             </div>
                           )}
                           {isExpanded && groupTasks.length === 0 && (
