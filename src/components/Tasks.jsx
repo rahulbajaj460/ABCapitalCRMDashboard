@@ -175,16 +175,16 @@ export default function Tasks({
   // Column widths in px — shared across every group's table so columns
   // always line up, and resizable by dragging the handle on each header.
   const DEFAULT_COLUMN_WIDTHS = {
-    name: 260,
-    status_inline: 110,
-    priority: 100,
-    assignees: 150,
-    due_date: 110,
-    date_done: 110,
-    date_closed: 110,
-    date_updated_manual: 110,
-    status_select: 130,
-    actions: 50,
+    name: 320,
+    status_inline: 130,
+    priority: 130,
+    assignees: 200,
+    due_date: 150,
+    date_done: 150,
+    date_closed: 150,
+    date_updated_manual: 150,
+    status_select: 160,
+    actions: 60,
   };
   const [columnWidths, setColumnWidths] = useState(() => {
     try {
