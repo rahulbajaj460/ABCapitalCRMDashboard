@@ -175,16 +175,16 @@ export default function Tasks({
   // Column widths in px — shared across every group's table so columns
   // always line up, and resizable by dragging the handle on each header.
   const DEFAULT_COLUMN_WIDTHS = {
-    name: 280,
+    name: 260,
     status_inline: 110,
-    priority: 110,
-    assignees: 160,
-    due_date: 120,
-    date_done: 120,
-    date_closed: 120,
-    date_updated_manual: 120,
-    status_select: 150,
-    actions: 60,
+    priority: 100,
+    assignees: 150,
+    due_date: 110,
+    date_done: 110,
+    date_closed: 110,
+    date_updated_manual: 110,
+    status_select: 130,
+    actions: 50,
   };
   const [columnWidths, setColumnWidths] = useState(() => {
     try {
@@ -1174,8 +1174,9 @@ export default function Tasks({
     setShowNewTaskModal(true);
   }
 
-  function GridHeaderCell({ colKey, label, sortable, indented, isFirst }) {
+  function GridHeaderCell({ colKey, resizeKey, label, sortable, indented }) {
     const isActive = sortConfig.key === colKey;
+    const widthKey = resizeKey || colKey;
     return (
       <div
         style={{
@@ -1224,7 +1225,7 @@ export default function Tasks({
         </span>
         {/* Resize handle */}
         <div
-          onMouseDown={(e) => startColumnResize(colKey, e)}
+          onMouseDown={(e) => startColumnResize(widthKey, e)}
           onClick={(e) => e.stopPropagation()}
           style={{
             position: "absolute",
@@ -1246,9 +1247,17 @@ export default function Tasks({
     const activeCols = getActiveColumns(fieldList);
     const gridTemplate = buildGridTemplate(fieldList, indented);
     return (
-      <div style={{ display: "grid", gridTemplateColumns: gridTemplate }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: gridTemplate,
+          width: "max-content",
+          minWidth: "100%",
+        }}
+      >
         <GridHeaderCell
           colKey="title"
+          resizeKey="name"
           label="Name"
           sortable
           indented={indented}
@@ -1455,6 +1464,8 @@ export default function Tasks({
         style={{
           display: "grid",
           gridTemplateColumns: gridTemplate,
+          width: "max-content",
+          minWidth: "100%",
           background: isActive ? "#f0f7ff" : undefined,
           cursor: "pointer",
         }}
