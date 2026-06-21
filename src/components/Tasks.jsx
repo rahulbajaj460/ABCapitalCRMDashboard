@@ -1863,382 +1863,390 @@ export default function Tasks({
         <div className="content-area">
           {viewMode === "list" && (
             <div className="task-table-scroll">
-              {activeSpace && !activeFolder ? (
-                <div>
-                  {(activeSpace.folders || []).map((folder) => {
-                    const folderTasks = tasks.filter(
-                      (t) => t.folder_id === folder.id,
-                    );
-                    const filteredFolderTasks = folderTasks.filter((t) => {
-                      if (statusFilter !== "all" && t.status !== statusFilter)
-                        return false;
-                      if (
-                        search &&
-                        !t.title.toLowerCase().includes(search.toLowerCase())
-                      )
-                        return false;
-                      return true;
-                    });
-                    const isExpanded = expandedGroups[folder.id] !== false;
-                    const folderStatusList = getFolderStatuses(folder);
-                    const folderFieldList = getFolderFields(folder);
-                    const groupedRaw =
-                      groupBy === "status"
-                        ? folderStatusList.reduce((acc, s) => {
-                            acc[s] = filteredFolderTasks.filter(
-                              (t) => t.status === s,
-                            );
-                            return acc;
-                          }, {})
-                        : groupBy === "priority"
-                          ? ["High", "Medium", "Low"].reduce((acc, p) => {
-                              acc[p] = filteredFolderTasks.filter(
-                                (t) => t.priority === p,
+              <div style={{ width: "max-content", minWidth: "100%" }}>
+                {activeSpace && !activeFolder ? (
+                  <div>
+                    {(activeSpace.folders || []).map((folder) => {
+                      const folderTasks = tasks.filter(
+                        (t) => t.folder_id === folder.id,
+                      );
+                      const filteredFolderTasks = folderTasks.filter((t) => {
+                        if (statusFilter !== "all" && t.status !== statusFilter)
+                          return false;
+                        if (
+                          search &&
+                          !t.title.toLowerCase().includes(search.toLowerCase())
+                        )
+                          return false;
+                        return true;
+                      });
+                      const isExpanded = expandedGroups[folder.id] !== false;
+                      const folderStatusList = getFolderStatuses(folder);
+                      const folderFieldList = getFolderFields(folder);
+                      const groupedRaw =
+                        groupBy === "status"
+                          ? folderStatusList.reduce((acc, s) => {
+                              acc[s] = filteredFolderTasks.filter(
+                                (t) => t.status === s,
                               );
                               return acc;
                             }, {})
-                          : groupBy === "assignee"
-                            ? filteredFolderTasks.reduce((acc, task) => {
-                                const names =
-                                  task.assignees?.length > 0
-                                    ? task.assignees
-                                    : task.assignee
-                                      ? [task.assignee]
-                                      : ["Unassigned"];
-                                names.forEach((n) => {
-                                  if (!acc[n]) acc[n] = [];
-                                  acc[n].push(task);
-                                });
+                          : groupBy === "priority"
+                            ? ["High", "Medium", "Low"].reduce((acc, p) => {
+                                acc[p] = filteredFolderTasks.filter(
+                                  (t) => t.priority === p,
+                                );
                                 return acc;
                               }, {})
-                            : { "All tasks": filteredFolderTasks };
-                    const grouped = Object.fromEntries(
-                      Object.entries(groupedRaw).map(([k, v]) => [
-                        k,
-                        sortTasks(v),
-                      ]),
-                    );
-                    return (
-                      <div
-                        key={folder.id}
-                        style={{
-                          background: "#fff",
-                          border: "1px solid #e8e8e8",
-                          borderRadius: 8,
-                          marginBottom: 16,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "12px 16px",
-                            borderBottom: isExpanded
-                              ? "1px solid #e8e8e8"
-                              : "none",
-                            cursor: "pointer",
-                            background: "#fafaf9",
-                          }}
-                          onClick={() =>
-                            setExpandedGroups((p) => ({
-                              ...p,
-                              [folder.id]: !isExpanded,
-                            }))
-                          }
-                        >
-                          <span style={{ fontSize: 12, color: "#aaa" }}>
-                            {isExpanded ? "▾" : "▸"}
-                          </span>
-                          <span
-                            style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
-                          >
-                            <span
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 7,
-                              }}
-                            >
-                              <svg
-                                width="15"
-                                height="13"
-                                viewBox="0 0 16 14"
-                                fill="none"
-                                style={{ flexShrink: 0 }}
-                              >
-                                <path
-                                  d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
-                                  fill="#9ca3af"
-                                />
-                                <path
-                                  d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
-                                  fill="#6b7280"
-                                />
-                              </svg>
-                              {folder.name}
-                            </span>
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              color: "#888",
-                              background: "#f0f0ef",
-                              borderRadius: 20,
-                              padding: "1px 8px",
-                            }}
-                          >
-                            {folderTasks.length} tasks
-                          </span>
-                        </div>
-                        {isExpanded && (
-                          <div style={{ padding: "8px 0" }}>
-                            {filteredFolderTasks.length === 0 ? (
-                              <div
-                                style={{
-                                  fontSize: 13,
-                                  color: "#ccc",
-                                  padding: "12px 16px",
-                                }}
-                              >
-                                No tasks in this folder
-                              </div>
-                            ) : (
-                              Object.entries(grouped).map(
-                                ([groupName, groupTasks]) => {
-                                  if (groupTasks.length === 0) return null;
-                                  const groupKey = `${folder.id}_${groupName}`;
-                                  const groupExpanded =
-                                    expandedGroups[groupKey] !== false;
-                                  const groupColor =
-                                    groupBy === "status"
-                                      ? getStatusColorForFolder(
-                                          groupName,
-                                          folder,
-                                        )
-                                      : "#f0f0ef";
-                                  return (
-                                    <div
-                                      key={groupName}
-                                      style={{ marginBottom: 4 }}
-                                    >
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: 8,
-                                          padding: "6px 16px",
-                                          cursor: "pointer",
-                                        }}
-                                        onClick={() =>
-                                          setExpandedGroups((p) => ({
-                                            ...p,
-                                            [groupKey]: !groupExpanded,
-                                          }))
-                                        }
-                                      >
-                                        <span
-                                          style={{
-                                            fontSize: 10,
-                                            color: "#aaa",
-                                          }}
-                                        >
-                                          {groupExpanded ? "▾" : "▸"}
-                                        </span>
-                                        <span
-                                          style={{
-                                            background: groupColor,
-                                            color:
-                                              groupBy === "status"
-                                                ? "#fff"
-                                                : "#333",
-                                            padding: "2px 10px",
-                                            borderRadius: 20,
-                                            fontSize: 11,
-                                            fontWeight: 600,
-                                          }}
-                                        >
-                                          {groupName}
-                                        </span>
-                                        <span
-                                          style={{
-                                            fontSize: 12,
-                                            color: "#aaa",
-                                          }}
-                                        >
-                                          {groupTasks.length}
-                                        </span>
-                                      </div>
-                                      {groupExpanded && (
-                                        <div style={{ marginBottom: 4 }}>
-                                          {renderTableHead(
-                                            folderFieldList,
-                                            true,
-                                          )}
-                                          {groupTasks.map((task) =>
-                                            renderTaskRow(
-                                              task,
-                                              folderStatusList,
-                                              folderFieldList,
-                                              folder,
-                                            ),
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                },
-                              )
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {(() => {
-                    const nft = sortTasks(tasks.filter((t) => !t.folder_id));
-                    if (nft.length === 0) return null;
-                    return (
-                      <div
-                        style={{
-                          background: "#fff",
-                          border: "1px solid #e8e8e8",
-                          borderRadius: 8,
-                          marginBottom: 16,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "12px 16px",
-                            background: "#fafaf9",
-                            borderBottom: "1px solid #e8e8e8",
-                          }}
-                        >
-                          <span
-                            style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
-                          >
-                            📋 No folder
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              color: "#888",
-                              background: "#f0f0ef",
-                              borderRadius: 20,
-                              padding: "1px 8px",
-                            }}
-                          >
-                            {nft.length} tasks
-                          </span>
-                        </div>
-                        <div>
-                          {renderTableHead(getFields())}
-                          {nft.map((task) =>
-                            renderTaskRow(task, getStatuses(), getFields()),
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  {(activeSpace.folders || []).length === 0 &&
-                    tasks.length === 0 && (
-                      <div
-                        style={{
-                          textAlign: "center",
-                          padding: "60px 20px",
-                          color: "#aaa",
-                        }}
-                      >
-                        <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-                        <div style={{ fontSize: 14, marginBottom: 4 }}>
-                          No folders yet
-                        </div>
-                        <div style={{ fontSize: 12 }}>
-                          Add a folder from the sidebar to organise your tasks
-                        </div>
-                      </div>
-                    )}
-                </div>
-              ) : (
-                <div>
-                  {Object.entries(getGroupedTasks()).map(
-                    ([groupName, groupTasks]) => {
-                      const isExpanded = expandedGroups[groupName] !== false;
+                            : groupBy === "assignee"
+                              ? filteredFolderTasks.reduce((acc, task) => {
+                                  const names =
+                                    task.assignees?.length > 0
+                                      ? task.assignees
+                                      : task.assignee
+                                        ? [task.assignee]
+                                        : ["Unassigned"];
+                                  names.forEach((n) => {
+                                    if (!acc[n]) acc[n] = [];
+                                    acc[n].push(task);
+                                  });
+                                  return acc;
+                                }, {})
+                              : { "All tasks": filteredFolderTasks };
+                      const grouped = Object.fromEntries(
+                        Object.entries(groupedRaw).map(([k, v]) => [
+                          k,
+                          sortTasks(v),
+                        ]),
+                      );
                       return (
-                        <div key={groupName} style={{ marginBottom: 16 }}>
+                        <div
+                          key={folder.id}
+                          style={{
+                            background: "#fff",
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 8,
+                            marginBottom: 16,
+                            overflow: "hidden",
+                          }}
+                        >
                           <div
-                            className="status-group-header"
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "12px 16px",
+                              borderBottom: isExpanded
+                                ? "1px solid #e8e8e8"
+                                : "none",
+                              cursor: "pointer",
+                              background: "#fafaf9",
+                            }}
                             onClick={() =>
                               setExpandedGroups((p) => ({
                                 ...p,
-                                [groupName]: !isExpanded,
+                                [folder.id]: !isExpanded,
                               }))
                             }
                           >
-                            <span style={{ fontSize: 10 }}>
+                            <span style={{ fontSize: 12, color: "#aaa" }}>
                               {isExpanded ? "▾" : "▸"}
                             </span>
                             <span
-                              style={{
-                                background:
-                                  groupBy === "status"
-                                    ? getStatusColor(groupName)
-                                    : "#f0f0ef",
-                                color: groupBy === "status" ? "#fff" : "#333",
-                                padding: "2px 10px",
-                                borderRadius: 20,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                border:
-                                  groupBy !== "status"
-                                    ? "1px solid #e8e8e8"
-                                    : "none",
-                              }}
+                              style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
                             >
-                              {groupName}
+                              <span
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 7,
+                                }}
+                              >
+                                <svg
+                                  width="15"
+                                  height="13"
+                                  viewBox="0 0 16 14"
+                                  fill="none"
+                                  style={{ flexShrink: 0 }}
+                                >
+                                  <path
+                                    d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
+                                    fill="#9ca3af"
+                                  />
+                                  <path
+                                    d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
+                                    fill="#6b7280"
+                                  />
+                                </svg>
+                                {folder.name}
+                              </span>
                             </span>
-                            <span style={{ fontSize: 12, color: "#aaa" }}>
-                              {groupTasks.length}
-                            </span>
-                          </div>
-                          {isExpanded && groupTasks.length > 0 && (
-                            <div
-                              style={{
-                                background: "#fff",
-                                border: "1px solid #e8e8e8",
-                                borderRadius: 8,
-                                overflow: "hidden",
-                                marginTop: 4,
-                              }}
-                            >
-                              {renderTableHead(getFields())}
-                              {groupTasks.map((task) =>
-                                renderTaskRow(task, getStatuses(), getFields()),
-                              )}
-                            </div>
-                          )}
-                          {isExpanded && groupTasks.length === 0 && (
-                            <div
+                            <span
                               style={{
                                 fontSize: 12,
-                                color: "#ccc",
-                                padding: "8px 12px",
+                                color: "#888",
+                                background: "#f0f0ef",
+                                borderRadius: 20,
+                                padding: "1px 8px",
                               }}
                             >
-                              No tasks
+                              {folderTasks.length} tasks
+                            </span>
+                          </div>
+                          {isExpanded && (
+                            <div style={{ padding: "8px 0" }}>
+                              {filteredFolderTasks.length === 0 ? (
+                                <div
+                                  style={{
+                                    fontSize: 13,
+                                    color: "#ccc",
+                                    padding: "12px 16px",
+                                  }}
+                                >
+                                  No tasks in this folder
+                                </div>
+                              ) : (
+                                Object.entries(grouped).map(
+                                  ([groupName, groupTasks]) => {
+                                    if (groupTasks.length === 0) return null;
+                                    const groupKey = `${folder.id}_${groupName}`;
+                                    const groupExpanded =
+                                      expandedGroups[groupKey] !== false;
+                                    const groupColor =
+                                      groupBy === "status"
+                                        ? getStatusColorForFolder(
+                                            groupName,
+                                            folder,
+                                          )
+                                        : "#f0f0ef";
+                                    return (
+                                      <div
+                                        key={groupName}
+                                        style={{ marginBottom: 4 }}
+                                      >
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 8,
+                                            padding: "6px 16px",
+                                            cursor: "pointer",
+                                          }}
+                                          onClick={() =>
+                                            setExpandedGroups((p) => ({
+                                              ...p,
+                                              [groupKey]: !groupExpanded,
+                                            }))
+                                          }
+                                        >
+                                          <span
+                                            style={{
+                                              fontSize: 10,
+                                              color: "#aaa",
+                                            }}
+                                          >
+                                            {groupExpanded ? "▾" : "▸"}
+                                          </span>
+                                          <span
+                                            style={{
+                                              background: groupColor,
+                                              color:
+                                                groupBy === "status"
+                                                  ? "#fff"
+                                                  : "#333",
+                                              padding: "2px 10px",
+                                              borderRadius: 20,
+                                              fontSize: 11,
+                                              fontWeight: 600,
+                                            }}
+                                          >
+                                            {groupName}
+                                          </span>
+                                          <span
+                                            style={{
+                                              fontSize: 12,
+                                              color: "#aaa",
+                                            }}
+                                          >
+                                            {groupTasks.length}
+                                          </span>
+                                        </div>
+                                        {groupExpanded && (
+                                          <div style={{ marginBottom: 4 }}>
+                                            {renderTableHead(
+                                              folderFieldList,
+                                              true,
+                                            )}
+                                            {groupTasks.map((task) =>
+                                              renderTaskRow(
+                                                task,
+                                                folderStatusList,
+                                                folderFieldList,
+                                                folder,
+                                              ),
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  },
+                                )
+                              )}
                             </div>
                           )}
                         </div>
                       );
-                    },
-                  )}
-                </div>
-              )}
+                    })}
+                    {(() => {
+                      const nft = sortTasks(tasks.filter((t) => !t.folder_id));
+                      if (nft.length === 0) return null;
+                      return (
+                        <div
+                          style={{
+                            background: "#fff",
+                            border: "1px solid #e8e8e8",
+                            borderRadius: 8,
+                            marginBottom: 16,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "12px 16px",
+                              background: "#fafaf9",
+                              borderBottom: "1px solid #e8e8e8",
+                            }}
+                          >
+                            <span
+                              style={{ fontSize: 14, fontWeight: 600, flex: 1 }}
+                            >
+                              📋 No folder
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                color: "#888",
+                                background: "#f0f0ef",
+                                borderRadius: 20,
+                                padding: "1px 8px",
+                              }}
+                            >
+                              {nft.length} tasks
+                            </span>
+                          </div>
+                          <div>
+                            {renderTableHead(getFields())}
+                            {nft.map((task) =>
+                              renderTaskRow(task, getStatuses(), getFields()),
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {(activeSpace.folders || []).length === 0 &&
+                      tasks.length === 0 && (
+                        <div
+                          style={{
+                            textAlign: "center",
+                            padding: "60px 20px",
+                            color: "#aaa",
+                          }}
+                        >
+                          <div style={{ fontSize: 32, marginBottom: 8 }}>
+                            📋
+                          </div>
+                          <div style={{ fontSize: 14, marginBottom: 4 }}>
+                            No folders yet
+                          </div>
+                          <div style={{ fontSize: 12 }}>
+                            Add a folder from the sidebar to organise your tasks
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                ) : (
+                  <div>
+                    {Object.entries(getGroupedTasks()).map(
+                      ([groupName, groupTasks]) => {
+                        const isExpanded = expandedGroups[groupName] !== false;
+                        return (
+                          <div key={groupName} style={{ marginBottom: 16 }}>
+                            <div
+                              className="status-group-header"
+                              onClick={() =>
+                                setExpandedGroups((p) => ({
+                                  ...p,
+                                  [groupName]: !isExpanded,
+                                }))
+                              }
+                            >
+                              <span style={{ fontSize: 10 }}>
+                                {isExpanded ? "▾" : "▸"}
+                              </span>
+                              <span
+                                style={{
+                                  background:
+                                    groupBy === "status"
+                                      ? getStatusColor(groupName)
+                                      : "#f0f0ef",
+                                  color: groupBy === "status" ? "#fff" : "#333",
+                                  padding: "2px 10px",
+                                  borderRadius: 20,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  border:
+                                    groupBy !== "status"
+                                      ? "1px solid #e8e8e8"
+                                      : "none",
+                                }}
+                              >
+                                {groupName}
+                              </span>
+                              <span style={{ fontSize: 12, color: "#aaa" }}>
+                                {groupTasks.length}
+                              </span>
+                            </div>
+                            {isExpanded && groupTasks.length > 0 && (
+                              <div
+                                style={{
+                                  background: "#fff",
+                                  border: "1px solid #e8e8e8",
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  marginTop: 4,
+                                }}
+                              >
+                                {renderTableHead(getFields())}
+                                {groupTasks.map((task) =>
+                                  renderTaskRow(
+                                    task,
+                                    getStatuses(),
+                                    getFields(),
+                                  ),
+                                )}
+                              </div>
+                            )}
+                            {isExpanded && groupTasks.length === 0 && (
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "#ccc",
+                                  padding: "8px 12px",
+                                }}
+                              >
+                                No tasks
+                              </div>
+                            )}
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {viewMode === "board" && (
