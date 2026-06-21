@@ -51,6 +51,7 @@ textarea:focus {
 
 .app-main {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   background: #f7f8fa;
   scrollbar-width: thin;
