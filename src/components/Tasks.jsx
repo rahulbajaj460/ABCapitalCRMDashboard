@@ -284,9 +284,13 @@ export default function Tasks({
   const [drawerFieldValues, setDrawerFieldValues] = useState({});
   const [drawerSaving, setDrawerSaving] = useState(false);
   const [drawerSaved, setDrawerSaved] = useState(false);
-  const [drawerTab, setDrawerTab] = useState("details"); // "details" | "history"
+  const [drawerTab, setDrawerTab] = useState("details"); // "details" | "history" | "attachments"
   const [taskHistory, setTaskHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef(null);
   const drawerRef = useRef(null);
 
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
@@ -469,6 +473,92 @@ export default function Tasks({
       .limit(50);
     setTaskHistory(data || []);
     setHistoryLoading(false);
+  }
+
+  // ── Attachment helpers ──
+  async function fetchAttachments(taskId) {
+    setAttachmentsLoading(true);
+    const { data } = await supabase
+      .from("task_attachments")
+      .select("*")
+      .eq("task_id", taskId)
+      .order("uploaded_at", { ascending: false });
+    setAttachments(data || []);
+    setAttachmentsLoading(false);
+  }
+
+  async function uploadAttachment(file) {
+    if (!drawerTask || !file) return;
+    setUploadingFile(true);
+    const ext = file.name.split(".").pop();
+    const path = `${drawerTask.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { error: uploadError } = await supabase.storage
+      .from("task-attachments")
+      .upload(path, file, { upsert: false });
+    if (uploadError) {
+      console.error("Upload error:", uploadError);
+      setUploadingFile(false);
+      return;
+    }
+    await supabase.from("task_attachments").insert({
+      task_id: drawerTask.id,
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type,
+      storage_path: path,
+      uploaded_by: profile?.full_name || "Unknown",
+    });
+    await fetchAttachments(drawerTask.id);
+    setUploadingFile(false);
+  }
+
+  async function downloadAttachment(attachment) {
+    const { data, error } = await supabase.storage
+      .from("task-attachments")
+      .download(attachment.storage_path);
+    if (error || !data) {
+      console.error("Download error:", error);
+      return;
+    }
+    const url = URL.createObjectURL(data);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = attachment.file_name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function deleteAttachment(attachment) {
+    if (!confirm(`Delete "${attachment.file_name}"?`)) return;
+    await supabase.storage
+      .from("task-attachments")
+      .remove([attachment.storage_path]);
+    await supabase.from("task_attachments").delete().eq("id", attachment.id);
+    await fetchAttachments(drawerTask.id);
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function fileIcon(type) {
+    if (!type) return "📎";
+    if (type.startsWith("image/")) return "🖼";
+    if (type === "application/pdf") return "📄";
+    if (type.includes("word") || type.includes("document")) return "📝";
+    if (
+      type.includes("sheet") ||
+      type.includes("excel") ||
+      type.includes("csv")
+    )
+      return "📊";
+    if (type.includes("zip") || type.includes("compressed")) return "🗜";
+    return "📎";
   }
 
   // Status helpers
@@ -815,12 +905,14 @@ export default function Tasks({
       date_updated_manual: task.date_updated_manual || "",
     });
     setDrawerTab("details");
+    setAttachments([]);
   }
   function closeDrawer() {
     setDrawerTask(null);
     setDrawerEdits({});
     setDrawerTab("details");
     setTaskHistory([]);
+    setAttachments([]);
   }
 
   // Build change diff for history
@@ -2567,12 +2659,18 @@ export default function Tasks({
             {[
               { key: "details", label: "Details" },
               { key: "history", label: "History" },
+              {
+                key: "attachments",
+                label: `Attachments${attachments.length > 0 ? ` (${attachments.length})` : ""}`,
+              },
             ].map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => {
                   setDrawerTab(tab.key);
                   if (tab.key === "history") fetchTaskHistory(drawerTask.id);
+                  if (tab.key === "attachments")
+                    fetchAttachments(drawerTask.id);
                 }}
                 style={{
                   flex: 1,
@@ -3345,6 +3443,182 @@ export default function Tasks({
                             </div>
                           )}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ATTACHMENTS TAB */}
+            {drawerTab === "attachments" && (
+              <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}>
+                {/* Upload area */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor = "#1d4ed8";
+                    e.currentTarget.style.background = "#eff6ff";
+                  }}
+                  onDragLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#e0e0e0";
+                    e.currentTarget.style.background = "#fafaf9";
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor = "#e0e0e0";
+                    e.currentTarget.style.background = "#fafaf9";
+                    const file = e.dataTransfer.files[0];
+                    if (file) uploadAttachment(file);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    border: "2px dashed #e0e0e0",
+                    borderRadius: 10,
+                    padding: "20px 16px",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    background: "#fafaf9",
+                    marginBottom: 16,
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadAttachment(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  {uploadingFile ? (
+                    <div style={{ fontSize: 13, color: "#1d4ed8" }}>
+                      Uploading...
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 22, marginBottom: 6 }}>📎</div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#555",
+                          marginBottom: 2,
+                        }}
+                      >
+                        Drop a file here or click to upload
+                      </div>
+                      <div style={{ fontSize: 11, color: "#aaa" }}>
+                        Any file type · Max 50 MB
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Attachment list */}
+                {attachmentsLoading ? (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#aaa",
+                      textAlign: "center",
+                      padding: "12px 0",
+                    }}
+                  >
+                    Loading attachments...
+                  </div>
+                ) : attachments.length === 0 ? (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#aaa",
+                      textAlign: "center",
+                      padding: "12px 0",
+                    }}
+                  >
+                    No attachments yet
+                  </div>
+                ) : (
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                  >
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "10px 12px",
+                          background: "#fafaf9",
+                          border: "1px solid #e8e8e8",
+                          borderRadius: 8,
+                        }}
+                      >
+                        <span style={{ fontSize: 20, flexShrink: 0 }}>
+                          {fileIcon(att.file_type)}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 500,
+                              color: "#333",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {att.file_name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#aaa",
+                              marginTop: 1,
+                            }}
+                          >
+                            {formatFileSize(att.file_size)}
+                            {att.uploaded_by ? ` · ${att.uploaded_by}` : ""}
+                            {att.uploaded_at
+                              ? ` · ${timeAgo(att.uploaded_at)}`
+                              : ""}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => downloadAttachment(att)}
+                          title="Download"
+                          style={{
+                            background: "#eff6ff",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "5px 8px",
+                            cursor: "pointer",
+                            fontSize: 14,
+                            color: "#1d4ed8",
+                            flexShrink: 0,
+                          }}
+                        >
+                          ⬇
+                        </button>
+                        <button
+                          onClick={() => deleteAttachment(att)}
+                          title="Delete"
+                          style={{
+                            background: "#fef2f2",
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "5px 8px",
+                            cursor: "pointer",
+                            fontSize: 14,
+                            color: "#b91c1c",
+                            flexShrink: 0,
+                          }}
+                        >
+                          🗑
+                        </button>
                       </div>
                     ))}
                   </div>
