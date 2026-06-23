@@ -3949,7 +3949,8 @@ export default function Tasks({
                                   style={{
                                     position: "absolute",
                                     right: 0,
-                                    top: "100%",
+                                    bottom: "100%",
+                                    marginBottom: 4,
                                     background: "#fff",
                                     border: "1px solid #e8e8e8",
                                     borderRadius: 8,
