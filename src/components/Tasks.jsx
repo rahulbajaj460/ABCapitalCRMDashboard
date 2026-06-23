@@ -291,6 +291,14 @@ export default function Tasks({
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef(null);
+  // Checklists
+  const [checklists, setChecklists] = useState([]);
+  const [checklistsLoading, setChecklistsLoading] = useState(false);
+  const [newChecklistName, setNewChecklistName] = useState("");
+  const [addingChecklist, setAddingChecklist] = useState(false);
+  const [newItemText, setNewItemText] = useState({}); // { checklistId: text }
+  const [editingChecklistName, setEditingChecklistName] = useState(null); // checklistId
+  const [editingChecklistNameVal, setEditingChecklistNameVal] = useState("");
   const drawerRef = useRef(null);
 
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
@@ -571,6 +579,132 @@ export default function Tasks({
       return "📊";
     if (type.includes("zip") || type.includes("compressed")) return "🗜";
     return "📎";
+  }
+
+  // ── Checklist helpers ──
+  async function fetchChecklists(taskId) {
+    setChecklistsLoading(true);
+    const { data: lists } = await supabase
+      .from("task_checklists")
+      .select("*")
+      .eq("task_id", taskId)
+      .order("list_order");
+    if (!lists) {
+      setChecklistsLoading(false);
+      return;
+    }
+    const { data: items } = await supabase
+      .from("task_checklist_items")
+      .select("*")
+      .eq("task_id", taskId)
+      .order("item_order");
+    const merged = lists.map((l) => ({
+      ...l,
+      items: (items || []).filter((i) => i.checklist_id === l.id),
+    }));
+    setChecklists(merged);
+    setChecklistsLoading(false);
+  }
+
+  async function addChecklist(taskId) {
+    const name = newChecklistName.trim() || "Checklist";
+    const { data } = await supabase
+      .from("task_checklists")
+      .insert({ task_id: taskId, name, list_order: checklists.length })
+      .select()
+      .single();
+    if (data) {
+      setChecklists((prev) => [...prev, { ...data, items: [] }]);
+      setNewChecklistName("");
+      setAddingChecklist(false);
+    }
+  }
+
+  async function renameChecklist(checklistId, name) {
+    await supabase
+      .from("task_checklists")
+      .update({ name })
+      .eq("id", checklistId);
+    setChecklists((prev) =>
+      prev.map((c) => (c.id === checklistId ? { ...c, name } : c)),
+    );
+    setEditingChecklistName(null);
+  }
+
+  async function deleteChecklist(checklistId) {
+    if (!confirm("Delete this checklist and all its items?")) return;
+    await supabase.from("task_checklists").delete().eq("id", checklistId);
+    setChecklists((prev) => prev.filter((c) => c.id !== checklistId));
+  }
+
+  async function addChecklistItem(checklistId, taskId) {
+    const text = (newItemText[checklistId] || "").trim();
+    if (!text) return;
+    const checklist = checklists.find((c) => c.id === checklistId);
+    const { data } = await supabase
+      .from("task_checklist_items")
+      .insert({
+        checklist_id: checklistId,
+        task_id: taskId,
+        title: text,
+        is_checked: false,
+        item_order: checklist?.items?.length || 0,
+      })
+      .select()
+      .single();
+    if (data) {
+      setChecklists((prev) =>
+        prev.map((c) =>
+          c.id === checklistId ? { ...c, items: [...c.items, data] } : c,
+        ),
+      );
+      setNewItemText((prev) => ({ ...prev, [checklistId]: "" }));
+    }
+  }
+
+  async function toggleChecklistItem(item) {
+    const newVal = !item.is_checked;
+    await supabase
+      .from("task_checklist_items")
+      .update({ is_checked: newVal })
+      .eq("id", item.id);
+    setChecklists((prev) =>
+      prev.map((c) => ({
+        ...c,
+        items: c.items.map((i) =>
+          i.id === item.id ? { ...i, is_checked: newVal } : i,
+        ),
+      })),
+    );
+  }
+
+  async function deleteChecklistItem(item) {
+    await supabase.from("task_checklist_items").delete().eq("id", item.id);
+    setChecklists((prev) =>
+      prev.map((c) => ({
+        ...c,
+        items: c.items.filter((i) => i.id !== item.id),
+      })),
+    );
+  }
+
+  function checklistProgress(checklist) {
+    const total = checklist.items.length;
+    const done = checklist.items.filter((i) => i.is_checked).length;
+    return {
+      total,
+      done,
+      pct: total > 0 ? Math.round((done / total) * 100) : 0,
+    };
+  }
+
+  function totalChecklistProgress(taskChecklists) {
+    const total = taskChecklists.reduce((s, c) => s + c.items.length, 0);
+    const done = taskChecklists.reduce(
+      (s, c) => s + c.items.filter((i) => i.is_checked).length,
+      0,
+    );
+    return { total, done };
   }
 
   // Status helpers
@@ -918,6 +1052,10 @@ export default function Tasks({
     });
     setDrawerTab("details");
     setAttachments([]);
+    setChecklists([]);
+    setAddingChecklist(false);
+    setNewChecklistName("");
+    setNewItemText({});
   }
   function closeDrawer() {
     setDrawerTask(null);
@@ -925,6 +1063,7 @@ export default function Tasks({
     setDrawerTab("details");
     setTaskHistory([]);
     setAttachments([]);
+    setChecklists([]);
   }
 
   // Build change diff for history
@@ -2675,6 +2814,15 @@ export default function Tasks({
                 key: "attachments",
                 label: `Attachments${attachments.length > 0 ? ` (${attachments.length})` : ""}`,
               },
+              {
+                key: "checklist",
+                label: (() => {
+                  const { total, done } = totalChecklistProgress(checklists);
+                  return total > 0
+                    ? `Checklist (${done}/${total})`
+                    : "Checklist";
+                })(),
+              },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -2683,6 +2831,7 @@ export default function Tasks({
                   if (tab.key === "history") fetchTaskHistory(drawerTask.id);
                   if (tab.key === "attachments")
                     fetchAttachments(drawerTask.id);
+                  if (tab.key === "checklist") fetchChecklists(drawerTask.id);
                 }}
                 style={{
                   flex: 1,
@@ -3634,6 +3783,333 @@ export default function Tasks({
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* CHECKLIST TAB */}
+            {drawerTab === "checklist" && (
+              <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}>
+                {checklistsLoading ? (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#aaa",
+                      textAlign: "center",
+                      padding: 16,
+                    }}
+                  >
+                    Loading checklists...
+                  </div>
+                ) : (
+                  <>
+                    {/* Render each checklist */}
+                    {checklists.map((cl) => {
+                      const { total, done, pct } = checklistProgress(cl);
+                      return (
+                        <div key={cl.id} style={{ marginBottom: 20 }}>
+                          {/* Checklist header */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              marginBottom: 8,
+                            }}
+                          >
+                            <span style={{ fontSize: 14 }}>☑</span>
+                            {editingChecklistName === cl.id ? (
+                              <input
+                                autoFocus
+                                value={editingChecklistNameVal}
+                                onChange={(e) =>
+                                  setEditingChecklistNameVal(e.target.value)
+                                }
+                                onBlur={() =>
+                                  renameChecklist(
+                                    cl.id,
+                                    editingChecklistNameVal || cl.name,
+                                  )
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter")
+                                    renameChecklist(
+                                      cl.id,
+                                      editingChecklistNameVal || cl.name,
+                                    );
+                                  if (e.key === "Escape")
+                                    setEditingChecklistName(null);
+                                }}
+                                style={{
+                                  flex: 1,
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  border: "1px solid #1d4ed8",
+                                  borderRadius: 6,
+                                  padding: "3px 8px",
+                                  outline: "none",
+                                }}
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  flex: 1,
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  color: "#1a1a1a",
+                                  cursor: "pointer",
+                                }}
+                                onClick={() => {
+                                  setEditingChecklistName(cl.id);
+                                  setEditingChecklistNameVal(cl.name);
+                                }}
+                                title="Click to rename"
+                              >
+                                {cl.name}
+                              </span>
+                            )}
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "#aaa",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {done}/{total}
+                            </span>
+                            <button
+                              onClick={() => deleteChecklist(cl.id)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                fontSize: 13,
+                                color: "#ccc",
+                                padding: "0 2px",
+                              }}
+                              title="Delete checklist"
+                            >
+                              🗑
+                            </button>
+                          </div>
+
+                          {/* Progress bar */}
+                          {total > 0 && (
+                            <div
+                              style={{
+                                height: 4,
+                                background: "#f0f0f0",
+                                borderRadius: 4,
+                                marginBottom: 8,
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: "100%",
+                                  width: `${pct}%`,
+                                  background:
+                                    pct === 100 ? "#16a34a" : "#1d4ed8",
+                                  borderRadius: 4,
+                                  transition: "width 0.3s",
+                                }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Items */}
+                          {cl.items.map((item) => (
+                            <div
+                              key={item.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                gap: 8,
+                                padding: "5px 0",
+                                borderBottom: "1px solid #f5f5f5",
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={item.is_checked}
+                                onChange={() => toggleChecklistItem(item)}
+                                style={{
+                                  marginTop: 2,
+                                  cursor: "pointer",
+                                  accentColor: "#1d4ed8",
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  flex: 1,
+                                  fontSize: 13,
+                                  color: item.is_checked ? "#aaa" : "#333",
+                                  textDecoration: item.is_checked
+                                    ? "line-through"
+                                    : "none",
+                                }}
+                              >
+                                {item.title}
+                              </span>
+                              <button
+                                onClick={() => deleteChecklistItem(item)}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  fontSize: 11,
+                                  color: "#ddd",
+                                  padding: 0,
+                                  opacity: 0,
+                                  transition: "opacity 0.1s",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.opacity = 1)
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.opacity = 0)
+                                }
+                                title="Delete item"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+
+                          {/* Add item input */}
+                          <div
+                            style={{ display: "flex", gap: 6, marginTop: 8 }}
+                          >
+                            <input
+                              placeholder="Add an item..."
+                              value={newItemText[cl.id] || ""}
+                              onChange={(e) =>
+                                setNewItemText((p) => ({
+                                  ...p,
+                                  [cl.id]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter")
+                                  addChecklistItem(cl.id, drawerTask.id);
+                              }}
+                              style={{
+                                flex: 1,
+                                fontSize: 12,
+                                padding: "6px 10px",
+                                border: "1px solid #e0e0e0",
+                                borderRadius: 7,
+                                outline: "none",
+                              }}
+                              onFocus={(e) =>
+                                (e.target.style.borderColor = "#1d4ed8")
+                              }
+                              onBlur={(e) =>
+                                (e.target.style.borderColor = "#e0e0e0")
+                              }
+                            />
+                            <button
+                              onClick={() =>
+                                addChecklistItem(cl.id, drawerTask.id)
+                              }
+                              disabled={!(newItemText[cl.id] || "").trim()}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 7,
+                                border: "none",
+                                background: "#1d4ed8",
+                                color: "#fff",
+                                fontSize: 12,
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                opacity: (newItemText[cl.id] || "").trim()
+                                  ? 1
+                                  : 0.4,
+                              }}
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Add new checklist */}
+                    {addingChecklist ? (
+                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                        <input
+                          autoFocus
+                          placeholder="Checklist name..."
+                          value={newChecklistName}
+                          onChange={(e) => setNewChecklistName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") addChecklist(drawerTask.id);
+                            if (e.key === "Escape") setAddingChecklist(false);
+                          }}
+                          style={{
+                            flex: 1,
+                            fontSize: 12,
+                            padding: "6px 10px",
+                            border: "1px solid #1d4ed8",
+                            borderRadius: 7,
+                            outline: "none",
+                          }}
+                        />
+                        <button
+                          onClick={() => addChecklist(drawerTask.id)}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: 7,
+                            border: "none",
+                            background: "#1d4ed8",
+                            color: "#fff",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            fontWeight: 500,
+                          }}
+                        >
+                          Create
+                        </button>
+                        <button
+                          onClick={() => setAddingChecklist(false)}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: 7,
+                            border: "1px solid #e0e0e0",
+                            background: "#fff",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            color: "#888",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setAddingChecklist(true)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: "1px dashed #d0d0d0",
+                          background: "#fafaf9",
+                          color: "#888",
+                          fontSize: 12,
+                          cursor: "pointer",
+                          width: "100%",
+                          fontWeight: 500,
+                          marginTop: checklists.length > 0 ? 8 : 0,
+                        }}
+                      >
+                        <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+                        Add checklist
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
