@@ -490,24 +490,36 @@ export default function Tasks({
   async function uploadAttachment(file) {
     if (!drawerTask || !file) return;
     setUploadingFile(true);
-    const ext = file.name.split(".").pop();
     const path = `${drawerTask.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     const { error: uploadError } = await supabase.storage
       .from("task-attachments")
       .upload(path, file, { upsert: false });
     if (uploadError) {
-      console.error("Upload error:", uploadError);
+      alert(
+        `Upload failed: ${uploadError.message}\n\nMake sure:\n1. The "task-attachments" storage bucket exists in Supabase\n2. The storage bucket has a policy allowing authenticated uploads`,
+      );
       setUploadingFile(false);
       return;
     }
-    await supabase.from("task_attachments").insert({
-      task_id: drawerTask.id,
-      file_name: file.name,
-      file_size: file.size,
-      file_type: file.type,
-      storage_path: path,
-      uploaded_by: profile?.full_name || "Unknown",
-    });
+    const { error: insertError } = await supabase
+      .from("task_attachments")
+      .insert({
+        task_id: drawerTask.id,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        storage_path: path,
+        uploaded_by: profile?.full_name || "Unknown",
+      });
+    if (insertError) {
+      alert(
+        `Database error: ${insertError.message}\n\nMake sure the task_attachments table exists and has RLS enabled with the correct policy.`,
+      );
+      // Clean up the uploaded file since DB insert failed
+      await supabase.storage.from("task-attachments").remove([path]);
+      setUploadingFile(false);
+      return;
+    }
     await fetchAttachments(drawerTask.id);
     setUploadingFile(false);
   }
