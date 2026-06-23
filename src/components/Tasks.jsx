@@ -302,6 +302,7 @@ export default function Tasks({
   const [editingItemId, setEditingItemId] = useState(null);
   const [editingItemVal, setEditingItemVal] = useState("");
   const [itemMenuOpen, setItemMenuOpen] = useState(null); // item.id
+  const [clMenuOpen, setClMenuOpen] = useState(null); // checklist id
   const drawerRef = useRef(null);
 
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
@@ -638,6 +639,20 @@ export default function Tasks({
     if (!confirm("Delete this checklist and all its items?")) return;
     await supabase.from("task_checklists").delete().eq("id", checklistId);
     setChecklists((prev) => prev.filter((c) => c.id !== checklistId));
+  }
+
+  async function checkAllItems(checklistId, checked) {
+    const cl = checklists.find((c) => c.id === checklistId);
+    if (!cl) return;
+    const ids = cl.items.map((i) => i.id);
+    await supabase.from("task_checklist_items").update({ is_checked: checked }).in("id", ids);
+    setChecklists((prev) =>
+      prev.map((c) =>
+        c.id === checklistId
+          ? { ...c, items: c.items.map((i) => ({ ...i, is_checked: checked })) }
+          : c,
+      ),
+    );
   }
 
   async function addChecklistItem(checklistId, taskId) {
@@ -1084,6 +1099,7 @@ export default function Tasks({
     setChecklists([]);
     setItemMenuOpen(null);
     setEditingItemId(null);
+    setClMenuOpen(null);
   }
 
   // Build change diff for history
@@ -3813,6 +3829,7 @@ export default function Tasks({
                 style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}
                 onClick={(e) => {
                   if (!e.target.closest("[data-item-menu]")) setItemMenuOpen(null);
+                  if (!e.target.closest("[data-cl-menu]")) setClMenuOpen(null);
                 }}
               >
                 {checklistsLoading ? (
@@ -3902,20 +3919,145 @@ export default function Tasks({
                             >
                               {done}/{total}
                             </span>
-                            <button
-                              onClick={() => deleteChecklist(cl.id)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: 13,
-                                color: "#ccc",
-                                padding: "0 2px",
-                              }}
-                              title="Delete checklist"
+                            {/* Checklist ··· menu */}
+                            <div
+                              data-cl-menu
+                              style={{ position: "relative", flexShrink: 0 }}
                             >
-                              🗑
-                            </button>
+                              <button
+                                onClick={() =>
+                                  setClMenuOpen(
+                                    clMenuOpen === cl.id ? null : cl.id,
+                                  )
+                                }
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  fontSize: 16,
+                                  color: "#bbb",
+                                  padding: "0 2px",
+                                  lineHeight: 1,
+                                  width: "auto",
+                                }}
+                                title="Checklist options"
+                              >
+                                ···
+                              </button>
+                              {clMenuOpen === cl.id && (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    right: 0,
+                                    top: "100%",
+                                    background: "#fff",
+                                    border: "1px solid #e8e8e8",
+                                    borderRadius: 8,
+                                    boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                                    zIndex: 200,
+                                    minWidth: 190,
+                                    padding: "4px 0",
+                                  }}
+                                >
+                                  {[
+                                    {
+                                      icon: "➕",
+                                      label: "Add Item",
+                                      action: () => {
+                                        setClMenuOpen(null);
+                                        setTimeout(() => {
+                                          document
+                                            .getElementById(
+                                              `add-item-input-${cl.id}`,
+                                            )
+                                            ?.focus();
+                                        }, 50);
+                                      },
+                                    },
+                                    {
+                                      icon: "✏️",
+                                      label: "Rename checklist",
+                                      action: () => {
+                                        setEditingChecklistName(cl.id);
+                                        setEditingChecklistNameVal(cl.name);
+                                        setClMenuOpen(null);
+                                      },
+                                    },
+                                    { divider: true },
+                                    {
+                                      icon: "✅",
+                                      label: "Check All",
+                                      action: () => {
+                                        checkAllItems(cl.id, true);
+                                        setClMenuOpen(null);
+                                      },
+                                    },
+                                    {
+                                      icon: "⬜",
+                                      label: "Uncheck All",
+                                      action: () => {
+                                        checkAllItems(cl.id, false);
+                                        setClMenuOpen(null);
+                                      },
+                                    },
+                                    { divider: true },
+                                    {
+                                      icon: "🗑",
+                                      label: "Delete checklist",
+                                      danger: true,
+                                      action: () => {
+                                        setClMenuOpen(null);
+                                        deleteChecklist(cl.id);
+                                      },
+                                    },
+                                  ].map((opt, idx) =>
+                                    opt.divider ? (
+                                      <div
+                                        key={idx}
+                                        style={{
+                                          borderTop: "1px solid #f0f0f0",
+                                          margin: "4px 0",
+                                        }}
+                                      />
+                                    ) : (
+                                      <button
+                                        key={opt.label}
+                                        onClick={opt.action}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 8,
+                                          width: "100%",
+                                          background: "none",
+                                          border: "none",
+                                          padding: "7px 14px",
+                                          fontSize: 13,
+                                          color: opt.danger
+                                            ? "#dc2626"
+                                            : "#333",
+                                          cursor: "pointer",
+                                          textAlign: "left",
+                                          width: "auto",
+                                        }}
+                                        onMouseEnter={(e) =>
+                                          (e.currentTarget.style.background =
+                                            opt.danger
+                                              ? "#fee2e2"
+                                              : "#f5f5f4")
+                                        }
+                                        onMouseLeave={(e) =>
+                                          (e.currentTarget.style.background =
+                                            "none")
+                                        }
+                                      >
+                                        <span>{opt.icon}</span>
+                                        {opt.label}
+                                      </button>
+                                    ),
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           {/* Progress bar */}
@@ -4093,6 +4235,7 @@ export default function Tasks({
                             style={{ display: "flex", gap: 6, marginTop: 8 }}
                           >
                             <input
+                              id={`add-item-input-${cl.id}`}
                               placeholder="Add an item..."
                               value={newItemText[cl.id] || ""}
                               onChange={(e) =>
