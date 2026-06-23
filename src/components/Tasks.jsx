@@ -1072,6 +1072,7 @@ export default function Tasks({
     setAddingChecklist(false);
     setNewChecklistName("");
     setNewItemText({});
+    fetchAttachments(task.id);
     fetchChecklists(task.id);
   }
   function closeDrawer() {
