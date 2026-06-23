@@ -299,6 +299,9 @@ export default function Tasks({
   const [newItemText, setNewItemText] = useState({}); // { checklistId: text }
   const [editingChecklistName, setEditingChecklistName] = useState(null); // checklistId
   const [editingChecklistNameVal, setEditingChecklistNameVal] = useState("");
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [editingItemVal, setEditingItemVal] = useState("");
+  const [itemMenuOpen, setItemMenuOpen] = useState(null); // item.id
   const drawerRef = useRef(null);
 
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
@@ -688,6 +691,19 @@ export default function Tasks({
     );
   }
 
+  async function renameChecklistItem(item, newTitle) {
+    const title = newTitle.trim();
+    if (!title || title === item.title) { setEditingItemId(null); return; }
+    await supabase.from("task_checklist_items").update({ title }).eq("id", item.id);
+    setChecklists((prev) =>
+      prev.map((c) => ({
+        ...c,
+        items: c.items.map((i) => i.id === item.id ? { ...i, title } : i),
+      })),
+    );
+    setEditingItemId(null);
+  }
+
   function checklistProgress(checklist) {
     const total = checklist.items.length;
     const done = checklist.items.filter((i) => i.is_checked).length;
@@ -1064,6 +1080,8 @@ export default function Tasks({
     setTaskHistory([]);
     setAttachments([]);
     setChecklists([]);
+    setItemMenuOpen(null);
+    setEditingItemId(null);
   }
 
   // Build change diff for history
@@ -3789,7 +3807,12 @@ export default function Tasks({
 
             {/* CHECKLIST TAB */}
             {drawerTab === "checklist" && (
-              <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}>
+              <div
+                style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}
+                onClick={(e) => {
+                  if (!e.target.closest("[data-item-menu]")) setItemMenuOpen(null);
+                }}
+              >
                 {checklistsLoading ? (
                   <div
                     style={{
@@ -3923,10 +3946,14 @@ export default function Tasks({
                               key={item.id}
                               style={{
                                 display: "flex",
-                                alignItems: "flex-start",
+                                alignItems: "center",
                                 gap: 8,
                                 padding: "5px 0",
                                 borderBottom: "1px solid #f5f5f5",
+                                position: "relative",
+                              }}
+                              onMouseLeave={() => {
+                                if (itemMenuOpen === item.id) setItemMenuOpen(null);
                               }}
                             >
                               <input
@@ -3934,47 +3961,128 @@ export default function Tasks({
                                 checked={item.is_checked}
                                 onChange={() => toggleChecklistItem(item)}
                                 style={{
-                                  marginTop: 2,
+                                  marginTop: 0,
                                   cursor: "pointer",
                                   accentColor: "#1d4ed8",
                                   flexShrink: 0,
                                   width: "auto",
                                 }}
                               />
-                              <span
-                                style={{
-                                  flex: 1,
-                                  fontSize: 13,
-                                  color: item.is_checked ? "#aaa" : "#333",
-                                  textDecoration: item.is_checked
-                                    ? "line-through"
-                                    : "none",
-                                }}
-                              >
-                                {item.title}
-                              </span>
-                              <button
-                                onClick={() => deleteChecklistItem(item)}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontSize: 11,
-                                  color: "#ddd",
-                                  padding: 0,
-                                  opacity: 0,
-                                  transition: "opacity 0.1s",
-                                }}
-                                onMouseEnter={(e) =>
-                                  (e.currentTarget.style.opacity = 1)
-                                }
-                                onMouseLeave={(e) =>
-                                  (e.currentTarget.style.opacity = 0)
-                                }
-                                title="Delete item"
-                              >
-                                ✕
-                              </button>
+                              {editingItemId === item.id ? (
+                                <input
+                                  autoFocus
+                                  value={editingItemVal}
+                                  onChange={(e) => setEditingItemVal(e.target.value)}
+                                  onBlur={() => renameChecklistItem(item, editingItemVal)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") renameChecklistItem(item, editingItemVal);
+                                    if (e.key === "Escape") setEditingItemId(null);
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    fontSize: 13,
+                                    border: "1px solid #1d4ed8",
+                                    borderRadius: 5,
+                                    padding: "2px 6px",
+                                    outline: "none",
+                                    width: "auto",
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    flex: 1,
+                                    fontSize: 13,
+                                    color: item.is_checked ? "#aaa" : "#333",
+                                    textDecoration: item.is_checked ? "line-through" : "none",
+                                  }}
+                                >
+                                  {item.title}
+                                </span>
+                              )}
+                              {/* ··· menu button */}
+                              <div data-item-menu style={{ position: "relative", flexShrink: 0 }}>
+                                <button
+                                  onClick={() => setItemMenuOpen(itemMenuOpen === item.id ? null : item.id)}
+                                  style={{
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    fontSize: 14,
+                                    color: "#bbb",
+                                    padding: "0 2px",
+                                    lineHeight: 1,
+                                    width: "auto",
+                                  }}
+                                  title="Item options"
+                                >
+                                  ···
+                                </button>
+                                {itemMenuOpen === item.id && (
+                                  <div
+                                    style={{
+                                      position: "absolute",
+                                      right: 0,
+                                      top: "100%",
+                                      background: "#fff",
+                                      border: "1px solid #e8e8e8",
+                                      borderRadius: 8,
+                                      boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+                                      zIndex: 100,
+                                      minWidth: 150,
+                                      padding: "4px 0",
+                                    }}
+                                  >
+                                    {[
+                                      {
+                                        icon: "✏️",
+                                        label: "Rename",
+                                        action: () => {
+                                          setEditingItemId(item.id);
+                                          setEditingItemVal(item.title);
+                                          setItemMenuOpen(null);
+                                        },
+                                      },
+                                      {
+                                        icon: "🗑",
+                                        label: "Delete",
+                                        action: () => {
+                                          deleteChecklistItem(item);
+                                          setItemMenuOpen(null);
+                                        },
+                                        danger: true,
+                                      },
+                                    ].map((opt) => (
+                                      <button
+                                        key={opt.label}
+                                        onClick={opt.action}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 8,
+                                          width: "100%",
+                                          background: "none",
+                                          border: "none",
+                                          padding: "7px 14px",
+                                          fontSize: 13,
+                                          color: opt.danger ? "#dc2626" : "#333",
+                                          cursor: "pointer",
+                                          textAlign: "left",
+                                        }}
+                                        onMouseEnter={(e) =>
+                                          (e.currentTarget.style.background = opt.danger ? "#fee2e2" : "#f5f5f4")
+                                        }
+                                        onMouseLeave={(e) =>
+                                          (e.currentTarget.style.background = "none")
+                                        }
+                                      >
+                                        <span>{opt.icon}</span>
+                                        {opt.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           ))}
 
