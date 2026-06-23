@@ -302,7 +302,9 @@ export default function Tasks({
   const [editingItemId, setEditingItemId] = useState(null);
   const [editingItemVal, setEditingItemVal] = useState("");
   const [itemMenuOpen, setItemMenuOpen] = useState(null); // item.id
+  const [itemMenuPos, setItemMenuPos] = useState({ top: 0, left: 0 });
   const [clMenuOpen, setClMenuOpen] = useState(null); // checklist id
+  const [clMenuPos, setClMenuPos] = useState({ top: 0, left: 0 });
   const drawerRef = useRef(null);
 
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
@@ -3925,11 +3927,15 @@ export default function Tasks({
                               style={{ position: "relative", flexShrink: 0 }}
                             >
                               <button
-                                onClick={() =>
-                                  setClMenuOpen(
-                                    clMenuOpen === cl.id ? null : cl.id,
-                                  )
-                                }
+                                onClick={(e) => {
+                                  if (clMenuOpen === cl.id) {
+                                    setClMenuOpen(null);
+                                  } else {
+                                    const r = e.currentTarget.getBoundingClientRect();
+                                    setClMenuPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+                                    setClMenuOpen(cl.id);
+                                  }
+                                }}
                                 style={{
                                   background: "none",
                                   border: "none",
@@ -3947,15 +3953,14 @@ export default function Tasks({
                               {clMenuOpen === cl.id && (
                                 <div
                                   style={{
-                                    position: "absolute",
-                                    right: 0,
-                                    bottom: "100%",
-                                    marginBottom: 4,
+                                    position: "fixed",
+                                    top: clMenuPos.top,
+                                    right: clMenuPos.right,
                                     background: "#fff",
                                     border: "1px solid #e8e8e8",
                                     borderRadius: 8,
                                     boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-                                    zIndex: 200,
+                                    zIndex: 9999,
                                     minWidth: 190,
                                     padding: "4px 0",
                                   }}
@@ -4145,9 +4150,17 @@ export default function Tasks({
                                 </span>
                               )}
                               {/* ··· menu button */}
-                              <div data-item-menu style={{ position: "relative", flexShrink: 0 }}>
+                              <div data-item-menu style={{ flexShrink: 0 }}>
                                 <button
-                                  onClick={() => setItemMenuOpen(itemMenuOpen === item.id ? null : item.id)}
+                                  onClick={(e) => {
+                                    if (itemMenuOpen === item.id) {
+                                      setItemMenuOpen(null);
+                                    } else {
+                                      const r = e.currentTarget.getBoundingClientRect();
+                                      setItemMenuPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+                                      setItemMenuOpen(item.id);
+                                    }
+                                  }}
                                   style={{
                                     background: "none",
                                     border: "none",
@@ -4165,14 +4178,14 @@ export default function Tasks({
                                 {itemMenuOpen === item.id && (
                                   <div
                                     style={{
-                                      position: "absolute",
-                                      right: 0,
-                                      top: "100%",
+                                      position: "fixed",
+                                      top: itemMenuPos.top,
+                                      right: itemMenuPos.right,
                                       background: "#fff",
                                       border: "1px solid #e8e8e8",
                                       borderRadius: 8,
                                       boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-                                      zIndex: 100,
+                                      zIndex: 9999,
                                       minWidth: 150,
                                       padding: "4px 0",
                                     }}
