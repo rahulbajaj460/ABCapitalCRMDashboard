@@ -3938,6 +3938,7 @@ export default function Tasks({
                                   cursor: "pointer",
                                   accentColor: "#1d4ed8",
                                   flexShrink: 0,
+                                  width: "auto",
                                 }}
                               />
                               <span
