@@ -138,6 +138,7 @@ export default function Tasks({
   onRefreshSpaces,
 }) {
   const [tasks, setTasks] = useState([]);
+  const [taskMeta, setTaskMeta] = useState({}); // { [taskId]: { attachmentCount, checklistChecked, checklistTotal } }
   const [viewMode, setViewMode] = useState("list");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -395,7 +396,32 @@ export default function Tasks({
         const u = data.find((t) => t.id === drawerTask.id);
         if (u) setDrawerTask(u);
       }
+      fetchTaskMeta(data.map((t) => t.id));
     }
+  }
+
+  async function fetchTaskMeta(taskIds) {
+    if (!taskIds.length) return;
+    const [{ data: attData }, { data: clData }, { data: clItemData }] = await Promise.all([
+      supabase.from("task_attachments").select("task_id").in("task_id", taskIds),
+      supabase.from("task_checklists").select("id, task_id").in("task_id", taskIds),
+      supabase.from("task_checklist_items").select("checklist_id, is_checked"),
+    ]);
+    const meta = {};
+    (attData || []).forEach(({ task_id }) => {
+      if (!meta[task_id]) meta[task_id] = { attachmentCount: 0, checklistChecked: 0, checklistTotal: 0 };
+      meta[task_id].attachmentCount = (meta[task_id].attachmentCount || 0) + 1;
+    });
+    const clMap = {}; // checklist_id -> task_id
+    (clData || []).forEach(({ id, task_id }) => { clMap[id] = task_id; });
+    (clItemData || []).forEach(({ checklist_id, is_checked }) => {
+      const task_id = clMap[checklist_id];
+      if (!task_id) return;
+      if (!meta[task_id]) meta[task_id] = { attachmentCount: 0, checklistChecked: 0, checklistTotal: 0 };
+      meta[task_id].checklistTotal = (meta[task_id].checklistTotal || 0) + 1;
+      if (is_checked) meta[task_id].checklistChecked = (meta[task_id].checklistChecked || 0) + 1;
+    });
+    setTaskMeta(meta);
   }
 
   // ── Export tasks to CSV ──
@@ -535,6 +561,7 @@ export default function Tasks({
       return;
     }
     await fetchAttachments(drawerTask.id);
+    fetchTaskMeta([drawerTask.id]);
     setUploadingFile(false);
   }
 
@@ -563,6 +590,7 @@ export default function Tasks({
       .remove([attachment.storage_path]);
     await supabase.from("task_attachments").delete().eq("id", attachment.id);
     await fetchAttachments(drawerTask.id);
+    fetchTaskMeta([drawerTask.id]);
   }
 
   function formatFileSize(bytes) {
@@ -623,6 +651,7 @@ export default function Tasks({
       setChecklists((prev) => [...prev, { ...data, items: [] }]);
       setNewChecklistName("");
       setAddingChecklist(false);
+      fetchTaskMeta([taskId]);
     }
   }
 
@@ -641,6 +670,7 @@ export default function Tasks({
     if (!confirm("Delete this checklist and all its items?")) return;
     await supabase.from("task_checklists").delete().eq("id", checklistId);
     setChecklists((prev) => prev.filter((c) => c.id !== checklistId));
+    if (drawerTask) fetchTaskMeta([drawerTask.id]);
   }
 
   async function checkAllItems(checklistId, checked) {
@@ -655,6 +685,7 @@ export default function Tasks({
           : c,
       ),
     );
+    if (drawerTask) fetchTaskMeta([drawerTask.id]);
   }
 
   async function addChecklistItem(checklistId, taskId) {
@@ -679,6 +710,7 @@ export default function Tasks({
         ),
       );
       setNewItemText((prev) => ({ ...prev, [checklistId]: "" }));
+      if (drawerTask) fetchTaskMeta([drawerTask.id]);
     }
   }
 
@@ -696,6 +728,7 @@ export default function Tasks({
         ),
       })),
     );
+    if (drawerTask) fetchTaskMeta([drawerTask.id]);
   }
 
   async function deleteChecklistItem(item) {
@@ -706,6 +739,7 @@ export default function Tasks({
         items: c.items.filter((i) => i.id !== item.id),
       })),
     );
+    if (drawerTask) fetchTaskMeta([drawerTask.id]);
   }
 
   async function renameChecklistItem(item, newTitle) {
@@ -1883,16 +1917,36 @@ export default function Tasks({
             boxShadow: "2px 0 4px -2px rgba(0,0,0,0.06)",
           }}
         >
-          <span
-            style={{
-              fontWeight: 500,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              maxWidth: "100%",
-            }}
-          >
-            {task.title}
+          <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, maxWidth: "100%" }}>
+            <span
+              style={{
+                fontWeight: 500,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                flexShrink: 1,
+                minWidth: 0,
+              }}
+            >
+              {task.title}
+            </span>
+            {taskMeta[task.id]?.attachmentCount > 0 && (
+              <span style={{ display: "flex", alignItems: "center", gap: 2, color: "#999", fontSize: 11, flexShrink: 0, whiteSpace: "nowrap" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                </svg>
+                {taskMeta[task.id].attachmentCount}
+              </span>
+            )}
+            {taskMeta[task.id]?.checklistTotal > 0 && (
+              <span style={{ display: "flex", alignItems: "center", gap: 2, color: "#999", fontSize: 11, flexShrink: 0, whiteSpace: "nowrap" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                  <polyline points="3 6 4 7 6 5"/><polyline points="3 12 4 13 6 11"/><polyline points="3 18 4 19 6 17"/>
+                </svg>
+                {taskMeta[task.id].checklistChecked}/{taskMeta[task.id].checklistTotal}
+              </span>
+            )}
           </span>
           {task.description && (
             <div
