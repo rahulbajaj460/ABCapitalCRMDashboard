@@ -2061,11 +2061,13 @@ export default function Tasks({
             )}
             {task.description && (
               <span
-                style={{ display: "flex", alignItems: "center", color: "#bbb", flexShrink: 0, cursor: "default" }}
-                onMouseEnter={(e) => {
+                style={{ display: "flex", alignItems: "center", color: descPopup?.taskId === task.id ? "#1d4ed8" : "#bbb", flexShrink: 0, cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (descPopup?.taskId === task.id) { setDescPopup(null); return; }
                   const r = e.currentTarget.getBoundingClientRect();
                   const GAP = 8;
-                  const POPUP_H = 300; // fixed height — always scroll for long descriptions
+                  const POPUP_H = 300;
                   const spaceBelow = window.innerHeight - r.bottom - GAP;
                   const openUp = spaceBelow < POPUP_H && r.top > POPUP_H;
                   setDescPopup({
@@ -2078,8 +2080,6 @@ export default function Tasks({
                       : r.bottom + GAP,
                   });
                 }}
-                onMouseLeave={() => setDescPopup(null)}
-                onClick={(e) => e.stopPropagation()}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -2197,9 +2197,13 @@ export default function Tasks({
     >
       {/* Description hover popup — rendered into body via portal to escape any ancestor overflow/transform */}
       {descPopup && createPortal(
-        <div
-          onMouseEnter={() => setDescPopup(descPopup)}
-          onMouseLeave={() => setDescPopup(null)}
+        <>
+          {/* Click-outside backdrop */}
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 99998 }}
+            onClick={() => setDescPopup(null)}
+          />
+          <div
           style={{
             position: "fixed",
             ...(descPopup.openUp
@@ -2229,7 +2233,8 @@ export default function Tasks({
             }}
             dangerouslySetInnerHTML={{ __html: normalizeDesc(descPopup.desc) }}
           />
-        </div>,
+        </div>
+        </>,
         document.body
       )}
       {/* MAIN PANEL */}
