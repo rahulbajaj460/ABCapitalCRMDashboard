@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -2063,18 +2064,14 @@ export default function Tasks({
                 style={{ display: "flex", alignItems: "center", color: "#bbb", flexShrink: 0, cursor: "default" }}
                 onMouseEnter={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
-                  const maxPopupH = 340;
-                  const spaceBelow = window.innerHeight - r.bottom - 12;
-                  const spaceAbove = r.top - 12;
-                  const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
-                  const availH = openUp ? Math.min(maxPopupH, spaceAbove) : Math.min(maxPopupH, spaceBelow);
-                  setDescPopup({
-                    taskId: task.id,
-                    desc: task.description,
-                    x: r.left,
-                    y: openUp ? r.top - availH - 6 : r.bottom + 6,
-                    maxH: availH,
-                  });
+                  const GAP = 10;
+                  const MAX = 360;
+                  const spaceBelow = window.innerHeight - r.bottom - GAP;
+                  const spaceAbove = r.top - GAP;
+                  const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
+                  const maxH = Math.min(MAX, openUp ? spaceAbove : spaceBelow);
+                  const y = openUp ? r.top - maxH - GAP : r.bottom + GAP;
+                  setDescPopup({ taskId: task.id, desc: task.description, x: r.left, y, maxH });
                 }}
                 onMouseLeave={() => setDescPopup(null)}
                 onClick={(e) => e.stopPropagation()}
@@ -2193,8 +2190,8 @@ export default function Tasks({
     <div
       style={{ display: "flex", flex: 1, overflow: "hidden", height: "100%" }}
     >
-      {/* Description hover popup */}
-      {descPopup && (
+      {/* Description hover popup — rendered into body via portal to escape any ancestor overflow/transform */}
+      {descPopup && createPortal(
         <div
           onMouseEnter={() => setDescPopup(descPopup)}
           onMouseLeave={() => setDescPopup(null)}
@@ -2205,20 +2202,21 @@ export default function Tasks({
             left: Math.min(descPopup.x, window.innerWidth - 360),
             width: 340,
             maxHeight: descPopup.maxH,
-            overflowY: "scroll",
+            overflowY: "auto",
             background: "#fff",
             border: "1px solid #e5e7eb",
             borderRadius: 10,
-            boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-            zIndex: 9999,
+            boxShadow: "0 8px 30px rgba(0,0,0,0.14)",
+            zIndex: 99999,
             padding: "14px 16px",
             fontSize: 13,
             lineHeight: 1.7,
             color: "#333",
-            pointerEvents: "auto",
+            boxSizing: "border-box",
           }}
           dangerouslySetInnerHTML={{ __html: normalizeDesc(descPopup.desc) }}
-        />
+        />,
+        document.body
       )}
       {/* MAIN PANEL */}
       <div
