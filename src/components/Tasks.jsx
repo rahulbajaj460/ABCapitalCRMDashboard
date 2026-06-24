@@ -2064,14 +2064,23 @@ export default function Tasks({
                 style={{ display: "flex", alignItems: "center", color: "#bbb", flexShrink: 0, cursor: "default" }}
                 onMouseEnter={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
-                  const GAP = 10;
+                  const GAP = 8;
                   const MAX = 360;
                   const spaceBelow = window.innerHeight - r.bottom - GAP;
                   const spaceAbove = r.top - GAP;
-                  const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
+                  const openUp = spaceAbove > spaceBelow;
                   const maxH = Math.min(MAX, openUp ? spaceAbove : spaceBelow);
-                  const y = openUp ? r.top - maxH - GAP : r.bottom + GAP;
-                  setDescPopup({ taskId: task.id, desc: task.description, x: r.left, y, maxH });
+                  setDescPopup({
+                    taskId: task.id,
+                    desc: task.description,
+                    x: r.left,
+                    openUp,
+                    // For upward: anchor to bottom of icon; for downward: anchor to top of popup
+                    anchorY: openUp
+                      ? window.innerHeight - r.top + GAP  // distance from viewport bottom to icon top
+                      : r.bottom + GAP,                   // distance from viewport top to icon bottom
+                    maxH,
+                  });
                 }}
                 onMouseLeave={() => setDescPopup(null)}
                 onClick={(e) => e.stopPropagation()}
@@ -2198,7 +2207,9 @@ export default function Tasks({
           className="task-desc-popup"
           style={{
             position: "fixed",
-            top: descPopup.y,
+            ...(descPopup.openUp
+              ? { bottom: descPopup.anchorY }
+              : { top: descPopup.anchorY }),
             left: Math.min(descPopup.x, window.innerWidth - 360),
             width: 340,
             maxHeight: descPopup.maxH,
