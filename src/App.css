@@ -1235,3 +1235,19 @@ textarea:focus {
   background: #e0e0de;
   border-radius: 20px;
 }
+
+/* ── Task description hover popup prose styles ── */
+.task-desc-popup h1 { font-size: 18px; font-weight: 800; margin: 0 0 8px; color: #1a1a1a; }
+.task-desc-popup h2 { font-size: 15px; font-weight: 700; margin: 10px 0 6px; color: #1a1a1a; }
+.task-desc-popup h3 { font-size: 13px; font-weight: 700; margin: 8px 0 4px; color: #333; }
+.task-desc-popup p  { margin: 0 0 6px; }
+.task-desc-popup ul, .task-desc-popup ol { padding-left: 18px; margin: 4px 0 6px; }
+.task-desc-popup li { line-height: 1.6; }
+.task-desc-popup strong { font-weight: 700; }
+.task-desc-popup em { font-style: italic; }
+.task-desc-popup u  { text-decoration: underline; }
+.task-desc-popup s  { text-decoration: line-through; }
+.task-desc-popup blockquote { border-left: 3px solid #1d4ed8; padding: 4px 12px; margin: 8px 0; background: #eff6ff; border-radius: 0 6px 6px 0; }
+.task-desc-popup code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+.task-desc-popup pre  { background: #f3f4f6; padding: 10px 12px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+.task-desc-popup a    { color: #1d4ed8; text-decoration: underline; }
