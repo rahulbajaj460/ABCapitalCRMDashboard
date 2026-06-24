@@ -2063,14 +2063,17 @@ export default function Tasks({
                 style={{ display: "flex", alignItems: "center", color: "#bbb", flexShrink: 0, cursor: "default" }}
                 onMouseEnter={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
-                  const popupH = 320;
-                  const spaceBelow = window.innerHeight - r.bottom;
-                  const openUp = spaceBelow < popupH + 12;
+                  const maxPopupH = 340;
+                  const spaceBelow = window.innerHeight - r.bottom - 12;
+                  const spaceAbove = r.top - 12;
+                  const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+                  const availH = openUp ? Math.min(maxPopupH, spaceAbove) : Math.min(maxPopupH, spaceBelow);
                   setDescPopup({
                     taskId: task.id,
                     desc: task.description,
                     x: r.left,
-                    y: openUp ? r.top - popupH - 6 : r.bottom + 6,
+                    y: openUp ? r.top - availH - 6 : r.bottom + 6,
+                    maxH: availH,
                   });
                 }}
                 onMouseLeave={() => setDescPopup(null)}
@@ -2201,8 +2204,8 @@ export default function Tasks({
             top: descPopup.y,
             left: Math.min(descPopup.x, window.innerWidth - 360),
             width: 340,
-            maxHeight: 320,
-            overflowY: "auto",
+            maxHeight: descPopup.maxH,
+            overflowY: "scroll",
             background: "#fff",
             border: "1px solid #e5e7eb",
             borderRadius: 10,
