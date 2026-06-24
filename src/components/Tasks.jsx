@@ -2216,10 +2216,9 @@ export default function Tasks({
             borderRadius: 10,
             boxShadow: "0 8px 30px rgba(0,0,0,0.14)",
             zIndex: 99999,
-            overflow: "hidden",   // clips border-radius cleanly
+            // No overflow:hidden here — it would clip the inner scrollbar
           }}
         >
-          {/* Separate scrollable inner div so the scrollbar isn't clipped by border-radius */}
           <div
             className="task-desc-popup"
             style={{
@@ -2230,6 +2229,7 @@ export default function Tasks({
               lineHeight: 1.7,
               color: "#333",
               boxSizing: "border-box",
+              borderRadius: 10,  // match outer so content respects rounded corners
             }}
             dangerouslySetInnerHTML={{ __html: normalizeDesc(descPopup.desc) }}
           />
