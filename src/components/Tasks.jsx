@@ -2204,7 +2204,6 @@ export default function Tasks({
         <div
           onMouseEnter={() => setDescPopup(descPopup)}
           onMouseLeave={() => setDescPopup(null)}
-          className="task-desc-popup"
           style={{
             position: "fixed",
             ...(descPopup.openUp
@@ -2212,21 +2211,29 @@ export default function Tasks({
               : { top: descPopup.anchorY }),
             left: Math.min(descPopup.x, window.innerWidth - 360),
             width: 340,
-            maxHeight: descPopup.maxH,
-            overflowY: "scroll",
             background: "#fff",
             border: "1px solid #e5e7eb",
             borderRadius: 10,
             boxShadow: "0 8px 30px rgba(0,0,0,0.14)",
             zIndex: 99999,
-            padding: "14px 16px",
-            fontSize: 13,
-            lineHeight: 1.7,
-            color: "#333",
-            boxSizing: "border-box",
+            overflow: "hidden",   // clips border-radius cleanly
           }}
-          dangerouslySetInnerHTML={{ __html: normalizeDesc(descPopup.desc) }}
-        />,
+        >
+          {/* Separate scrollable inner div so the scrollbar isn't clipped by border-radius */}
+          <div
+            className="task-desc-popup"
+            style={{
+              maxHeight: descPopup.maxH,
+              overflowY: "auto",
+              padding: "14px 16px",
+              fontSize: 13,
+              lineHeight: 1.7,
+              color: "#333",
+              boxSizing: "border-box",
+            }}
+            dangerouslySetInnerHTML={{ __html: normalizeDesc(descPopup.desc) }}
+          />
+        </div>,
         document.body
       )}
       {/* MAIN PANEL */}
