@@ -2213,7 +2213,7 @@ export default function Tasks({
             left: Math.min(descPopup.x, window.innerWidth - 360),
             width: 340,
             maxHeight: descPopup.maxH,
-            overflowY: "auto",
+            overflowY: "scroll",
             background: "#fff",
             border: "1px solid #e5e7eb",
             borderRadius: 10,
