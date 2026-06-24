@@ -2065,21 +2065,17 @@ export default function Tasks({
                 onMouseEnter={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
                   const GAP = 8;
-                  const MAX = 360;
+                  const POPUP_H = 300; // fixed height — always scroll for long descriptions
                   const spaceBelow = window.innerHeight - r.bottom - GAP;
-                  const spaceAbove = r.top - GAP;
-                  const openUp = spaceAbove > spaceBelow;
-                  const maxH = Math.min(MAX, openUp ? spaceAbove : spaceBelow);
+                  const openUp = spaceBelow < POPUP_H && r.top > POPUP_H;
                   setDescPopup({
                     taskId: task.id,
                     desc: task.description,
                     x: r.left,
                     openUp,
-                    // For upward: anchor to bottom of icon; for downward: anchor to top of popup
                     anchorY: openUp
-                      ? window.innerHeight - r.top + GAP  // distance from viewport bottom to icon top
-                      : r.bottom + GAP,                   // distance from viewport top to icon bottom
-                    maxH,
+                      ? window.innerHeight - r.top + GAP
+                      : r.bottom + GAP,
                   });
                 }}
                 onMouseLeave={() => setDescPopup(null)}
@@ -2222,7 +2218,7 @@ export default function Tasks({
           <div
             className="task-desc-popup"
             style={{
-              maxHeight: descPopup.maxH,
+              maxHeight: 300,
               overflowY: "auto",
               padding: "14px 16px",
               fontSize: 13,
