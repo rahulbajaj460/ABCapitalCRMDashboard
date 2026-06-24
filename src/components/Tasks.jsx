@@ -2063,7 +2063,15 @@ export default function Tasks({
                 style={{ display: "flex", alignItems: "center", color: "#bbb", flexShrink: 0, cursor: "default" }}
                 onMouseEnter={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
-                  setDescPopup({ taskId: task.id, desc: task.description, x: r.left, y: r.bottom + 6 });
+                  const popupH = 320;
+                  const spaceBelow = window.innerHeight - r.bottom;
+                  const openUp = spaceBelow < popupH + 12;
+                  setDescPopup({
+                    taskId: task.id,
+                    desc: task.description,
+                    x: r.left,
+                    y: openUp ? r.top - popupH - 6 : r.bottom + 6,
+                  });
                 }}
                 onMouseLeave={() => setDescPopup(null)}
                 onClick={(e) => e.stopPropagation()}
