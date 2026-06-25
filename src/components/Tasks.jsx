@@ -474,6 +474,8 @@ export default function Tasks({
   const [modalSpaceStatuses, setModalSpaceStatuses] = useState([]);
   const [statusActionMsg, setStatusActionMsg] = useState("");
   const [statusLoading, setStatusLoading] = useState(false);
+  const [editingStatusId, setEditingStatusId] = useState(null);
+  const [editingStatusData, setEditingStatusData] = useState({ name: "", color: "#378ADD" });
 
   function updateVisibleColumns(cols) {
     setVisibleColumns(cols);
@@ -1766,6 +1768,37 @@ export default function Tasks({
         ? `✅ "${statusName}" deleted. Tasks moved to "${fallback}".`
         : `✅ "${statusName}" deleted.`,
     );
+    await fetchModalStatuses();
+    await onRefreshSpaces();
+    fetchTasks();
+    setStatusLoading(false);
+  }
+
+  async function saveEditStatus() {
+    if (!editingStatusId || !editingStatusData.name.trim()) return;
+    setStatusLoading(true);
+    setStatusActionMsg("");
+    const oldStatus = modalSpaceStatuses.find((s) => s.id === editingStatusId);
+    const oldName = oldStatus?.name || "";
+    const newName = editingStatusData.name.trim();
+    const { error } = await supabase
+      .from("space_statuses")
+      .update({ name: newName, color: editingStatusData.color })
+      .eq("id", editingStatusId);
+    if (error) {
+      setStatusActionMsg("❌ Failed to update status.");
+      setStatusLoading(false);
+      return;
+    }
+    if (oldName && oldName !== newName) {
+      await supabase
+        .from("tasks")
+        .update({ status: newName })
+        .eq("space_id", activeSpace.id)
+        .eq("status", oldName);
+    }
+    setEditingStatusId(null);
+    setStatusActionMsg(`✅ "${newName}" updated.`);
     await fetchModalStatuses();
     await onRefreshSpaces();
     fetchTasks();
@@ -5913,7 +5946,12 @@ export default function Tasks({
               </button>
             </div>
             <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>
-              {activeFolder ? (
+              {activeList ? (
+                <>
+                  <span>List: </span>
+                  <strong>{activeList.name}</strong>
+                </>
+              ) : activeFolder ? (
                 <>
                   <span>Folder: </span>
                   <strong>{activeFolder.name}</strong>
@@ -5997,40 +6035,61 @@ export default function Tasks({
                   <div
                     key={s.id}
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "8px 10px",
                       background: "#f5f5f4",
                       borderRadius: 6,
                       marginBottom: 6,
                       border: "1px solid #e8e8e8",
+                      overflow: "hidden",
                     }}
                   >
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 8 }}
-                    >
-                      <span
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: "50%",
-                          background: s.color,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>
-                        {s.name}
-                      </span>
-                    </div>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      style={{ padding: "2px 10px", fontSize: 11 }}
-                      onClick={() => deleteCustomStatus(s.id, s.name)}
-                      disabled={statusLoading}
-                    >
-                      Delete
-                    </button>
+                    {editingStatusId === s.id ? (
+                      <div style={{ padding: "10px 10px 8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <input
+                            type="color"
+                            value={editingStatusData.color}
+                            onChange={(e) => setEditingStatusData((p) => ({ ...p, color: e.target.value }))}
+                            style={{ width: 32, height: 32, padding: 2, cursor: "pointer", flexShrink: 0 }}
+                          />
+                          <input
+                            autoFocus
+                            value={editingStatusData.name}
+                            onChange={(e) => setEditingStatusData((p) => ({ ...p, name: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") saveEditStatus(); if (e.key === "Escape") setEditingStatusId(null); }}
+                            style={{ flex: 1, fontSize: 13, padding: "4px 8px", border: "1px solid #d1d5db", borderRadius: 4 }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                          <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setEditingStatusId(null)} disabled={statusLoading}>Cancel</button>
+                          <button className="btn btn-sm btn-primary" style={{ fontSize: 11 }} onClick={saveEditStatus} disabled={statusLoading || !editingStatusData.name.trim()}>Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ width: 12, height: 12, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button
+                            className="btn btn-sm"
+                            style={{ padding: "2px 10px", fontSize: 11 }}
+                            onClick={() => { setEditingStatusId(s.id); setEditingStatusData({ name: s.name, color: s.color || "#378ADD" }); setStatusActionMsg(""); }}
+                            disabled={statusLoading}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-sm btn-danger"
+                            style={{ padding: "2px 10px", fontSize: 11 }}
+                            onClick={() => deleteCustomStatus(s.id, s.name)}
+                            disabled={statusLoading}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
