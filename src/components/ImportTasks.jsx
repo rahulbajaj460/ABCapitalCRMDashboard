@@ -75,6 +75,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   const [selectedFolder, setSelectedFolder] = useState("");
   const [selectedList, setSelectedList] = useState("");
   const [folderLists, setFolderLists] = useState([]);
+  const [listScopedFields, setListScopedFields] = useState([]);
   const [statusMap, setStatusMap] = useState({});
 
   // Status review state
@@ -104,18 +105,27 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
       .then(({ data }) => { setFolderLists(data || []); setSelectedList(""); });
   }, [selectedFolder]);
 
+  useEffect(() => {
+    if (!selectedList) { setListScopedFields([]); return; }
+    supabase.from("space_fields").select("*").eq("list_id", selectedList).order("field_order")
+      .then(({ data }) => setListScopedFields(data || []));
+  }, [selectedList]);
+
   const unmappedColumns = headers.filter(
     (h) => !Object.values(mapping).includes(h),
   );
 
   const existingFields = (() => {
+    // When a list is selected, show only list-scoped fields for "map to existing"
+    if (selectedList) return listScopedFields;
     const space = spaces.find((s) => s.id === selectedSpace);
     if (!space) return [];
     if (selectedFolder) {
       const folder = space.folders?.find((f) => f.id === selectedFolder);
-      return folder?.space_fields || space.space_fields || [];
+      // Exclude list-scoped fields from folder-level field list
+      return (folder?.space_fields || space.space_fields || []).filter((f) => !f.list_id);
     }
-    return space.space_fields || [];
+    return (space.space_fields || []).filter((f) => !f.list_id);
   })();
 
   // Get portal statuses for selected space/folder
@@ -376,7 +386,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         .from("space_fields")
         .insert({
           space_id: selectedSpace,
-          folder_id: selectedFolder || null,
+          folder_id: selectedList ? null : (selectedFolder || null),
+          list_id: selectedList || null,
           field_name: cfg.fieldName.trim(),
           field_type: cfg.fieldType || "text",
           field_order:

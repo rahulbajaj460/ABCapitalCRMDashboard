@@ -407,12 +407,19 @@ export default function Tasks({
   const fileInputRef = useRef(null);
   // Lists (folder sub-lists)
   const [spaceLists, setSpaceLists] = useState([]); // all lists for the active space
+  const [listFields, setListFields] = useState([]); // space_fields scoped to active list
 
   useEffect(() => {
     if (!activeSpace) { setSpaceLists([]); return; }
     supabase.from("lists").select("*").eq("space_id", activeSpace.id).is("deleted_at", null).order("created_at")
       .then(({ data }) => setSpaceLists(data || []));
   }, [activeSpace]);
+
+  useEffect(() => {
+    if (!activeList) { setListFields([]); return; }
+    supabase.from("space_fields").select("*").eq("list_id", activeList.id).order("field_order")
+      .then(({ data }) => setListFields(data || []));
+  }, [activeList]);
 
   // Checklists
   const [checklists, setChecklists] = useState([]);
@@ -1033,8 +1040,17 @@ export default function Tasks({
     return result;
   }
   function getFields() {
+    if (activeList && listFields.length > 0) {
+      // List-scoped fields only (don't show folder-level fields that aren't for this list)
+      return applyFieldOverrides(
+        [...listFields].sort((a, b) => a.field_order - b.field_order),
+        activeSpace?.id,
+        activeFolder?.id,
+      );
+    }
     if (activeFolder) {
-      const ff = activeFolder.space_fields || [];
+      // Show folder fields that are NOT list-scoped
+      const ff = (activeFolder.space_fields || []).filter((f) => !f.list_id);
       if (ff.length > 0)
         return applyFieldOverrides(
           ff.sort((a, b) => a.field_order - b.field_order),
@@ -1043,7 +1059,7 @@ export default function Tasks({
         );
     }
     return applyFieldOverrides(
-      (activeSpace?.space_fields || []).sort(
+      (activeSpace?.space_fields || []).filter((f) => !f.list_id).sort(
         (a, b) => a.field_order - b.field_order,
       ),
       activeSpace?.id,
@@ -1051,7 +1067,7 @@ export default function Tasks({
     );
   }
   function getFolderFields(folder) {
-    const ff = folder.space_fields || [];
+    const ff = (folder.space_fields || []).filter((f) => !f.list_id);
     if (ff.length > 0)
       return applyFieldOverrides(
         ff.sort((a, b) => a.field_order - b.field_order),
@@ -1059,7 +1075,7 @@ export default function Tasks({
         folder.id,
       );
     return applyFieldOverrides(
-      (activeSpace?.space_fields || []).sort(
+      (activeSpace?.space_fields || []).filter((f) => !f.list_id).sort(
         (a, b) => a.field_order - b.field_order,
       ),
       activeSpace?.id,
