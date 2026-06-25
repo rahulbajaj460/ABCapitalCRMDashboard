@@ -2875,7 +2875,116 @@ export default function Tasks({
                         </div>
                       )}
                   </div>
-                ) : (
+                ) : (() => {
+                  // If viewing a folder that has lists, show list sub-sections
+                  const folderListItems = activeFolder && !activeList
+                    ? spaceLists.filter((l) => l.folder_id === activeFolder.id)
+                    : [];
+
+                  if (folderListItems.length > 0) {
+                    const folderStatusList = getFolderStatuses(activeFolder);
+                    const folderFieldList = getFolderFields(activeFolder);
+                    return (
+                      <div>
+                        {folderListItems.map((list) => {
+                          const listTasks = tasks.filter((t) => t.list_id === list.id);
+                          const filteredListTasks = listTasks.filter((t) => {
+                            if (statusFilter !== "all" && t.status !== statusFilter) return false;
+                            if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+                            return true;
+                          });
+                          const listKey = `flv_${list.id}`;
+                          const listExpanded = expandedGroups[listKey] !== false;
+                          const listGroupedRaw = groupBy === "status"
+                            ? folderStatusList.reduce((acc, s) => { acc[s] = filteredListTasks.filter((t) => t.status === s); return acc; }, {})
+                            : groupBy === "priority"
+                              ? ["High", "Medium", "Low"].reduce((acc, p) => { acc[p] = filteredListTasks.filter((t) => t.priority === p); return acc; }, {})
+                              : groupBy === "assignee"
+                                ? groupByAssignees(filteredListTasks)
+                                : { "All tasks": filteredListTasks };
+                          const listGrouped = Object.fromEntries(Object.entries(listGroupedRaw).map(([k, v]) => [k, sortTasks(v)]));
+
+                          return (
+                            <div key={list.id} style={{ marginBottom: 16 }}>
+                              {/* List section header */}
+                              <div
+                                className="status-group-header"
+                                onClick={() => setExpandedGroups((p) => ({ ...p, [listKey]: !listExpanded }))}
+                              >
+                                <span style={{ fontSize: 10 }}>{listExpanded ? "▾" : "▸"}</span>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>
+                                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                                  <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                                </svg>
+                                <span style={{ fontSize: 13, fontWeight: 600 }}>{list.name}</span>
+                                <span style={{ fontSize: 12, color: "#aaa" }}>{filteredListTasks.length}</span>
+                              </div>
+                              {listExpanded && (
+                                <div>
+                                  {Object.entries(listGrouped).map(([groupName, groupTasks]) => {
+                                    if (groupTasks.length === 0) return null;
+                                    const groupKey = `flv_${list.id}_${groupName}`;
+                                    const groupExpanded = expandedGroups[groupKey] !== false;
+                                    const groupColor = groupBy === "status" ? getStatusColorForFolder(groupName, activeFolder) : "#f0f0ef";
+                                    return (
+                                      <div key={groupName} style={{ marginBottom: 4, paddingLeft: 8 }}>
+                                        <div
+                                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer" }}
+                                          onClick={() => setExpandedGroups((p) => ({ ...p, [groupKey]: !groupExpanded }))}
+                                        >
+                                          <span style={{ fontSize: 10, color: "#aaa" }}>{groupExpanded ? "▾" : "▸"}</span>
+                                          <span style={{ background: groupColor, color: groupBy === "status" ? "#fff" : "#333", padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600 }}>{groupName}</span>
+                                          <span style={{ fontSize: 12, color: "#aaa" }}>{groupTasks.length}</span>
+                                        </div>
+                                        {groupExpanded && (
+                                          <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, marginTop: 4 }}>
+                                            {renderTableHead(folderFieldList)}
+                                            {groupTasks.map((task) => renderTaskRow(task, folderStatusList, folderFieldList, activeFolder))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                  {filteredListTasks.length === 0 && (
+                                    <div style={{ fontSize: 12, color: "#ccc", padding: "8px 20px" }}>No tasks in this list</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {/* Tasks in folder not assigned to any list */}
+                        {(() => {
+                          const unlistedTasks = sortTasks(tasks.filter((t) => !t.list_id).filter((t) => {
+                            if (statusFilter !== "all" && t.status !== statusFilter) return false;
+                            if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
+                            return true;
+                          }));
+                          if (unlistedTasks.length === 0) return null;
+                          const ulKey = "flv_unlisted";
+                          const ulExpanded = expandedGroups[ulKey] !== false;
+                          return (
+                            <div style={{ marginBottom: 16 }}>
+                              <div className="status-group-header" onClick={() => setExpandedGroups((p) => ({ ...p, [ulKey]: !ulExpanded }))}>
+                                <span style={{ fontSize: 10 }}>{ulExpanded ? "▾" : "▸"}</span>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: "#9ca3af" }}>No list</span>
+                                <span style={{ fontSize: 12, color: "#aaa" }}>{unlistedTasks.length}</span>
+                              </div>
+                              {ulExpanded && (
+                                <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, marginTop: 4 }}>
+                                  {renderTableHead(getFolderFields(activeFolder))}
+                                  {unlistedTasks.map((task) => renderTaskRow(task, getFolderStatuses(activeFolder), getFolderFields(activeFolder), activeFolder))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  }
+
+                  // No lists in folder (or viewing a list directly) — original grouped view
+                  return (
                   <div>
                     {Object.entries(getGroupedTasks()).map(
                       ([groupName, groupTasks]) => {
@@ -2952,7 +3061,8 @@ export default function Tasks({
                       },
                     )}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           )}
