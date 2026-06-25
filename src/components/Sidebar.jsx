@@ -1028,7 +1028,7 @@ export default function Sidebar({
       <div
         style={{
           flex: 1,
-          overflow: "hidden",
+          overflow: "visible",
           display: "flex",
           flexDirection: "column",
         }}
