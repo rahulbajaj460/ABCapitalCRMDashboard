@@ -135,13 +135,16 @@ export default function Sidebar({
   const [expandedFolders, setExpandedFolders] = useState({});
   const [newListFolderId, setNewListFolderId] = useState(null); // folder id showing inline create
   const [newListName, setNewListName] = useState("");
+  const [listMenu, setListMenu] = useState(null); // { id, list, x, y }
+  const [editListModal, setEditListModal] = useState(null); // list object
+  const [editListName, setEditListName] = useState("");
 
   useEffect(() => {
     fetchLists();
   }, []);
 
   async function fetchLists() {
-    const { data } = await supabase.from("lists").select("*").order("created_at");
+    const { data } = await supabase.from("lists").select("*").is("deleted_at", null).order("created_at");
     setLists(data || []);
   }
 
@@ -158,6 +161,23 @@ export default function Sidebar({
       setNewListFolderId(null);
       setNewListName("");
     }
+  }
+
+  async function saveEditList() {
+    if (!editListName.trim() || !editListModal) return;
+    await supabase.from("lists").update({ name: editListName.trim() }).eq("id", editListModal.id);
+    setLists((prev) => prev.map((l) => l.id === editListModal.id ? { ...l, name: editListName.trim() } : l));
+    setEditListModal(null);
+  }
+
+  async function deleteList(list) {
+    setListMenu(null);
+    if (!confirm("Move this list to Trash? Tasks inside will also be moved.")) return;
+    const now = new Date().toISOString();
+    const deletedBy = profile?.full_name || "Unknown";
+    await supabase.from("lists").update({ deleted_at: now, deleted_by: deletedBy }).eq("id", list.id);
+    await supabase.from("tasks").update({ deleted_at: now, deleted_by: deletedBy }).eq("list_id", list.id);
+    setLists((prev) => prev.filter((l) => l.id !== list.id));
   }
 
   // ── Wiki docs in sidebar ──
@@ -242,6 +262,7 @@ export default function Sidebar({
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setSpaceMenu(null);
         setFolderMenu(null);
+        setListMenu(null);
       }
     }
     document.addEventListener("mousedown", handler);
@@ -923,8 +944,8 @@ export default function Sidebar({
           zIndex: 9999,
           minWidth: 180,
           padding: "4px 0",
-          left: spaceMenu?.x || folderMenu?.x,
-          top: spaceMenu?.y || folderMenu?.y,
+          left: spaceMenu?.x || folderMenu?.x || listMenu?.x,
+          top: spaceMenu?.y || folderMenu?.y || listMenu?.y,
         }}
       >
         {items.map((item, i) =>
@@ -1188,7 +1209,7 @@ export default function Sidebar({
                                 key={list.id}
                                 className={`folder-item ${activeList?.id === list.id ? "active" : ""}`}
                                 onClick={() => onListSelect(space, folder, list)}
-                                style={{ paddingLeft: 32 }}
+                                style={{ paddingLeft: 32, position: "relative" }}
                               >
                                 {/* List icon */}
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>
@@ -1196,6 +1217,19 @@ export default function Sidebar({
                                   <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                                 </svg>
                                 <span style={{ flex: 1, fontSize: 12 }}>{list.name}</span>
+                                <span
+                                  className="space-delete-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const r = e.currentTarget.getBoundingClientRect();
+                                    setListMenu({ id: list.id, list, x: r.right + 4, y: r.top });
+                                    setFolderMenu(null);
+                                    setSpaceMenu(null);
+                                  }}
+                                  style={{ opacity: 0, fontSize: 14, color: "#888", padding: "1px 4px", borderRadius: 4, cursor: "pointer", lineHeight: 1 }}
+                                >
+                                  •••
+                                </span>
                               </div>
                             ))}
                             {/* Inline new list input */}
@@ -1508,6 +1542,54 @@ export default function Sidebar({
           ]}
           onClose={() => setFolderMenu(null)}
         />
+      )}
+
+      {/* ── LIST CONTEXT MENU ── */}
+      {listMenu && (
+        <ContextMenu
+          items={[
+            {
+              icon: "✏️",
+              label: "Rename list",
+              action: () => {
+                setEditListModal(listMenu.list);
+                setEditListName(listMenu.list.name);
+                setListMenu(null);
+              },
+            },
+            "divider",
+            {
+              icon: "🗑️",
+              label: "Delete list",
+              danger: true,
+              action: () => deleteList(listMenu.list),
+            },
+          ]}
+          onClose={() => setListMenu(null)}
+        />
+      )}
+
+      {/* ── EDIT LIST MODAL ── */}
+      {editListModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 3000 }}
+          onClick={(e) => e.target === e.currentTarget && setEditListModal(null)}
+        >
+          <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Rename list</div>
+            <input
+              autoFocus
+              value={editListName}
+              onChange={(e) => setEditListName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEditList(); if (e.key === "Escape") setEditListModal(null); }}
+              style={{ width: "100%", fontSize: 14, border: "1px solid #d1d5db", borderRadius: 6, padding: "8px 10px", outline: "none", boxSizing: "border-box" }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button onClick={() => setEditListModal(null)} style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontSize: 13 }}>Cancel</button>
+              <button onClick={saveEditList} style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#2563eb", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Save</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── EDIT SPACE MODAL ── */}
