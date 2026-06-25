@@ -1238,6 +1238,20 @@ export default function Sidebar({
                                   <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                                 </svg>
                                 <span style={{ flex: 1, fontSize: 12 }}>{list.name}</span>
+                                {taskCounts[list.id] > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      color: "#aaa",
+                                      background: "#f0f0ef",
+                                      borderRadius: 20,
+                                      padding: "0 6px",
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {taskCounts[list.id]}
+                                  </span>
+                                )}
                                 <span
                                   className="space-delete-btn"
                                   onClick={(e) => {

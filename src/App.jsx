@@ -142,7 +142,7 @@ export default function App() {
   async function fetchTaskCounts() {
     const { data } = await supabase
       .from("tasks")
-      .select("space_id, folder_id")
+      .select("space_id, folder_id, list_id")
       .is("deleted_at", null);
     if (!data) return;
     const counts = {};
@@ -150,6 +150,9 @@ export default function App() {
       counts[t.space_id] = (counts[t.space_id] || 0) + 1;
       if (t.folder_id) {
         counts[t.folder_id] = (counts[t.folder_id] || 0) + 1;
+      }
+      if (t.list_id) {
+        counts[t.list_id] = (counts[t.list_id] || 0) + 1;
       }
     });
     setTaskCounts(counts);
