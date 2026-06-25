@@ -282,6 +282,24 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
       .filter(Boolean);
   }
 
+  // Detect ClickUp field type hints from column names like "Field (short text)", "Field (drop down)", "Field (formula)"
+  function detectFieldTypeFromColName(col) {
+    const lower = col.toLowerCase();
+    if (lower.includes("(short text)") || lower.includes("(text)") || lower.includes("(email)")) return "text";
+    if (lower.includes("(drop down)") || lower.includes("(dropdown)")) return "dropdown";
+    if (lower.includes("(formula)")) return "formula";
+    if (lower.includes("(number)") || lower.includes("(numeric)")) return "number";
+    if (lower.includes("(date)")) return "date";
+    if (lower.includes("(phone)") || lower.includes("(telephone)")) return "phone";
+    if (lower.includes("(url)") || lower.includes("(link)")) return "url";
+    return "text";
+  }
+
+  // Strip ClickUp type hint suffix from column name to get a clean field name
+  function cleanFieldName(col) {
+    return col.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  }
+
   function updateCustomFieldMapping(col, updates) {
     setCustomFieldMappings((prev) => ({
       ...prev,
@@ -343,6 +361,15 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         ];
       }
 
+      // Check if a field with this name already exists — reuse it instead of creating a duplicate
+      const existingMatch = existingFields.find(
+        (f) => f.field_name.toLowerCase() === cfg.fieldName.trim().toLowerCase()
+      );
+      if (existingMatch) {
+        created[col] = existingMatch.id;
+        continue;
+      }
+
       const { data, error } = await supabase
         .from("space_fields")
         .insert({
@@ -356,6 +383,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         })
         .select()
         .single();
+      if (error) {
+        console.error("Field creation error for", cfg.fieldName, error.message);
+      }
       if (!error && data) created[col] = data.id;
     }
     return created;
@@ -504,7 +534,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
             }
           });
           if (fieldValues.length > 0) {
-            await supabase.from("task_field_values").insert(fieldValues);
+            const { error: fvErr } = await supabase.from("task_field_values").insert(fieldValues);
+            if (fvErr) errs.push(`Field values: ${fvErr.message}`);
           }
         }
         imported += batch.length;
@@ -767,8 +798,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                   const action = customFieldMappings[col]?.action || "skip";
                   const cfg = customFieldMappings[col] || {
                     action: "skip",
-                    fieldName: col,
-                    fieldType: "text",
+                    fieldName: cleanFieldName(col),
+                    fieldType: detectFieldTypeFromColName(col),
                   };
                   const sampleValue = rows.find((r) => r[col])?.[col] || "";
                   return (
@@ -826,6 +857,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                             onChange={(e) =>
                               updateCustomFieldMapping(col, {
                                 action: e.target.value,
+                                fieldName: cfg.fieldName || cleanFieldName(col),
+                                fieldType: cfg.fieldType || detectFieldTypeFromColName(col),
                               })
                             }
                             style={{ fontSize: 12, padding: "4px 8px" }}
