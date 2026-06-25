@@ -221,6 +221,7 @@ export default function Sidebar({
   const [showTrashModal, setShowTrashModal] = useState(false);
   const [trashedSpaces, setTrashedSpaces] = useState([]);
   const [trashedFolders, setTrashedFolders] = useState([]);
+  const [trashedLists, setTrashedLists] = useState([]);
   const [trashedTasks, setTrashedTasks] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
 
@@ -464,7 +465,7 @@ export default function Sidebar({
   // ── Trash management ──
   async function fetchTrash() {
     setTrashLoading(true);
-    const [spacesRes, foldersRes, tasksRes] = await Promise.all([
+    const [spacesRes, foldersRes, listsRes, tasksRes] = await Promise.all([
       supabase
         .from("spaces")
         .select("*")
@@ -476,6 +477,11 @@ export default function Sidebar({
         .not("deleted_at", "is", null)
         .order("deleted_at", { ascending: false }),
       supabase
+        .from("lists")
+        .select("*, folders(name)")
+        .not("deleted_at", "is", null)
+        .order("deleted_at", { ascending: false }),
+      supabase
         .from("tasks")
         .select("*")
         .not("deleted_at", "is", null)
@@ -484,6 +490,7 @@ export default function Sidebar({
     ]);
     setTrashedSpaces(spacesRes.data || []);
     setTrashedFolders(foldersRes.data || []);
+    setTrashedLists(listsRes.data || []);
     setTrashedTasks(tasksRes.data || []);
     setTrashLoading(false);
   }
@@ -516,6 +523,20 @@ export default function Sidebar({
       .update({ deleted_at: null, deleted_by: null })
       .eq("folder_id", folderId);
     onSpaceCreated();
+    fetchTrash();
+  }
+
+  async function restoreList(listId) {
+    await supabase.from("lists").update({ deleted_at: null, deleted_by: null }).eq("id", listId);
+    await supabase.from("tasks").update({ deleted_at: null, deleted_by: null }).eq("list_id", listId);
+    setLists((prev) => prev.filter((l) => l.id !== listId));
+    fetchTrash();
+  }
+
+  async function permanentlyDeleteList(listId, name) {
+    if (!confirm(`Permanently delete list "${name}" and its tasks? This cannot be undone.`)) return;
+    await supabase.from("tasks").delete().eq("list_id", listId);
+    await supabase.from("lists").delete().eq("id", listId);
     fetchTrash();
   }
 
@@ -3242,6 +3263,7 @@ export default function Sidebar({
                 </div>
               ) : trashedSpaces.length === 0 &&
                 trashedFolders.length === 0 &&
+                trashedLists.length === 0 &&
                 trashedTasks.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <div style={{ fontSize: 24, marginBottom: 8 }}>🗑</div>
@@ -3249,7 +3271,7 @@ export default function Sidebar({
                     Trash is empty
                   </div>
                   <div style={{ fontSize: 12, color: "#aaa", marginTop: 4 }}>
-                    Deleted spaces, folders, and tasks will appear here
+                    Deleted spaces, folders, lists, and tasks will appear here
                   </div>
                 </div>
               ) : (
@@ -3415,6 +3437,41 @@ export default function Sidebar({
                               fontWeight: 500,
                               flexShrink: 0,
                             }}
+                          >
+                            Delete forever
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {trashedLists.length > 0 && (
+                    <div style={{ marginBottom: 18 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
+                        Lists ({trashedLists.length})
+                      </div>
+                      {trashedLists.map((l) => (
+                        <div
+                          key={l.id}
+                          style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "#fafaf9", border: "1px solid #e8e8e8", borderRadius: 8, marginBottom: 6 }}
+                        >
+                          <span style={{ fontSize: 14 }}>📋</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#333" }}>{l.name}</div>
+                            <div style={{ fontSize: 11, color: "#aaa" }}>
+                              {l.folders?.name ? `In ${l.folders.name} · ` : ""}
+                              Deleted by {l.deleted_by || "Unknown"} · {timeAgo(l.deleted_at)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => restoreList(l.id)}
+                            style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #1d4ed8", background: "#eff6ff", color: "#1d4ed8", fontSize: 11, cursor: "pointer", fontWeight: 500, flexShrink: 0 }}
+                          >
+                            ↺ Restore
+                          </button>
+                          <button
+                            onClick={() => permanentlyDeleteList(l.id, l.name)}
+                            style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fef2f2", color: "#b91c1c", fontSize: 11, cursor: "pointer", fontWeight: 500, flexShrink: 0 }}
                           >
                             Delete forever
                           </button>
