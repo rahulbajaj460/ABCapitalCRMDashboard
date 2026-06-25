@@ -340,9 +340,11 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   }
 
   async function createNewFields() {
+    console.log("[Import] customFieldMappings at import time:", customFieldMappings);
     const toCreate = Object.entries(customFieldMappings).filter(
       ([, v]) => v.action === "new" && v.fieldName?.trim(),
     );
+    console.log("[Import] fields to create:", toCreate);
     const created = {};
     for (const [col, cfg] of toCreate) {
       // For dropdown type: collect all unique values from CSV column as field_options
@@ -384,7 +386,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         .select()
         .single();
       if (error) {
-        console.error("Field creation error for", cfg.fieldName, error.message);
+        console.error("[Import] Field creation error for", cfg.fieldName, error.message, error.details, error.hint);
+      } else {
+        console.log("[Import] Field created:", cfg.fieldName, "id:", data?.id);
       }
       if (!error && data) created[col] = data.id;
     }
@@ -539,8 +543,14 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
             }
           });
           if (fieldValues.length > 0) {
+            console.log("[Import] inserting field values:", fieldValues);
             const { error: fvErr } = await supabase.from("task_field_values").insert(fieldValues);
-            if (fvErr) errs.push(`Field values: ${fvErr.message}`);
+            if (fvErr) {
+              console.error("[Import] field values insert error:", fvErr.message, fvErr.details);
+              errs.push(`Field values: ${fvErr.message}`);
+            } else {
+              console.log("[Import] field values inserted OK:", fieldValues.length);
+            }
           }
         }
         imported += batch.length;
