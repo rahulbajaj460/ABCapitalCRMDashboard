@@ -1138,17 +1138,6 @@ export default function Sidebar({
                         </span>
                       </div>
                     ))}
-                    <div
-                      className="add-btn-sidebar"
-                      style={{ paddingLeft: 28 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openFolderModal(space);
-                      }}
-                    >
-                      + Add folder
-                    </div>
-
                     {/* Wiki Documents — only under Knowledge Hub space */}
                     {space.name === "Knowledge Hub" && wikiCategories.length > 0 && (
                       <div>

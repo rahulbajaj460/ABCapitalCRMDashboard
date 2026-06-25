@@ -3136,19 +3136,14 @@ export default function Tasks({
                     : "Checklist";
                 })(),
               },
-              {
-                key: "docs",
-                label: `Docs${linkedDocs.length > 0 ? ` (${linkedDocs.length})` : ""}`,
-              },
             ].map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => {
                   setDrawerTab(tab.key);
                   if (tab.key === "history") fetchTaskHistory(drawerTask.id);
-                  if (tab.key === "attachments") fetchAttachments(drawerTask.id);
+                  if (tab.key === "attachments") { fetchAttachments(drawerTask.id); fetchLinkedDocs(drawerTask.id); fetchAllWikiArticles(); }
                   if (tab.key === "checklist") fetchChecklists(drawerTask.id);
-                  if (tab.key === "docs") { fetchLinkedDocs(drawerTask.id); fetchAllWikiArticles(); }
                 }}
                 style={{
                   flex: 1,
@@ -4081,6 +4076,76 @@ export default function Tasks({
                     ))}
                   </div>
                 )}
+
+                {/* Linked wiki pages */}
+                <div style={{ marginTop: 20, borderTop: "1px solid #f0f0f0", paddingTop: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
+                    Linked Pages
+                  </div>
+                  {linkedDocsLoading ? (
+                    <div style={{ fontSize: 12, color: "#aaa" }}>Loading…</div>
+                  ) : (
+                    <>
+                      {linkedDocs.map((link) => {
+                        const art = link.wiki_articles;
+                        const catName = art?.wiki_categories?.name;
+                        return (
+                          <div key={link.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid #f0f0f0", marginBottom: 6, background: "#fafaf9" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 500, fontSize: 12, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art?.title}</div>
+                              {catName && <div style={{ fontSize: 11, color: "#aaa" }}>{catName}</div>}
+                            </div>
+                            <button onClick={() => unlinkDoc(link.id)} title="Remove" style={{ background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = "#ef4444"}
+                              onMouseLeave={(e) => e.currentTarget.style.color = "#ccc"}
+                            >×</button>
+                          </div>
+                        );
+                      })}
+                      {showDocPicker && (
+                        <div style={{ border: "1.5px solid #e0e0e0", borderRadius: 8, overflow: "hidden", marginBottom: 8 }}>
+                          <div style={{ padding: "6px 10px", borderBottom: "1px solid #f0f0f0", background: "#fafaf9" }}>
+                            <input autoFocus value={docSearch} onChange={(e) => setDocSearch(e.target.value)} placeholder="Search wiki pages…"
+                              style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent", color: "#333" }} />
+                          </div>
+                          <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                            {(() => {
+                              const q = docSearch.toLowerCase();
+                              const filtered = allWikiArticles.filter((a) => !linkedDocs.find((l) => l.article_id === a.id) && (!q || a.title.toLowerCase().includes(q)));
+                              if (!filtered.length) return <div style={{ padding: "10px 12px", fontSize: 12, color: "#aaa" }}>No pages found</div>;
+                              return filtered.map((art) => {
+                                const cat = allWikiCategories.find((c) => c.id === art.category_id);
+                                return (
+                                  <div key={art.id} onClick={() => linkDocToTask(art)}
+                                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid #f7f7f7" }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = "#f0f4ff"}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                    </svg>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontSize: 12, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</div>
+                                      {cat && <div style={{ fontSize: 11, color: "#aaa" }}>{cat.name}</div>}
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                      <button onClick={() => { setShowDocPicker((v) => !v); setDocSearch(""); }}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 7, border: "1px dashed #d0d0d0", background: "#fafaf9", color: "#888", fontSize: 12, cursor: "pointer", width: "100%", fontWeight: 500 }}>
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
+                        {showDocPicker ? "Cancel" : "Link a wiki page"}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
@@ -4643,100 +4708,6 @@ export default function Tasks({
               </div>
             )}
 
-            {/* DOCS TAB */}
-            {drawerTab === "docs" && (
-              <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}>
-                {/* Linked docs list */}
-                {linkedDocsLoading ? (
-                  <div style={{ fontSize: 12, color: "#aaa", textAlign: "center", padding: 16 }}>Loading…</div>
-                ) : (
-                  <>
-                    {linkedDocs.length === 0 && !showDocPicker && (
-                      <div style={{ fontSize: 13, color: "#aaa", textAlign: "center", padding: "24px 0" }}>
-                        No docs linked yet. Click below to link a wiki page.
-                      </div>
-                    )}
-                    {linkedDocs.map((link) => {
-                      const art = link.wiki_articles;
-                      const catName = art?.wiki_categories?.name;
-                      return (
-                        <div key={link.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "1px solid #f0f0f0", marginBottom: 8, background: "#fafaf9" }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                          </svg>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 500, fontSize: 13, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art?.title}</div>
-                            {catName && <div style={{ fontSize: 11, color: "#aaa", marginTop: 1 }}>📁 {catName}</div>}
-                          </div>
-                          <button
-                            onClick={() => unlinkDoc(link.id)}
-                            title="Remove link"
-                            style={{ background: "none", border: "none", color: "#ccc", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
-                            onMouseEnter={(e) => e.currentTarget.style.color = "#ef4444"}
-                            onMouseLeave={(e) => e.currentTarget.style.color = "#ccc"}
-                          >×</button>
-                        </div>
-                      );
-                    })}
-
-                    {/* Article picker */}
-                    {showDocPicker && (
-                      <div style={{ border: "1.5px solid #e0e0e0", borderRadius: 10, overflow: "hidden", marginTop: 8 }}>
-                        <div style={{ padding: "8px 10px", borderBottom: "1px solid #f0f0f0", background: "#fafaf9" }}>
-                          <input
-                            autoFocus
-                            value={docSearch}
-                            onChange={(e) => setDocSearch(e.target.value)}
-                            placeholder="Search wiki pages…"
-                            style={{ width: "100%", border: "none", outline: "none", fontSize: 13, background: "transparent", color: "#333" }}
-                          />
-                        </div>
-                        <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                          {(() => {
-                            const q = docSearch.toLowerCase();
-                            const filtered = allWikiArticles.filter((a) =>
-                              !linkedDocs.find((l) => l.article_id === a.id) &&
-                              (!q || a.title.toLowerCase().includes(q))
-                            );
-                            if (!filtered.length) return (
-                              <div style={{ padding: "12px 14px", fontSize: 12, color: "#aaa" }}>No pages found</div>
-                            );
-                            return filtered.map((art) => {
-                              const cat = allWikiCategories.find((c) => c.id === art.category_id);
-                              return (
-                                <div
-                                  key={art.id}
-                                  onClick={() => linkDocToTask(art)}
-                                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", cursor: "pointer", borderBottom: "1px solid #f7f7f7" }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = "#f0f4ff"}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                                  </svg>
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</div>
-                                    {cat && <div style={{ fontSize: 11, color: "#aaa" }}>{cat.name}</div>}
-                                  </div>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => { setShowDocPicker((v) => !v); setDocSearch(""); fetchAllWikiArticles(); }}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, border: "1px dashed #d0d0d0", background: "#fafaf9", color: "#888", fontSize: 12, cursor: "pointer", width: "100%", fontWeight: 500, marginTop: linkedDocs.length > 0 || showDocPicker ? 8 : 0 }}
-                    >
-                      <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-                      {showDocPicker ? "Cancel" : "Link a wiki page"}
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}
