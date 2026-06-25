@@ -434,7 +434,7 @@ function RichEditor({ content, onChange }) {
   );
 }
 
-export default function Wiki({ profile }) {
+export default function Wiki({ profile, openArticleId }) {
   const [categories, setCategories] = useState([]);
   const [articles, setArticles] = useState([]);
   const [activeArticle, setActiveArticle] = useState(null);
@@ -466,6 +466,13 @@ export default function Wiki({ profile }) {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  // Open a specific article when navigated from sidebar
+  useEffect(() => {
+    if (!openArticleId || !articles.length) return;
+    const art = articles.find((a) => a.id === openArticleId);
+    if (art) setActiveArticle(art);
+  }, [openArticleId, articles]);
 
   // Transform raw URL links to favicon pills
   useEffect(() => {

@@ -18,6 +18,7 @@ export default function App() {
   );
   const [activeSpace, setActiveSpace] = useState(null);
   const [activeFolder, setActiveFolder] = useState(null);
+  const [openArticleId, setOpenArticleId] = useState(null);
   const [spaces, setSpaces] = useState([]);
   const [pendingSpaceId, setPendingSpaceId] = useState(
     () => localStorage.getItem("abc_space_id") || null,
@@ -206,6 +207,17 @@ export default function App() {
   }
 
   function handleNavigate(v) {
+    // Support "wiki:articleId" to open a specific article
+    if (typeof v === "string" && v.startsWith("wiki:")) {
+      const articleId = v.slice(5);
+      setOpenArticleId(articleId);
+      setView("wiki");
+      localStorage.setItem("abc_view", "wiki");
+      setActiveSpace(null);
+      setActiveFolder(null);
+      return;
+    }
+    setOpenArticleId(null);
     setView(v);
     localStorage.setItem("abc_view", v);
     if (v !== "tasks") {
@@ -285,7 +297,7 @@ export default function App() {
             onRefreshSpaces={fetchSpaces}
           />
         )}
-        {view === "wiki" && <Wiki profile={profile} />}
+        {view === "wiki" && <Wiki profile={profile} openArticleId={openArticleId} />}
         {view === "mytasks" && <MyTasks profile={profile} />}
         {view === "settings" && profile?.role === "admin" && (
           <Settings currentUser={user} profile={profile} />
