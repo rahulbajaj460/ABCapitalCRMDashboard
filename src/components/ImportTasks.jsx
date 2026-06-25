@@ -73,6 +73,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   const [customFieldMappings, setCustomFieldMappings] = useState({});
   const [selectedSpace, setSelectedSpace] = useState("");
   const [selectedFolder, setSelectedFolder] = useState("");
+  const [selectedList, setSelectedList] = useState("");
+  const [folderLists, setFolderLists] = useState([]);
   const [statusMap, setStatusMap] = useState({});
 
   // Status review state
@@ -95,6 +97,12 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   ];
   const spaceFolders =
     spaces.find((s) => s.id === selectedSpace)?.folders || [];
+
+  useEffect(() => {
+    if (!selectedFolder) { setFolderLists([]); setSelectedList(""); return; }
+    supabase.from("lists").select("*").eq("folder_id", selectedFolder).is("deleted_at", null).order("created_at")
+      .then(({ data }) => { setFolderLists(data || []); setSelectedList(""); });
+  }, [selectedFolder]);
 
   const unmappedColumns = headers.filter(
     (h) => !Object.values(mapping).includes(h),
@@ -414,6 +422,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         description: (row[mapping.description] || "").trim(),
         space_id: selectedSpace,
         folder_id: selectedFolder || null,
+        list_id: selectedList || null,
         // Preserve the original ClickUp creation date if mapped/parseable,
         // otherwise let Supabase default it to the import time.
         ...(importedCreatedAt ? { created_at: importedCreatedAt } : {}),
@@ -692,6 +701,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                     onChange={(e) => {
                       setSelectedSpace(e.target.value);
                       setSelectedFolder("");
+                      setSelectedList("");
+                      setFolderLists([]);
                     }}
                   >
                     <option value="">Select space...</option>
@@ -714,6 +725,21 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                       <option key={f.id} value={f.id}>
                         {f.name}
                       </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">List (optional)</label>
+                  <select
+                    value={selectedList}
+                    onChange={(e) => setSelectedList(e.target.value)}
+                    disabled={!selectedFolder || folderLists.length === 0}
+                  >
+                    <option value="">
+                      {!selectedFolder ? "Select a folder first" : folderLists.length === 0 ? "No lists in this folder" : "No list (folder level)"}
+                    </option>
+                    {folderLists.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
                     ))}
                   </select>
                 </div>
