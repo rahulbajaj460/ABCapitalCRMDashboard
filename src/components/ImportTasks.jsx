@@ -418,10 +418,15 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
 
     const fieldIdMap = {};
     for (const [col, cfg] of Object.entries(customFieldMappings)) {
-      if (cfg.action === "new" && newFieldIds[col])
-        fieldIdMap[col] = newFieldIds[col];
-      else if (cfg.action === "existing" && cfg.existingFieldId)
+      if (cfg.action === "new") {
+        if (newFieldIds[col]) {
+          fieldIdMap[col] = newFieldIds[col];
+        } else {
+          errs.push(`Custom field "${cfg.fieldName || col}" could not be created or found. Its values will not be imported.`);
+        }
+      } else if (cfg.action === "existing" && cfg.existingFieldId) {
         fieldIdMap[col] = cfg.existingFieldId;
+      }
     }
 
     let imported = 0;
