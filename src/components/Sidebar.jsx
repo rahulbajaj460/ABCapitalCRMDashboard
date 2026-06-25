@@ -1151,29 +1151,6 @@ export default function Sidebar({
                               {taskCounts[folder.id]}
                             </span>
                           )}
-                          {/* Add list button */}
-                          <span
-                            className="space-delete-btn"
-                            title="Add list"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNewListFolderId(folder.id);
-                              setNewListName("");
-                              setExpandedFolders((prev) => ({ ...prev, [folder.id]: true }));
-                            }}
-                            style={{
-                              opacity: 0,
-                              fontSize: 16,
-                              color: "#888",
-                              padding: "0px 4px",
-                              borderRadius: 4,
-                              cursor: "pointer",
-                              lineHeight: 1,
-                              fontWeight: 400,
-                            }}
-                          >
-                            +
-                          </span>
                           {/* Three dot menu for folder */}
                           <span
                             className="space-delete-btn"
@@ -1495,6 +1472,19 @@ export default function Sidebar({
       {folderMenu && (
         <ContextMenu
           items={[
+            {
+              icon: "📋",
+              label: "Add List",
+              action: () => {
+                const fid = folderMenu.id;
+                const sid = folderMenu.space?.id;
+                setFolderMenu(null);
+                setNewListFolderId(fid);
+                setNewListName("");
+                setExpandedFolders((prev) => ({ ...prev, [fid]: true }));
+              },
+            },
+            "divider",
             {
               icon: "✏️",
               label: "Rename folder",
