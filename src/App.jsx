@@ -18,6 +18,7 @@ export default function App() {
   );
   const [activeSpace, setActiveSpace] = useState(null);
   const [activeFolder, setActiveFolder] = useState(null);
+  const [activeList, setActiveList] = useState(null);
   const [openArticleId, setOpenArticleId] = useState(null);
   const [spaces, setSpaces] = useState([]);
   const [pendingSpaceId, setPendingSpaceId] = useState(
@@ -191,6 +192,7 @@ export default function App() {
   function handleSpaceSelect(space) {
     setActiveSpace(space);
     setActiveFolder(null);
+    setActiveList(null);
     setView("tasks");
     localStorage.setItem("abc_view", "tasks");
     localStorage.setItem("abc_space_id", space.id);
@@ -200,6 +202,17 @@ export default function App() {
   function handleFolderSelect(space, folder) {
     setActiveSpace(space);
     setActiveFolder(folder);
+    setActiveList(null);
+    setView("tasks");
+    localStorage.setItem("abc_view", "tasks");
+    localStorage.setItem("abc_space_id", space.id);
+    localStorage.setItem("abc_folder_id", folder.id);
+  }
+
+  function handleListSelect(space, folder, list) {
+    setActiveSpace(space);
+    setActiveFolder(folder);
+    setActiveList(list);
     setView("tasks");
     localStorage.setItem("abc_view", "tasks");
     localStorage.setItem("abc_space_id", space.id);
@@ -225,6 +238,7 @@ export default function App() {
       localStorage.removeItem("abc_folder_id");
       setActiveSpace(null);
       setActiveFolder(null);
+      setActiveList(null);
     }
   }
 
@@ -254,11 +268,13 @@ export default function App() {
         spaces={spaces}
         activeSpace={activeSpace}
         activeFolder={activeFolder}
+        activeList={activeList}
         view={view}
         profile={profile}
         onNavigate={handleNavigate}
         onSpaceSelect={handleSpaceSelect}
         onFolderSelect={handleFolderSelect}
+        onListSelect={handleListSelect}
         taskCounts={taskCounts}
         onSpaceCreated={fetchSpaces}
         onLogout={handleLogout}
@@ -293,6 +309,7 @@ export default function App() {
             spaces={spaces}
             activeSpace={activeSpace}
             activeFolder={activeFolder}
+            activeList={activeList}
             profile={profile}
             onRefreshSpaces={fetchSpaces}
           />

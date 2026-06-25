@@ -118,16 +118,48 @@ export default function Sidebar({
   spaces,
   activeSpace,
   activeFolder,
+  activeList,
   view,
   onNavigate,
   onSpaceSelect,
   onFolderSelect,
+  onListSelect,
   onSpaceCreated,
   profile,
   onLogout,
   taskCounts = {},
   width = 240,
 }) {
+  // ── Lists (within folders) ──
+  const [lists, setLists] = useState([]); // [{id, folder_id, space_id, name}]
+  const [expandedFolders, setExpandedFolders] = useState({});
+  const [newListFolderId, setNewListFolderId] = useState(null); // folder id showing inline create
+  const [newListName, setNewListName] = useState("");
+
+  useEffect(() => {
+    fetchLists();
+  }, []);
+
+  async function fetchLists() {
+    const { data } = await supabase.from("lists").select("*").order("created_at");
+    setLists(data || []);
+  }
+
+  function toggleFolder(folderId) {
+    setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }));
+  }
+
+  async function createList(folderId, spaceId) {
+    const name = newListName.trim();
+    if (!name) return;
+    const { data } = await supabase.from("lists").insert({ folder_id: folderId, space_id: spaceId, name }).select().single();
+    if (data) {
+      setLists((prev) => [...prev, data]);
+      setNewListFolderId(null);
+      setNewListName("");
+    }
+  }
+
   // ── Wiki docs in sidebar ──
   const [wikiCategories, setWikiCategories] = useState([]);
   const [wikiArticles, setWikiArticles] = useState([]);
@@ -1067,75 +1099,155 @@ export default function Sidebar({
                 {isExpanded && (
                   <div>
                     {(space.folders || []).map((folder) => (
-                      <div
-                        key={folder.id}
-                        className={`folder-item ${activeFolder?.id === folder.id ? "active" : ""}`}
-                        onClick={() => onFolderSelect(space, folder)}
-                        style={{ position: "relative" }}
-                      >
-                        <svg
-                          width="15"
-                          height="13"
-                          viewBox="0 0 16 14"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style={{ flexShrink: 0, marginTop: 1 }}
+                      <div key={folder.id}>
+                        {/* Folder row */}
+                        <div
+                          className={`folder-item ${activeFolder?.id === folder.id ? "active" : ""}`}
+                          onClick={() => onFolderSelect(space, folder)}
+                          style={{ position: "relative" }}
                         >
-                          <path
-                            d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
-                            fill="currentColor"
-                            opacity="0.7"
-                            strokeWidth="0"
-                          />
-                          <path
-                            d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                        <span style={{ flex: 1, fontSize: 12 }}>
-                          {folder.name}
-                        </span>
-                        {taskCounts[folder.id] > 0 && (
+                          {/* Expand/collapse chevron for folders with lists */}
                           <span
+                            onClick={(e) => { e.stopPropagation(); toggleFolder(folder.id); }}
+                            style={{ fontSize: 10, color: "#aaa", marginRight: 2, flexShrink: 0, cursor: "pointer", userSelect: "none" }}
+                          >
+                            {lists.some((l) => l.folder_id === folder.id)
+                              ? (expandedFolders[folder.id] ? "▾" : "▸")
+                              : " "}
+                          </span>
+                          <svg
+                            width="15"
+                            height="13"
+                            viewBox="0 0 16 14"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                            style={{ flexShrink: 0, marginTop: 1 }}
+                          >
+                            <path
+                              d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z"
+                              fill="currentColor"
+                              opacity="0.7"
+                              strokeWidth="0"
+                            />
+                            <path
+                              d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                          <span style={{ flex: 1, fontSize: 12 }}>
+                            {folder.name}
+                          </span>
+                          {taskCounts[folder.id] > 0 && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "#aaa",
+                                background: "#f0f0ef",
+                                borderRadius: 20,
+                                padding: "0 6px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {taskCounts[folder.id]}
+                            </span>
+                          )}
+                          {/* Add list button */}
+                          <span
+                            className="space-delete-btn"
+                            title="Add list"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNewListFolderId(folder.id);
+                              setNewListName("");
+                              setExpandedFolders((prev) => ({ ...prev, [folder.id]: true }));
+                            }}
                             style={{
-                              fontSize: 11,
-                              color: "#aaa",
-                              background: "#f0f0ef",
-                              borderRadius: 20,
-                              padding: "0 6px",
-                              flexShrink: 0,
+                              opacity: 0,
+                              fontSize: 16,
+                              color: "#888",
+                              padding: "0px 4px",
+                              borderRadius: 4,
+                              cursor: "pointer",
+                              lineHeight: 1,
+                              fontWeight: 400,
                             }}
                           >
-                            {taskCounts[folder.id]}
+                            +
                           </span>
+                          {/* Three dot menu for folder */}
+                          <span
+                            className="space-delete-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const r = e.currentTarget.getBoundingClientRect();
+                              setFolderMenu({
+                                id: folder.id,
+                                space,
+                                folder,
+                                x: r.right + 4,
+                                y: r.top,
+                              });
+                              setSpaceMenu(null);
+                            }}
+                            style={{
+                              opacity: 0,
+                              fontSize: 14,
+                              color: "#888",
+                              padding: "1px 4px",
+                              borderRadius: 4,
+                              cursor: "pointer",
+                              lineHeight: 1,
+                            }}
+                          >
+                            •••
+                          </span>
+                        </div>
+
+                        {/* Lists under folder */}
+                        {expandedFolders[folder.id] && (
+                          <div>
+                            {lists.filter((l) => l.folder_id === folder.id).map((list) => (
+                              <div
+                                key={list.id}
+                                className={`folder-item ${activeList?.id === list.id ? "active" : ""}`}
+                                onClick={() => onListSelect(space, folder, list)}
+                                style={{ paddingLeft: 32 }}
+                              >
+                                {/* List icon */}
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>
+                                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                                  <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                                </svg>
+                                <span style={{ flex: 1, fontSize: 12 }}>{list.name}</span>
+                              </div>
+                            ))}
+                            {/* Inline new list input */}
+                            {newListFolderId === folder.id && (
+                              <div style={{ paddingLeft: 32, paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
+                                <input
+                                  autoFocus
+                                  value={newListName}
+                                  onChange={(e) => setNewListName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") createList(folder.id, space.id);
+                                    if (e.key === "Escape") { setNewListFolderId(null); setNewListName(""); }
+                                  }}
+                                  onBlur={() => { if (!newListName.trim()) { setNewListFolderId(null); setNewListName(""); } }}
+                                  placeholder="List name…"
+                                  style={{
+                                    width: "100%",
+                                    fontSize: 12,
+                                    border: "1px solid #d1d5db",
+                                    borderRadius: 4,
+                                    padding: "3px 6px",
+                                    outline: "none",
+                                    background: "#fff",
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
                         )}
-                        {/* Three dot menu for folder */}
-                        <span
-                          className="space-delete-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const r = e.currentTarget.getBoundingClientRect();
-                            setFolderMenu({
-                              id: folder.id,
-                              space,
-                              folder,
-                              x: r.right + 4,
-                              y: r.top,
-                            });
-                            setSpaceMenu(null);
-                          }}
-                          style={{
-                            opacity: 0,
-                            fontSize: 14,
-                            color: "#888",
-                            padding: "1px 4px",
-                            borderRadius: 4,
-                            cursor: "pointer",
-                            lineHeight: 1,
-                          }}
-                        >
-                          •••
-                        </span>
                       </div>
                     ))}
                     {/* Wiki Documents — only under Knowledge Hub space */}

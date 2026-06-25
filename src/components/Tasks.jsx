@@ -245,6 +245,7 @@ export default function Tasks({
   spaces,
   activeSpace,
   activeFolder,
+  activeList,
   profile,
   onRefreshSpaces,
 }) {
@@ -458,7 +459,7 @@ export default function Tasks({
 
   useEffect(() => {
     fetchTasks();
-  }, [activeSpace, activeFolder]);
+  }, [activeSpace, activeFolder, activeList]);
   useEffect(() => {
     fetchMembers();
   }, []);
@@ -498,7 +499,8 @@ export default function Tasks({
       .select("*, task_field_values(*)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
-    if (activeFolder) q = q.eq("folder_id", activeFolder.id);
+    if (activeList) q = q.eq("list_id", activeList.id);
+    else if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
     if (profile?.role === "member") {
       // Match either the legacy single assignee_id OR if the member's
@@ -1455,7 +1457,8 @@ export default function Tasks({
       title: newTask.title.trim(),
       description: newTask.description,
       space_id: newTask.space_id,
-      folder_id: newTask.folder_id || null,
+      folder_id: newTask.folder_id || activeFolder?.id || null,
+      list_id: activeList?.id || null,
       status: newTask.status || "To Do",
       priority: newTask.priority || "Medium",
       assignee: newTask.assignees.length > 0 ? newTask.assignees[0] : "",
@@ -2334,6 +2337,7 @@ export default function Tasks({
               >
                 {activeSpace.name}
                 {activeFolder ? ` / ${activeFolder.name}` : ""}
+                {activeList ? ` / ${activeList.name}` : ""}
               </div>
             )}
           </div>
