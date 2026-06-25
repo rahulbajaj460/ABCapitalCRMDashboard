@@ -1149,107 +1149,93 @@ export default function Sidebar({
                       + Add folder
                     </div>
 
-                    {/* Wiki Documents under this space */}
-                    {(() => {
-                      // Find wiki categories whose name matches a folder name in this space,
-                      // OR top-level categories if this is the only space — show all top-level cats
-                      const topLevelCats = wikiCategories.filter((c) => !c.parent_id);
-                      if (!topLevelCats.length) return null;
-                      return (
-                        <div style={{ marginTop: 4 }}>
-                          {topLevelCats.map((cat) => {
-                            const subCats = wikiCategories.filter((c) => c.parent_id === cat.id);
-                            const directArticles = wikiArticles.filter((a) => a.category_id === cat.id);
-                            const isExpanded = expandedWikiCats[cat.id];
-                            const hasChildren = subCats.length > 0 || directArticles.length > 0;
-                            return (
-                              <div key={cat.id}>
-                                {/* Category row */}
-                                <div
-                                  onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleWikiCat(cat.id); }}
-                                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 28px", cursor: "pointer", borderRadius: 6, fontSize: 12, color: "#555", fontWeight: 500 }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = "#f0f0ef"}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                >
-                                  {hasChildren && (
-                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
-                                      <path d="M3 2l4 3-4 3" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  )}
-                                  {!hasChildren && <span style={{ width: 10 }} />}
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                                  </svg>
-                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
-                                </div>
-
-                                {/* Sub-categories and direct articles */}
-                                {isExpanded && (
-                                  <div>
-                                    {subCats.map((sub) => {
-                                      const subArts = wikiArticles.filter((a) => a.category_id === sub.id);
-                                      const isSubExpanded = expandedWikiCats[sub.id];
-                                      return (
-                                        <div key={sub.id}>
-                                          <div
-                                            onClick={(e) => { e.stopPropagation(); if (subArts.length) toggleWikiCat(sub.id); }}
-                                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 44px", cursor: "pointer", borderRadius: 6, fontSize: 12, color: "#666" }}
-                                            onMouseEnter={(e) => e.currentTarget.style.background = "#f0f0ef"}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                          >
-                                            {subArts.length > 0 && (
-                                              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transform: isSubExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
-                                                <path d="M3 2l4 3-4 3" stroke="#aaa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                              </svg>
-                                            )}
-                                            {!subArts.length && <span style={{ width: 9 }} />}
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                                            </svg>
-                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
-                                            {subArts.length > 0 && (
-                                              <span style={{ fontSize: 10, color: "#aaa", marginLeft: "auto", flexShrink: 0 }}>{subArts.length}</span>
-                                            )}
-                                          </div>
-                                          {isSubExpanded && subArts.map((art) => (
-                                            <div
-                                              key={art.id}
-                                              onClick={(e) => { e.stopPropagation(); onNavigate(`wiki:${art.id}`); }}
-                                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 58px", cursor: "pointer", borderRadius: 6, fontSize: 11, color: "#777" }}
-                                              onMouseEnter={(e) => e.currentTarget.style.background = "#f0f0ef"}
-                                              onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                            >
-                                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                                              </svg>
-                                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      );
-                                    })}
-                                    {directArticles.map((art) => (
-                                      <div
-                                        key={art.id}
-                                        onClick={(e) => { e.stopPropagation(); onNavigate(`wiki:${art.id}`); }}
-                                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 44px", cursor: "pointer", borderRadius: 6, fontSize: 11, color: "#777" }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = "#f0f0ef"}
-                                        onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                      >
-                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                                        </svg>
-                                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                    {/* Wiki Documents — only under Knowledge Hub space */}
+                    {space.name === "Knowledge Hub" && wikiCategories.length > 0 && (
+                      <div>
+                        {wikiCategories.filter((c) => !c.parent_id).map((cat) => {
+                          const subCats = wikiCategories.filter((c) => c.parent_id === cat.id);
+                          const directArticles = wikiArticles.filter((a) => a.category_id === cat.id);
+                          const isExpanded = expandedWikiCats[cat.id];
+                          const hasChildren = subCats.length > 0 || directArticles.length > 0;
+                          return (
+                            <div key={cat.id}>
+                              {/* Top-level doc category — styled like a folder-item */}
+                              <div
+                                className={`folder-item`}
+                                onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleWikiCat(cat.id); }}
+                                style={{ paddingLeft: 28 }}
+                              >
+                                <span style={{ fontSize: 10, color: "#aaa", marginRight: 2, flexShrink: 0 }}>
+                                  {hasChildren ? (isExpanded ? "▾" : "▸") : " "}
+                                </span>
+                                {/* Page icon */}
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
                               </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
+
+                              {isExpanded && (
+                                <div>
+                                  {subCats.map((sub) => {
+                                    const subArts = wikiArticles.filter((a) => a.category_id === sub.id);
+                                    const isSubExpanded = expandedWikiCats[sub.id];
+                                    return (
+                                      <div key={sub.id}>
+                                        {/* Sub-category — styled like a folder-item, indented further */}
+                                        <div
+                                          className="folder-item"
+                                          onClick={(e) => { e.stopPropagation(); if (subArts.length) toggleWikiCat(sub.id); }}
+                                          style={{ paddingLeft: 44 }}
+                                        >
+                                          <span style={{ fontSize: 10, color: "#aaa", marginRight: 2, flexShrink: 0 }}>
+                                            {subArts.length ? (isSubExpanded ? "▾" : "▸") : " "}
+                                          </span>
+                                          <svg width="13" height="11" viewBox="0 0 16 14" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+                                            <path d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z" fill="currentColor" opacity="0.7"/>
+                                            <path d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z" fill="currentColor"/>
+                                          </svg>
+                                          <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
+                                          {subArts.length > 0 && (
+                                            <span style={{ fontSize: 11, color: "#aaa", background: "#f0f0ef", borderRadius: 20, padding: "0 6px", flexShrink: 0 }}>{subArts.length}</span>
+                                          )}
+                                        </div>
+                                        {isSubExpanded && subArts.map((art) => (
+                                          <div
+                                            key={art.id}
+                                            className="folder-item"
+                                            onClick={(e) => { e.stopPropagation(); onNavigate(`wiki:${art.id}`); }}
+                                            style={{ paddingLeft: 60 }}
+                                          >
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                            </svg>
+                                            <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                  {directArticles.map((art) => (
+                                    <div
+                                      key={art.id}
+                                      className="folder-item"
+                                      onClick={(e) => { e.stopPropagation(); onNavigate(`wiki:${art.id}`); }}
+                                      style={{ paddingLeft: 44 }}
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                      </svg>
+                                      <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
