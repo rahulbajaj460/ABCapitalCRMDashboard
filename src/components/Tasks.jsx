@@ -408,6 +408,7 @@ export default function Tasks({
   // Lists (folder sub-lists)
   const [spaceLists, setSpaceLists] = useState([]); // all lists for the active space
   const [listFields, setListFields] = useState([]); // space_fields scoped to active list
+  const [listStatuses, setListStatuses] = useState([]); // space_statuses scoped to active list
 
   useEffect(() => {
     if (!activeSpace) { setSpaceLists([]); return; }
@@ -419,6 +420,12 @@ export default function Tasks({
     if (!activeList) { setListFields([]); return; }
     supabase.from("space_fields").select("*").eq("list_id", activeList.id).order("field_order")
       .then(({ data }) => setListFields(data || []));
+  }, [activeList]);
+
+  useEffect(() => {
+    if (!activeList) { setListStatuses([]); return; }
+    supabase.from("space_statuses").select("*").eq("list_id", activeList.id).order("status_order")
+      .then(({ data }) => setListStatuses(data || []));
   }, [activeList]);
 
   // Checklists
@@ -954,13 +961,17 @@ export default function Tasks({
 
   // Status helpers
   function getStatuses() {
+    if (activeList) {
+      if (listStatuses.length > 0) return listStatuses.map((s) => s.name);
+      // fall through to folder/space statuses
+    }
     if (activeFolder) {
       const fs = (activeSpace?.space_statuses || [])
-        .filter((s) => s.folder_id === activeFolder.id)
+        .filter((s) => s.folder_id === activeFolder.id && !s.list_id)
         .sort((a, b) => a.status_order - b.status_order);
       if (fs.length > 0) return fs.map((s) => s.name);
       const sl = (activeSpace?.space_statuses || [])
-        .filter((s) => !s.folder_id)
+        .filter((s) => !s.folder_id && !s.list_id)
         .sort((a, b) => a.status_order - b.status_order);
       if (sl.length > 0) return sl.map((s) => s.name);
     }
@@ -1634,17 +1645,48 @@ export default function Tasks({
     if (!newStatus.name.trim() || !activeSpace) return;
     setStatusLoading(true);
     setStatusActionMsg("");
-    if (activeFolder) {
+    if (activeList) {
+      // If list has no statuses yet, seed from folder or space statuses
+      const { data: eLS } = await supabase
+        .from("space_statuses")
+        .select("*")
+        .eq("list_id", activeList.id);
+      if (!eLS || eLS.length === 0) {
+        const seed = await (async () => {
+          if (activeFolder) {
+            const { data } = await supabase.from("space_statuses").select("*")
+              .eq("folder_id", activeFolder.id).is("list_id", null).order("status_order");
+            if (data?.length > 0) return data;
+          }
+          const { data } = await supabase.from("space_statuses").select("*")
+            .eq("space_id", activeSpace.id).is("folder_id", null).is("list_id", null).order("status_order");
+          return data || [];
+        })();
+        if (seed.length > 0)
+          await supabase.from("space_statuses").insert(
+            seed.map((s) => ({
+              space_id: activeSpace.id,
+              folder_id: activeFolder?.id || null,
+              list_id: activeList.id,
+              name: s.name,
+              color: s.color,
+              status_order: s.status_order,
+            })),
+          );
+      }
+    } else if (activeFolder) {
       const { data: eFS } = await supabase
         .from("space_statuses")
         .select("*")
-        .eq("folder_id", activeFolder.id);
+        .eq("folder_id", activeFolder.id)
+        .is("list_id", null);
       if (!eFS || eFS.length === 0) {
         const { data: sS } = await supabase
           .from("space_statuses")
           .select("*")
           .eq("space_id", activeSpace.id)
           .is("folder_id", null)
+          .is("list_id", null)
           .order("status_order");
         if (sS?.length > 0)
           await supabase.from("space_statuses").insert(
@@ -1659,8 +1701,9 @@ export default function Tasks({
       }
     }
     let dupQ = supabase.from("space_statuses").select("name");
-    if (activeFolder) dupQ = dupQ.eq("folder_id", activeFolder.id);
-    else dupQ = dupQ.eq("space_id", activeSpace.id).is("folder_id", null);
+    if (activeList) dupQ = dupQ.eq("list_id", activeList.id);
+    else if (activeFolder) dupQ = dupQ.eq("folder_id", activeFolder.id).is("list_id", null);
+    else dupQ = dupQ.eq("space_id", activeSpace.id).is("folder_id", null).is("list_id", null);
     const { data: existing } = await dupQ;
     if (
       (existing || [])
@@ -1674,6 +1717,7 @@ export default function Tasks({
     const { error } = await supabase.from("space_statuses").insert({
       space_id: activeSpace.id,
       folder_id: activeFolder?.id || null,
+      list_id: activeList?.id || null,
       name: newStatus.name.trim(),
       color: newStatus.color,
       status_order: (existing?.length || 0) + 1,
@@ -1730,11 +1774,22 @@ export default function Tasks({
 
   async function fetchModalStatuses() {
     if (!activeSpace) return;
+    if (activeList) {
+      const { data } = await supabase
+        .from("space_statuses")
+        .select("*")
+        .eq("list_id", activeList.id)
+        .order("status_order");
+      setModalSpaceStatuses(data || []);
+      setListStatuses(data || []);
+      return data || [];
+    }
     if (activeFolder) {
       const { data } = await supabase
         .from("space_statuses")
         .select("*")
         .eq("folder_id", activeFolder.id)
+        .is("list_id", null)
         .order("status_order");
       setModalSpaceStatuses(data || []);
       return data || [];
@@ -5915,7 +5970,9 @@ export default function Tasks({
                 marginBottom: 8,
               }}
             >
-              {activeFolder && !(activeFolder.space_statuses?.length > 0)
+              {activeList && listStatuses.length === 0
+                ? `Inherited from ${activeFolder ? "folder" : "space"} (${modalSpaceStatuses.length})`
+                : activeFolder && !(activeFolder.space_statuses?.filter(s => !s.list_id).length > 0)
                 ? `Inherited from space (${modalSpaceStatuses.length})`
                 : `Current statuses (${modalSpaceStatuses.length})`}
             </div>
