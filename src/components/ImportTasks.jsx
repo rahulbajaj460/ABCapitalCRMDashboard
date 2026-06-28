@@ -371,12 +371,15 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         ];
         fieldOptions = uniqueVals;
       }
-      // For formula type: store the formula expression in field_options[0]
+      // For formula type: store the formula key + extra config in field_options
       if (cfg.fieldType === "formula") {
-        fieldOptions = [
-          cfg.formulaKey || "days_since_created",
-          cfg.customFormula || "",
-        ];
+        const fKey = cfg.formulaKey || "days_since_created";
+        if (fKey === "days_since_date_field") {
+          // field_options[0] = key, field_options[1] = referenced date column name
+          fieldOptions = [fKey, cfg.dateFieldCol || ""];
+        } else {
+          fieldOptions = [fKey, cfg.customFormula || ""];
+        }
       }
 
       // Check if a field with this name already exists — reuse it instead of creating a duplicate
