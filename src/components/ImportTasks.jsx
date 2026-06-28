@@ -33,6 +33,12 @@ const FORMULA_PRESETS = [
       "Calculates days remaining until the due date (negative = overdue)",
   },
   {
+    key: "days_since_date_field",
+    label: "Days since a date field",
+    description:
+      "TODAY() − a date column you choose (e.g. Signing Date). Equivalent to ClickUp's TODAY()-field(\"...\") formula.",
+  },
+  {
     key: "custom",
     label: "Custom formula (manual)",
     description: "Enter your own formula expression",
@@ -527,6 +533,16 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                     if (!isNaN(due)) {
                       formulaVal = String(
                         Math.ceil((due - createdAt) / (1000 * 60 * 60 * 24)),
+                      );
+                    }
+                  }
+                } else if (fKey === "days_since_date_field" && cfg.dateFieldCol) {
+                  const dateStr = row[cfg.dateFieldCol];
+                  if (dateStr) {
+                    const d = new Date(normalizeDate(dateStr));
+                    if (!isNaN(d)) {
+                      formulaVal = String(
+                        Math.floor((createdAt - d) / (1000 * 60 * 60 * 24)),
                       );
                     }
                   }
@@ -1134,6 +1150,38 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                               );
                             })}
                           </div>
+                          {(cfg.formulaKey || "days_since_created") ===
+                            "days_since_date_field" && (
+                            <div style={{ marginTop: 10 }}>
+                              <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>
+                                Which date column to subtract from today?
+                              </div>
+                              <select
+                                value={cfg.dateFieldCol || ""}
+                                onChange={(e) =>
+                                  updateCustomFieldMapping(col, { dateFieldCol: e.target.value })
+                                }
+                                style={{
+                                  width: "100%",
+                                  fontSize: 12,
+                                  padding: "6px 10px",
+                                  borderRadius: 7,
+                                  border: "1px solid #e0e0e0",
+                                  boxSizing: "border-box",
+                                }}
+                              >
+                                <option value="">— select a date column —</option>
+                                {headers
+                                  .filter((h) => h !== col)
+                                  .map((h) => (
+                                    <option key={h} value={h}>{h}</option>
+                                  ))}
+                              </select>
+                              <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>
+                                Equivalent to ClickUp's <code>TODAY()-field("{cfg.dateFieldCol || "..."}")</code>
+                              </div>
+                            </div>
+                          )}
                           {(cfg.formulaKey || "days_since_created") ===
                             "custom" && (
                             <input
