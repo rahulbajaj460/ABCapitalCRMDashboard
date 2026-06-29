@@ -1089,10 +1089,10 @@ export default function Tasks({
       );
     }
     if (activeFolder) {
-      const ff = (activeFolder.space_fields || []);
+      const ff = (activeSpace?.space_fields || []);
       if (ff.length > 0)
         return applyFieldOverrides(
-          ff.sort((a, b) => a.field_order - b.field_order),
+          [...ff].sort((a, b) => a.field_order - b.field_order),
           activeSpace?.id,
           activeFolder.id,
         );
