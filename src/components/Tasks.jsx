@@ -155,7 +155,7 @@ function parseFlexibleDate(str) {
   return isNaN(d) ? null : d;
 }
 
-function computeFormula(field, task, allFields) {
+function computeFormula(field, task, allFields, lookupFields) {
   if (field.field_type !== "formula") return null;
   const opts = field.field_options || [];
   const key = opts[0] || "days_since_created";
@@ -182,7 +182,8 @@ function computeFormula(field, task, allFields) {
   if (key === "days_since_date_field") {
     const dateFieldName = (opts[1] || "").trim();
     if (!dateFieldName || !allFields) return "—";
-    const dateField = allFields.find(
+    const pool = lookupFields || allFields || [];
+    const dateField = pool.find(
       (f) => f.field_name.toLowerCase() === dateFieldName.toLowerCase(),
     );
     if (!dateField) return `(field "${dateFieldName}" not found)`;
@@ -638,7 +639,7 @@ export default function Tasks({
       ).join(", ");
 
       const customValues = fieldList.map((f) => {
-        if (f.field_type === "formula") return computeFormula(f, task, fieldList) || "";
+        if (f.field_type === "formula") return computeFormula(f, task, fieldList, activeSpace?.space_fields) || "";
         const fv = task.task_field_values?.find((v) => v.field_id === f.id);
         return fv?.value || "";
       });
@@ -2143,7 +2144,7 @@ export default function Tasks({
               padding: "1px 8px",
             }}
           >
-            ƒ {computeFormula(f, task, getFields())}
+            ƒ {computeFormula(f, task, getFields(), activeSpace?.space_fields)}
           </span>
         );
       if (!fv?.value) return "—";
@@ -3832,7 +3833,7 @@ export default function Tasks({
                                   padding: "5px 12px",
                                 }}
                               >
-                                ƒ {computeFormula(field, drawerTask, drawerFields)}
+                                ƒ {computeFormula(field, drawerTask, drawerFields, activeSpace?.space_fields)}
                               </span>
                               <span style={{ fontSize: 11, color: "#aaa" }}>
                                 {
