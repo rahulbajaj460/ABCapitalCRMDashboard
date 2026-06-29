@@ -145,7 +145,7 @@ const FORMULA_PRESETS = [
   { key: "custom", label: "Custom (manual text)", fn: () => null },
 ];
 
-function computeFormula(field, task) {
+function computeFormula(field, task, allFields) {
   if (field.field_type !== "formula") return null;
   const opts = field.field_options || [];
   const key = opts[0] || "days_since_created";
@@ -168,6 +168,22 @@ function computeFormula(field, task) {
       return `${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} overdue`;
     if (days === 0) return "Due today";
     return `${days} day${days !== 1 ? "s" : ""} left`;
+  }
+  if (key === "days_since_date_field") {
+    const dateFieldName = (opts[1] || "").trim();
+    if (!dateFieldName || !allFields) return "—";
+    const dateField = allFields.find(
+      (f) => f.field_name.toLowerCase() === dateFieldName.toLowerCase(),
+    );
+    if (!dateField) return `(field "${dateFieldName}" not found)`;
+    const fv = (task.task_field_values || []).find(
+      (v) => v.field_id === dateField.id,
+    );
+    if (!fv?.value) return "—";
+    const d = new Date(fv.value);
+    if (isNaN(d)) return "—";
+    const days = Math.floor((now - d) / 86400000);
+    return `${days} day${days !== 1 ? "s" : ""}`;
   }
   if (key === "custom") {
     const expr = (opts[1] || "").trim();
@@ -612,7 +628,7 @@ export default function Tasks({
       ).join(", ");
 
       const customValues = fieldList.map((f) => {
-        if (f.field_type === "formula") return computeFormula(f, task) || "";
+        if (f.field_type === "formula") return computeFormula(f, task, fieldList) || "";
         const fv = task.task_field_values?.find((v) => v.field_id === f.id);
         return fv?.value || "";
       });
@@ -1577,8 +1593,12 @@ export default function Tasks({
     let fieldOptions = null;
     if (newField.field_type === "dropdown")
       fieldOptions = newField.field_options?.filter((o) => o.trim()) || [];
-    else if (newField.field_type === "formula")
-      fieldOptions = [newField.formula_key, newField.custom_formula || ""];
+    else if (newField.field_type === "formula") {
+      if (newField.formula_key === "days_since_date_field")
+        fieldOptions = [newField.formula_key, newField.date_field_name || ""];
+      else
+        fieldOptions = [newField.formula_key, newField.custom_formula || ""];
+    }
     const payload = {
       space_id: activeSpace.id,
       folder_id: activeFolder?.id || null,
@@ -1604,6 +1624,7 @@ export default function Tasks({
       field_options: [],
       formula_key: "days_since_created",
       custom_formula: "",
+      date_field_name: "",
     });
     // Keep modal open so the new field is visible in "Existing fields" above
     onRefreshSpaces();
@@ -2112,7 +2133,7 @@ export default function Tasks({
               padding: "1px 8px",
             }}
           >
-            ƒ {computeFormula(f, task)}
+            ƒ {computeFormula(f, task, getFields())}
           </span>
         );
       if (!fv?.value) return "—";
@@ -3801,7 +3822,7 @@ export default function Tasks({
                                   padding: "5px 12px",
                                 }}
                               >
-                                ƒ {computeFormula(field, drawerTask)}
+                                ƒ {computeFormula(field, drawerTask, drawerFields)}
                               </span>
                               <span style={{ fontSize: 11, color: "#aaa" }}>
                                 {
@@ -5717,6 +5738,12 @@ export default function Tasks({
                         example: "Requires a due date to be set on the task",
                       },
                       {
+                        key: "days_since_date_field",
+                        label: "Days since a date field",
+                        hint: "TODAY() − a custom date field you specify — equivalent to ClickUp's TODAY()-field(\"...\")",
+                        example: "e.g. days since Signing Date, Contract Date, etc.",
+                      },
+                      {
                         key: "custom",
                         label: "Custom formula expression",
                         hint: "Write your own expression — stored and displayed as-is",
@@ -5807,6 +5834,46 @@ export default function Tasks({
                       );
                     })}
                   </div>
+                  {(newField.formula_key || "days_since_created") ===
+                    "days_since_date_field" && (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        padding: "12px 14px",
+                        background: "#f0f9ff",
+                        borderRadius: 8,
+                        border: "1px solid #bae6fd",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#0369a1",
+                          marginBottom: 6,
+                          textTransform: "uppercase",
+                          letterSpacing: ".04em",
+                        }}
+                      >
+                        Date field name
+                      </div>
+                      <input
+                        placeholder="e.g. Signing Date, Contract Date"
+                        value={newField.date_field_name || ""}
+                        onChange={(e) =>
+                          setNewField((p) => ({ ...p, date_field_name: e.target.value }))
+                        }
+                        style={{ fontSize: 12 }}
+                      />
+                      <div style={{ fontSize: 11, color: "#aaa", marginTop: 6 }}>
+                        Must match the name of an existing date custom field on this task.
+                        Equivalent to ClickUp's{" "}
+                        <code style={{ background: "#e0f2fe", padding: "1px 5px", borderRadius: 4, fontSize: 11 }}>
+                          TODAY()-field("{newField.date_field_name || "..."}")
+                        </code>
+                      </div>
+                    </div>
+                  )}
                   {(newField.formula_key || "days_since_created") ===
                     "custom" && (
                     <div
