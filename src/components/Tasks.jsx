@@ -1097,10 +1097,19 @@ export default function Tasks({
           activeFolder.id,
         );
     }
+    // Collect space-level fields + all folder/list-scoped fields, deduplicated by name
+    const spaceFields = activeSpace?.space_fields || [];
+    const folderFields = (activeSpace?.folders || []).flatMap(
+      (f) => f.space_fields || [],
+    );
+    const seen = new Set();
+    const allFieldsMerged = [...spaceFields, ...folderFields].filter((f) => {
+      if (seen.has(f.field_name)) return false;
+      seen.add(f.field_name);
+      return true;
+    });
     return applyFieldOverrides(
-      (activeSpace?.space_fields || []).sort(
-        (a, b) => a.field_order - b.field_order,
-      ),
+      allFieldsMerged.sort((a, b) => a.field_order - b.field_order),
       activeSpace?.id,
       null,
     );
