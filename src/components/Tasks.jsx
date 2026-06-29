@@ -1089,8 +1089,7 @@ export default function Tasks({
       );
     }
     if (activeFolder) {
-      // Show folder fields that are NOT list-scoped
-      const ff = (activeFolder.space_fields || []).filter((f) => !f.list_id);
+      const ff = (activeFolder.space_fields || []);
       if (ff.length > 0)
         return applyFieldOverrides(
           ff.sort((a, b) => a.field_order - b.field_order),
@@ -1099,7 +1098,7 @@ export default function Tasks({
         );
     }
     return applyFieldOverrides(
-      (activeSpace?.space_fields || []).filter((f) => !f.list_id).sort(
+      (activeSpace?.space_fields || []).sort(
         (a, b) => a.field_order - b.field_order,
       ),
       activeSpace?.id,
@@ -1107,7 +1106,7 @@ export default function Tasks({
     );
   }
   function getFolderFields(folder) {
-    const ff = (folder.space_fields || []).filter((f) => !f.list_id);
+    const ff = (folder.space_fields || []);
     if (ff.length > 0)
       return applyFieldOverrides(
         ff.sort((a, b) => a.field_order - b.field_order),
@@ -1115,7 +1114,7 @@ export default function Tasks({
         folder.id,
       );
     return applyFieldOverrides(
-      (activeSpace?.space_fields || []).filter((f) => !f.list_id).sort(
+      (activeSpace?.space_fields || []).sort(
         (a, b) => a.field_order - b.field_order,
       ),
       activeSpace?.id,
