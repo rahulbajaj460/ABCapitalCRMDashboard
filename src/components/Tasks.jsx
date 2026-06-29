@@ -1102,12 +1102,15 @@ export default function Tasks({
         activeFolder.id,
       );
     }
-    // Space level: only fields with no folder_id and no list_id
-    const spaceFields = (activeSpace?.space_fields || []).filter(
-      (f) => !f.folder_id && !f.list_id
-    );
+    // Space level: all fields (space + folder + list scoped), deduplicated by name
+    const seen = new Set();
+    const allSpaceFields = (activeSpace?.space_fields || []).filter((f) => {
+      if (seen.has(f.field_name)) return false;
+      seen.add(f.field_name);
+      return true;
+    });
     return applyFieldOverrides(
-      [...spaceFields].sort((a, b) => a.field_order - b.field_order),
+      [...allSpaceFields].sort((a, b) => a.field_order - b.field_order),
       activeSpace?.id,
       null,
     );
