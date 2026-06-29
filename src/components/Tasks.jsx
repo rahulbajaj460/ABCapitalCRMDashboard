@@ -145,6 +145,16 @@ const FORMULA_PRESETS = [
   { key: "custom", label: "Custom (manual text)", fn: () => null },
 ];
 
+function parseFlexibleDate(str) {
+  if (!str) return null;
+  // Strip ordinal suffixes: 26th → 26, 2nd → 2, 1st → 1, 3rd → 3
+  const cleaned = str.replace(/(\d+)(st|nd|rd|th)/gi, "$1");
+  // Strip leading day name if present: "Thursday, February 26 2026" → "February 26 2026"
+  const withoutDay = cleaned.replace(/^[A-Za-z]+,\s*/, "");
+  const d = new Date(withoutDay);
+  return isNaN(d) ? null : d;
+}
+
 function computeFormula(field, task, allFields) {
   if (field.field_type !== "formula") return null;
   const opts = field.field_options || [];
@@ -180,8 +190,8 @@ function computeFormula(field, task, allFields) {
       (v) => v.field_id === dateField.id,
     );
     if (!fv?.value) return "—";
-    const d = new Date(fv.value);
-    if (isNaN(d)) return "—";
+    const d = parseFlexibleDate(fv.value);
+    if (!d) return "—";
     const days = Math.floor((now - d) / 86400000);
     return `${days} day${days !== 1 ? "s" : ""}`;
   }
