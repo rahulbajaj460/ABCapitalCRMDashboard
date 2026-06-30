@@ -3032,7 +3032,7 @@ export default function Tasks({
 
                   if (folderListItems.length > 0) {
                     const folderStatusList = getFolderStatuses(activeFolder);
-                    const folderFieldList = getFolderFields(activeFolder);
+                    const folderFieldList = getFields();
                     return (
                       <div>
                         {folderListItems.map((list) => {
