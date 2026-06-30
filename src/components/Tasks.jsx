@@ -3810,7 +3810,15 @@ export default function Tasks({
                       Custom fields
                     </div>
                     {drawerFields.map((field) => {
-                      const val = drawerFieldValues[field.id] || "";
+                      const rawVal = drawerFieldValues[field.id] || "";
+                      // For date inputs, convert stored value to YYYY-MM-DD
+                      let val = rawVal;
+                      if (field.field_type === "date" && rawVal) {
+                        const parsed = parseFlexibleDate(rawVal);
+                        if (parsed) {
+                          val = parsed.toISOString().slice(0, 10);
+                        }
+                      }
                       return (
                         <div key={field.id} style={{ marginBottom: 14 }}>
                           <div
