@@ -1074,7 +1074,7 @@ export default function Tasks({
         !existingIds.has(f.id) &&
         !locallyDeletedFieldIds.includes(f.id) &&
         f.space_id === scopeSpaceId &&
-        (f.folder_id || null) === (scopeFolderId || null),
+        ((f.folder_id || null) === (scopeFolderId || null) || f.list_id != null),
     );
     if (extras.length > 0) result = [...result, ...extras];
     return result;
@@ -1638,10 +1638,14 @@ export default function Tasks({
       .select()
       .single();
     if (!error && data) {
-      // Reflect instantly in the UI without waiting on the parent prop
       setLocallyAddedFields((prev) => [...prev, data]);
       setFieldAddedFlash(true);
       setTimeout(() => setFieldAddedFlash(false), 1800);
+      // Refetch list-scoped fields so the new field appears immediately at list level
+      if (activeList) {
+        supabase.from("space_fields").select("*").eq("list_id", activeList.id).order("field_order")
+          .then(({ data: lf }) => setListFields(lf || []));
+      }
     }
     setNewField({
       field_name: "",
