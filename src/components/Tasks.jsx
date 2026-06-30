@@ -1116,17 +1116,21 @@ export default function Tasks({
     );
   }
   function getFolderFields(folder) {
-    const ff = (folder.space_fields || []);
+    const folderListIds = new Set(
+      spaceLists.filter((l) => l.folder_id === folder.id).map((l) => l.id)
+    );
+    const ff = (activeSpace?.space_fields || []).filter(
+      (f) => f.folder_id === folder.id || (f.list_id && folderListIds.has(f.list_id))
+    );
     if (ff.length > 0)
       return applyFieldOverrides(
-        ff.sort((a, b) => a.field_order - b.field_order),
+        [...ff].sort((a, b) => a.field_order - b.field_order),
         activeSpace?.id,
         folder.id,
       );
     return applyFieldOverrides(
-      (activeSpace?.space_fields || []).sort(
-        (a, b) => a.field_order - b.field_order,
-      ),
+      (activeSpace?.space_fields || []).filter((f) => !f.folder_id && !f.list_id)
+        .sort((a, b) => a.field_order - b.field_order),
       activeSpace?.id,
       null,
     );
