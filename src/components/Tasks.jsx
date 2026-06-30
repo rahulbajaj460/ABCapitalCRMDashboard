@@ -1625,7 +1625,8 @@ export default function Tasks({
     }
     const payload = {
       space_id: activeSpace.id,
-      folder_id: activeFolder?.id || null,
+      folder_id: activeList ? null : (activeFolder?.id || null),
+      list_id: activeList?.id || null,
       field_name: newField.field_name.trim(),
       field_type: newField.field_type,
       field_order: getFields().length + 1,
