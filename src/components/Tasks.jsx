@@ -436,6 +436,7 @@ export default function Tasks({
   const [spaceLists, setSpaceLists] = useState([]); // all lists for the active space
   const [listFields, setListFields] = useState([]); // space_fields scoped to active list
   const [listStatuses, setListStatuses] = useState([]); // space_statuses scoped to active list
+  const [allListStatuses, setAllListStatuses] = useState([]); // space_statuses for all lists in space
 
   useEffect(() => {
     if (!activeSpace) { setSpaceLists([]); return; }
@@ -454,6 +455,13 @@ export default function Tasks({
     supabase.from("space_statuses").select("*").eq("list_id", activeList.id).order("status_order")
       .then(({ data }) => setListStatuses(data || []));
   }, [activeList]);
+
+  // Fetch all list-scoped statuses for the space so folder-level can merge them
+  useEffect(() => {
+    if (!activeSpace) { setAllListStatuses([]); return; }
+    supabase.from("space_statuses").select("*").eq("space_id", activeSpace.id).not("list_id", "is", null).order("status_order")
+      .then(({ data }) => setAllListStatuses(data || []));
+  }, [activeSpace]);
 
   // Checklists
   const [checklists, setChecklists] = useState([]);
@@ -995,14 +1003,8 @@ export default function Tasks({
       // fall through to folder/space statuses
     }
     if (activeFolder) {
-      const fs = (activeSpace?.space_statuses || [])
-        .filter((s) => s.folder_id === activeFolder.id && !s.list_id)
-        .sort((a, b) => a.status_order - b.status_order);
-      if (fs.length > 0) return fs.map((s) => s.name);
-      const sl = (activeSpace?.space_statuses || [])
-        .filter((s) => !s.folder_id && !s.list_id)
-        .sort((a, b) => a.status_order - b.status_order);
-      if (sl.length > 0) return sl.map((s) => s.name);
+      // Folder level: merge all list statuses for lists in this folder + folder-scoped statuses
+      return getMergedFolderStatuses(activeFolder.id);
     }
     const allFolderIds = (activeSpace?.folders || []).map((f) => f.id);
     const seen = new Set();
@@ -1023,12 +1025,51 @@ export default function Tasks({
     if (spaceLevel.length > 0) return spaceLevel.map((s) => s.name);
     return ["To Do", "In Progress", "In Review", "Done"];
   }
-  function getFolderStatuses(folder) {
-    const fs = (activeSpace?.space_statuses || [])
-      .filter((s) => s.folder_id === folder.id)
+
+  // Returns merged unique status names for all lists inside a folder + folder-scoped statuses
+  function getMergedFolderStatuses(folderId) {
+    const folderListIds = new Set(
+      spaceLists.filter((l) => l.folder_id === folderId).map((l) => l.id)
+    );
+    const seen = new Set();
+    const merged = [];
+    // List-scoped statuses for all lists in this folder
+    allListStatuses
+      .filter((s) => folderListIds.has(s.list_id))
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => {
+        if (!seen.has(s.name)) { seen.add(s.name); merged.push(s.name); }
+      });
+    // Folder-scoped statuses
+    (activeSpace?.space_statuses || [])
+      .filter((s) => s.folder_id === folderId && !s.list_id)
+      .sort((a, b) => a.status_order - b.status_order)
+      .forEach((s) => {
+        if (!seen.has(s.name)) { seen.add(s.name); merged.push(s.name); }
+      });
+    if (merged.length > 0) return merged;
+    // Fall back to space-level statuses
+    const sl = (activeSpace?.space_statuses || [])
+      .filter((s) => !s.folder_id && !s.list_id)
       .sort((a, b) => a.status_order - b.status_order);
-    if (fs.length > 0) return fs.map((s) => s.name);
-    return getStatuses();
+    if (sl.length > 0) return sl.map((s) => s.name);
+    return ["To Do", "In Progress", "In Review", "Done"];
+  }
+
+  // Returns status names for a specific list (isolated)
+  function getStatusesForList(listId) {
+    const ls = allListStatuses
+      .filter((s) => s.list_id === listId)
+      .sort((a, b) => a.status_order - b.status_order);
+    if (ls.length > 0) return ls.map((s) => s.name);
+    // Fall back to parent folder/space statuses
+    const list = spaceLists.find((l) => l.id === listId);
+    if (list?.folder_id) return getMergedFolderStatuses(list.folder_id);
+    return ["To Do", "In Progress", "In Review", "Done"];
+  }
+
+  function getFolderStatuses(folder) {
+    return getMergedFolderStatuses(folder.id);
   }
   function getUniqueStatuses() {
     if (activeFolder) return getStatuses();
@@ -1855,6 +1896,13 @@ export default function Tasks({
     setStatusLoading(false);
   }
 
+  async function refreshAllListStatuses() {
+    if (!activeSpace) return;
+    const { data } = await supabase.from("space_statuses").select("*")
+      .eq("space_id", activeSpace.id).not("list_id", "is", null).order("status_order");
+    setAllListStatuses(data || []);
+  }
+
   async function fetchModalStatuses() {
     if (!activeSpace) return;
     if (activeList) {
@@ -1865,6 +1913,7 @@ export default function Tasks({
         .order("status_order");
       setModalSpaceStatuses(data || []);
       setListStatuses(data || []);
+      refreshAllListStatuses();
       return data || [];
     }
     if (activeFolder) {
@@ -3049,8 +3098,9 @@ export default function Tasks({
                           });
                           const listKey = `flv_${list.id}`;
                           const listExpanded = expandedGroups[listKey] !== false;
+                          const thisListStatuses = getStatusesForList(list.id);
                           const listGroupedRaw = groupBy === "status"
-                            ? folderStatusList.reduce((acc, s) => { acc[s] = filteredListTasks.filter((t) => t.status === s); return acc; }, {})
+                            ? thisListStatuses.reduce((acc, s) => { acc[s] = filteredListTasks.filter((t) => t.status === s); return acc; }, {})
                             : groupBy === "priority"
                               ? ["High", "Medium", "Low"].reduce((acc, p) => { acc[p] = filteredListTasks.filter((t) => t.priority === p); return acc; }, {})
                               : groupBy === "assignee"
