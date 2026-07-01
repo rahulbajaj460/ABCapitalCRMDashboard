@@ -146,32 +146,26 @@ export default function Sidebar({
   }, []);
 
   async function fetchLists() {
-    const [{ data }, { data: taskData }] = await Promise.all([
-      supabase.from("lists").select("*").is("deleted_at", null).order("created_at"),
-      supabase.from("tasks").select("list_id, folder_id").is("deleted_at", null),
-    ]);
+    const { data } = await supabase.from("lists").select("*").is("deleted_at", null).order("created_at");
     const fetchedLists = data || [];
     setLists(fetchedLists);
 
-    // Count tasks per list: tasks with list_id set count directly;
-    // tasks with only folder_id count toward the list if it's the sole list in that folder.
-    const folderToLists = {};
-    fetchedLists.forEach((l) => {
-      if (!folderToLists[l.folder_id]) folderToLists[l.folder_id] = [];
-      folderToLists[l.folder_id].push(l.id);
-    });
-    const counts = {};
-    (taskData || []).forEach((t) => {
-      if (t.list_id) {
-        counts[t.list_id] = (counts[t.list_id] || 0) + 1;
-      } else if (t.folder_id) {
-        const siblings = folderToLists[t.folder_id] || [];
-        if (siblings.length === 1) {
-          counts[siblings[0]] = (counts[siblings[0]] || 0) + 1;
-        }
-      }
-    });
-    setListTaskCounts(counts);
+    // Count tasks per list using exact counts — avoids row-limit issues with bulk task fetches
+    if (fetchedLists.length > 0) {
+      const countResults = await Promise.all(
+        fetchedLists.map((l) =>
+          supabase
+            .from("tasks")
+            .select("*", { count: "exact", head: true })
+            .eq("list_id", l.id)
+            .is("deleted_at", null)
+            .then(({ count }) => ({ id: l.id, count: count || 0 }))
+        )
+      );
+      const counts = {};
+      countResults.forEach(({ id, count }) => { if (count > 0) counts[id] = count; });
+      setListTaskCounts(counts);
+    }
     onRefreshTaskCounts?.();
   }
 
