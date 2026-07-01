@@ -129,15 +129,18 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
   const nameInputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // ── Load saved data ──────────────────────────────────────────────
+  // ── Load saved data (always fetch fresh from DB) ─────────────────
   useEffect(() => {
-    if (whiteboard?.data?.elements) {
-      setElements(whiteboard.data.elements);
-      setHistory([whiteboard.data.elements]);
-    } else {
-      setHistory([[]]);
-    }
+    if (!whiteboard?.id) return;
+    setElements([]);
+    setHistory([[]]);
     setSelectedId(null);
+    supabase.from("whiteboards").select("data").eq("id", whiteboard.id).single()
+      .then(({ data }) => {
+        const els = data?.data?.elements || [];
+        setElements(els);
+        setHistory([els]);
+      });
   }, [whiteboard?.id]);
 
   // ── Redraw on elements / selectedId change ───────────────────────
@@ -402,7 +405,13 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
 
   async function saveToDb(els) {
     setSaving(true);
-    await supabase.from("whiteboards").update({ data: { elements: els }, updated_at: new Date().toISOString() }).eq("id", whiteboard.id);
+    console.log("[WB] saving to id:", whiteboard?.id, "elements:", els.length);
+    const { data: saved, error } = await supabase
+      .from("whiteboards")
+      .update({ data: { elements: els }, updated_at: new Date().toISOString() })
+      .eq("id", whiteboard.id)
+      .select("id, data");
+    console.log("[WB] save result:", saved, "error:", error);
     setSaving(false);
   }
 
