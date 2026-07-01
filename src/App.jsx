@@ -140,26 +140,58 @@ export default function App() {
   }, [user, spaces]);
 
   async function fetchTaskCounts() {
-    const [{ data }, { data: listsData }] = await Promise.all([
-      supabase.from("tasks").select("space_id, folder_id, list_id").is("deleted_at", null),
-      supabase.from("lists").select("id, folder_id").is("deleted_at", null),
-    ]);
-    if (!data) return;
+    if (!spaces.length) return;
 
-    // Build list → folder map so tasks with list_id but no folder_id can roll up
-    const listToFolder = {};
-    const listToSpace = {};
-    (listsData || []).forEach((l) => {
-      if (l.folder_id) listToFolder[l.id] = l.folder_id;
-      if (l.space_id) listToSpace[l.id] = l.space_id;
-    });
+    const { data: listsData } = await supabase
+      .from("lists")
+      .select("id, folder_id, space_id")
+      .is("deleted_at", null);
+    const allLists = listsData || [];
+
+    const allFolders = spaces.flatMap((s) => (s.folders || []).map((f) => ({ id: f.id, space_id: s.id })));
+
+    // Run count queries per list, per folder (direct tasks only), per space (direct tasks only)
+    const [listResults, folderResults, spaceResults] = await Promise.all([
+      Promise.all(
+        allLists.map((l) =>
+          supabase.from("tasks").select("*", { count: "exact", head: true })
+            .eq("list_id", l.id).is("deleted_at", null)
+            .then(({ count }) => ({ ...l, count: count || 0 }))
+        )
+      ),
+      Promise.all(
+        allFolders.map((f) =>
+          supabase.from("tasks").select("*", { count: "exact", head: true })
+            .eq("folder_id", f.id).is("list_id", null).is("deleted_at", null)
+            .then(({ count }) => ({ ...f, count: count || 0 }))
+        )
+      ),
+      Promise.all(
+        spaces.map((s) =>
+          supabase.from("tasks").select("*", { count: "exact", head: true })
+            .eq("space_id", s.id).is("folder_id", null).is("list_id", null).is("deleted_at", null)
+            .then(({ count }) => ({ id: s.id, count: count || 0 }))
+        )
+      ),
+    ]);
 
     const counts = {};
-    data.forEach((t) => {
-      const folderId = t.folder_id || listToFolder[t.list_id];
-      counts[t.space_id] = (counts[t.space_id] || 0) + 1;
-      if (folderId) counts[folderId] = (counts[folderId] || 0) + 1;
-      if (t.list_id) counts[t.list_id] = (counts[t.list_id] || 0) + 1;
+    // Lists: count directly, roll up to folder and space
+    listResults.forEach(({ id, folder_id, space_id, count }) => {
+      if (!count) return;
+      counts[id] = (counts[id] || 0) + count;
+      if (folder_id) counts[folder_id] = (counts[folder_id] || 0) + count;
+      if (space_id) counts[space_id] = (counts[space_id] || 0) + count;
+    });
+    // Folders: direct tasks (no list), roll up to space
+    folderResults.forEach(({ id, space_id, count }) => {
+      if (!count) return;
+      counts[id] = (counts[id] || 0) + count;
+      if (space_id) counts[space_id] = (counts[space_id] || 0) + count;
+    });
+    // Spaces: direct tasks (no folder, no list)
+    spaceResults.forEach(({ id, count }) => {
+      if (count) counts[id] = (counts[id] || 0) + count;
     });
     setTaskCounts(counts);
   }
