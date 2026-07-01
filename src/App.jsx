@@ -279,6 +279,7 @@ export default function App() {
         onFolderSelect={handleFolderSelect}
         onListSelect={handleListSelect}
         taskCounts={taskCounts}
+        onRefreshTaskCounts={fetchTaskCounts}
         onSpaceCreated={fetchSpaces}
         onLogout={handleLogout}
         width={sidebarWidth}

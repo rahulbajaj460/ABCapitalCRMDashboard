@@ -128,6 +128,7 @@ export default function Sidebar({
   profile,
   onLogout,
   taskCounts = {},
+  onRefreshTaskCounts,
   width = 240,
 }) {
   // ── Lists (within folders) ──
@@ -146,6 +147,7 @@ export default function Sidebar({
   async function fetchLists() {
     const { data } = await supabase.from("lists").select("*").is("deleted_at", null).order("created_at");
     setLists(data || []);
+    onRefreshTaskCounts?.();
   }
 
   function toggleFolder(folderId) {
