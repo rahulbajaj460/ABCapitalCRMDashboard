@@ -122,8 +122,56 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
     } else if (el.type === "text") {
       ctx.font = `${el.fontSize || 16}px Inter, sans-serif`;
       ctx.fillText(el.text, el.x, el.y);
+    } else if (el.type === "image" && el.src) {
+      const img = new window.Image();
+      img.onload = () => {
+        ctx.drawImage(img, el.x, el.y, el.w, el.h);
+        ctx.restore();
+      };
+      img.src = el.src;
+      return; // restore called in onload
     }
     ctx.restore();
+  }
+
+  const fileInputRef = useRef(null);
+
+  function importImage() {
+    fileInputRef.current?.click();
+  }
+
+  function onImageFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target.result;
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        // Scale to fit nicely — max half the canvas width/height
+        const maxW = canvas.width * 0.5;
+        const maxH = canvas.height * 0.5;
+        const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        const x = (canvas.width - w) / 2;
+        const y = (canvas.height - h) / 2;
+        const el = { type: "image", src, x, y, w, h, id: Date.now() };
+        commitElement(el);
+      };
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ""; // allow re-import of same file
+  }
+
+  function exportImage() {
+    const canvas = canvasRef.current;
+    const link = document.createElement("a");
+    link.download = `${name || "whiteboard"}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
   }
 
   function onMouseDown(e) {
@@ -228,9 +276,12 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
     setSaving(false);
   }
 
-  async function saveName(n) {
+  const nameInputRef = useRef(null);
+
+  async function saveName() {
+    const n = nameInputRef.current?.value ?? "";
     setEditingName(false);
-    if (!n.trim() || n === whiteboard.name) return;
+    if (!n.trim()) return;
     setName(n.trim());
     await supabase.from("whiteboards").update({ name: n.trim() }).eq("id", whiteboard.id);
   }
@@ -242,10 +293,14 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
         <button onClick={onBack} style={{ border: "none", background: "none", cursor: "pointer", color: "#6b7280", fontSize: 20, lineHeight: 1, padding: "2px 4px" }}>←</button>
         {editingName ? (
           <input
+            ref={nameInputRef}
             autoFocus
             defaultValue={name}
-            onBlur={(e) => saveName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") saveName(e.target.value); if (e.key === "Escape") setEditingName(false); }}
+            onBlur={saveName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); saveName(); }
+              if (e.key === "Escape") { setEditingName(false); }
+            }}
             style={{ fontSize: 14, fontWeight: 600, border: "1px solid #d1d5db", borderRadius: 4, padding: "2px 8px", outline: "none" }}
           />
         ) : (
@@ -330,11 +385,20 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
             style={{ border: "1px solid #e5e7eb", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#374151" }}>
             ↪ Redo
           </button>
+          <button onClick={importImage} title="Import image"
+            style={{ border: "1px solid #e5e7eb", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#374151" }}>
+            ↑ Import Image
+          </button>
+          <button onClick={exportImage} title="Export as PNG"
+            style={{ border: "1px solid #e5e7eb", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#374151" }}>
+            ↓ Export PNG
+          </button>
           <button onClick={clearAll}
             style={{ border: "1px solid #fca5a5", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#dc2626" }}>
             Clear
           </button>
         </div>
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={onImageFileChange} style={{ display: "none" }} />
       </div>
 
       {/* Canvas */}
