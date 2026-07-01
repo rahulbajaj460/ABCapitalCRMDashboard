@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
 import Tasks from "./components/Tasks";
 import Wiki from "./components/Wiki";
+import WhiteboardView from "./components/Whiteboard";
 import Login from "./components/Login";
 import Settings from "./components/Settings";
 import MyTasks from "./components/MyTasks";
@@ -20,6 +21,9 @@ export default function App() {
   const [activeFolder, setActiveFolder] = useState(null);
   const [activeList, setActiveList] = useState(null);
   const [openArticleId, setOpenArticleId] = useState(null);
+  const [activeWhiteboard, setActiveWhiteboard] = useState(null);
+  const [newDocFolderId, setNewDocFolderId] = useState(null);
+  const [newDocSpaceId, setNewDocSpaceId] = useState(null);
   const [spaces, setSpaces] = useState([]);
   const [pendingSpaceId, setPendingSpaceId] = useState(
     () => localStorage.getItem("abc_space_id") || null,
@@ -261,10 +265,24 @@ export default function App() {
   }
 
   function handleNavigate(v) {
-    // Support "wiki:articleId" to open a specific article
     if (typeof v === "string" && v.startsWith("wiki:")) {
       const articleId = v.slice(5);
       setOpenArticleId(articleId);
+      setNewDocFolderId(null);
+      setActiveWhiteboard(null);
+      setView("wiki");
+      localStorage.setItem("abc_view", "wiki");
+      setActiveSpace(null);
+      setActiveFolder(null);
+      return;
+    }
+    // "doc-new:folderId:spaceId" — open Wiki in create mode linked to folder
+    if (typeof v === "string" && v.startsWith("doc-new:")) {
+      const [, fid, sid] = v.split(":");
+      setNewDocFolderId(fid);
+      setNewDocSpaceId(sid);
+      setOpenArticleId(null);
+      setActiveWhiteboard(null);
       setView("wiki");
       localStorage.setItem("abc_view", "wiki");
       setActiveSpace(null);
@@ -272,6 +290,8 @@ export default function App() {
       return;
     }
     setOpenArticleId(null);
+    setNewDocFolderId(null);
+    setActiveWhiteboard(null);
     setView(v);
     localStorage.setItem("abc_view", v);
     if (v !== "tasks") {
@@ -281,6 +301,16 @@ export default function App() {
       setActiveFolder(null);
       setActiveList(null);
     }
+  }
+
+  function handleWhiteboardSelect(wb) {
+    setActiveWhiteboard(wb);
+    setView("whiteboard");
+    setActiveSpace(null);
+    setActiveFolder(null);
+    setActiveList(null);
+    setOpenArticleId(null);
+    setNewDocFolderId(null);
   }
 
   if (authLoading) {
@@ -310,12 +340,14 @@ export default function App() {
         activeSpace={activeSpace}
         activeFolder={activeFolder}
         activeList={activeList}
+        activeWhiteboard={activeWhiteboard}
         view={view}
         profile={profile}
         onNavigate={handleNavigate}
         onSpaceSelect={handleSpaceSelect}
         onFolderSelect={handleFolderSelect}
         onListSelect={handleListSelect}
+        onWhiteboardSelect={handleWhiteboardSelect}
         taskCounts={taskCounts}
         onRefreshTaskCounts={fetchTaskCounts}
         onSpaceCreated={fetchSpaces}
@@ -356,7 +388,22 @@ export default function App() {
             onRefreshSpaces={fetchSpaces}
           />
         )}
-        {view === "wiki" && <Wiki profile={profile} openArticleId={openArticleId} />}
+        {view === "wiki" && (
+          <Wiki
+            profile={profile}
+            openArticleId={openArticleId}
+            newDocFolderId={newDocFolderId}
+            newDocSpaceId={newDocSpaceId}
+            onDocCreated={() => { setNewDocFolderId(null); setNewDocSpaceId(null); }}
+          />
+        )}
+        {view === "whiteboard" && activeWhiteboard && (
+          <WhiteboardView
+            whiteboard={activeWhiteboard}
+            profile={profile}
+            onBack={() => { setView("tasks"); setActiveWhiteboard(null); }}
+          />
+        )}
         {view === "mytasks" && <MyTasks profile={profile} />}
         {view === "settings" && profile?.role === "admin" && (
           <Settings currentUser={user} profile={profile} />

@@ -119,11 +119,13 @@ export default function Sidebar({
   activeSpace,
   activeFolder,
   activeList,
+  activeWhiteboard,
   view,
   onNavigate,
   onSpaceSelect,
   onFolderSelect,
   onListSelect,
+  onWhiteboardSelect,
   onSpaceCreated,
   profile,
   onLogout,
@@ -137,13 +139,30 @@ export default function Sidebar({
   const [expandedFolders, setExpandedFolders] = useState({});
   const [newListFolderId, setNewListFolderId] = useState(null); // folder id showing inline create
   const [newListName, setNewListName] = useState("");
+  // ── Docs & Whiteboards ──
+  const [folderDocs, setFolderDocs] = useState({}); // folder_id → [article]
+  const [folderWhiteboards, setFolderWhiteboards] = useState({}); // folder_id → [whiteboard]
   const [listMenu, setListMenu] = useState(null); // { id, list, x, y }
   const [editListModal, setEditListModal] = useState(null); // list object
   const [editListName, setEditListName] = useState("");
 
   useEffect(() => {
     fetchLists();
+    fetchFolderItems();
   }, []);
+
+  async function fetchFolderItems() {
+    const [{ data: docs }, { data: wbs }] = await Promise.all([
+      supabase.from("wiki_articles").select("id, title, folder_id").not("folder_id", "is", null),
+      supabase.from("whiteboards").select("id, name, folder_id").is("deleted_at", null).not("folder_id", "is", null),
+    ]);
+    const docMap = {};
+    (docs || []).forEach((d) => { if (!docMap[d.folder_id]) docMap[d.folder_id] = []; docMap[d.folder_id].push(d); });
+    setFolderDocs(docMap);
+    const wbMap = {};
+    (wbs || []).forEach((w) => { if (!wbMap[w.folder_id]) wbMap[w.folder_id] = []; wbMap[w.folder_id].push(w); });
+    setFolderWhiteboards(wbMap);
+  }
 
   async function fetchLists() {
     const { data } = await supabase.from("lists").select("*").is("deleted_at", null).order("created_at");
@@ -1174,7 +1193,7 @@ export default function Sidebar({
                             onClick={(e) => { e.stopPropagation(); toggleFolder(folder.id); }}
                             style={{ fontSize: 10, color: "#aaa", marginRight: 2, flexShrink: 0, cursor: "pointer", userSelect: "none" }}
                           >
-                            {lists.some((l) => l.folder_id === folder.id)
+                            {(lists.some((l) => l.folder_id === folder.id) || (folderDocs[folder.id]?.length > 0) || (folderWhiteboards[folder.id]?.length > 0))
                               ? (expandedFolders[folder.id] ? "▾" : "▸")
                               : " "}
                           </span>
@@ -1286,6 +1305,34 @@ export default function Sidebar({
                                 >
                                   •••
                                 </span>
+                              </div>
+                            ))}
+                            {/* Docs under folder */}
+                            {(folderDocs[folder.id] || []).map((doc) => (
+                              <div
+                                key={doc.id}
+                                className={`folder-item ${view === "wiki" && activeFolder?.id === folder.id ? "active" : ""}`}
+                                onClick={() => onNavigate(`wiki:${doc.id}`)}
+                                style={{ paddingLeft: 32, position: "relative", cursor: "pointer" }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.title}</span>
+                              </div>
+                            ))}
+                            {/* Whiteboards under folder */}
+                            {(folderWhiteboards[folder.id] || []).map((wb) => (
+                              <div
+                                key={wb.id}
+                                className={`folder-item ${activeWhiteboard?.id === wb.id ? "active" : ""}`}
+                                onClick={() => onWhiteboardSelect(wb)}
+                                style={{ paddingLeft: 32, position: "relative", cursor: "pointer" }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                  <rect x="3" y="3" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                                </svg>
+                                <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wb.name}</span>
                               </div>
                             ))}
                             {/* Inline new list input */}
@@ -1567,11 +1614,40 @@ export default function Sidebar({
               label: "Add List",
               action: () => {
                 const fid = folderMenu.id;
-                const sid = folderMenu.space?.id;
                 setFolderMenu(null);
                 setNewListFolderId(fid);
                 setNewListName("");
                 setExpandedFolders((prev) => ({ ...prev, [fid]: true }));
+              },
+            },
+            {
+              icon: "📄",
+              label: "Add Doc",
+              action: async () => {
+                const fid = folderMenu.id;
+                const sid = folderMenu.space?.id;
+                setFolderMenu(null);
+                setExpandedFolders((prev) => ({ ...prev, [fid]: true }));
+                onNavigate(`doc-new:${fid}:${sid}`);
+              },
+            },
+            {
+              icon: "🎨",
+              label: "Add Whiteboard",
+              action: async () => {
+                const fid = folderMenu.id;
+                const sid = folderMenu.space?.id;
+                setFolderMenu(null);
+                setExpandedFolders((prev) => ({ ...prev, [fid]: true }));
+                const { data } = await supabase
+                  .from("whiteboards")
+                  .insert({ name: "Untitled Whiteboard", folder_id: fid, space_id: sid, data: { elements: [] } })
+                  .select()
+                  .single();
+                if (data) {
+                  await fetchFolderItems();
+                  onWhiteboardSelect(data);
+                }
               },
             },
             "divider",

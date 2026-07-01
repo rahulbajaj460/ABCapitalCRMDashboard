@@ -434,7 +434,7 @@ function RichEditor({ content, onChange }) {
   );
 }
 
-export default function Wiki({ profile, openArticleId }) {
+export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpaceId, onDocCreated }) {
   const [categories, setCategories] = useState([]);
   const [articles, setArticles] = useState([]);
   const [activeArticle, setActiveArticle] = useState(null);
@@ -460,6 +460,7 @@ export default function Wiki({ profile, openArticleId }) {
     title: "",
     content: "",
     category_id: "",
+    folder_id: null,
   });
   const [newCat, setNewCat] = useState({ name: "", parent_id: "" });
 
@@ -473,6 +474,14 @@ export default function Wiki({ profile, openArticleId }) {
     const art = articles.find((a) => a.id === openArticleId);
     if (art) setActiveArticle(art);
   }, [openArticleId, articles]);
+
+  // Open create modal pre-filled when coming from folder "Add Doc"
+  useEffect(() => {
+    if (!newDocFolderId) return;
+    setNewArticle({ title: "", content: "", category_id: "", folder_id: newDocFolderId });
+    setEditingArticle(null);
+    setShowArticleModal(true);
+  }, [newDocFolderId]);
 
   // Transform raw URL links to favicon pills
   useEffect(() => {
@@ -609,6 +618,7 @@ export default function Wiki({ profile, openArticleId }) {
       title: newArticle.title.trim(),
       content: newArticle.content,
       category_id: newArticle.category_id || null,
+      folder_id: newArticle.folder_id || null,
       updated_at: now,
       updated_by: profile?.full_name || "Unknown",
     };
@@ -753,6 +763,8 @@ export default function Wiki({ profile, openArticleId }) {
   function closeArticleModal() {
     setShowArticleModal(false);
     setEditingArticle(null);
+    setNewArticle({ title: "", content: "", category_id: "", folder_id: null });
+    onDocCreated?.();
   }
   function openNewCat(parentId = "") {
     setEditingCat(null);
