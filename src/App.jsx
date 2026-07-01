@@ -146,28 +146,20 @@ export default function App() {
     ]);
     if (!data) return;
 
-    // Build a map: folder_id → list ids in that folder
-    const folderToLists = {};
+    // Build list → folder map so tasks with list_id but no folder_id can roll up
+    const listToFolder = {};
+    const listToSpace = {};
     (listsData || []).forEach((l) => {
-      if (!folderToLists[l.folder_id]) folderToLists[l.folder_id] = [];
-      folderToLists[l.folder_id].push(l.id);
+      if (l.folder_id) listToFolder[l.id] = l.folder_id;
+      if (l.space_id) listToSpace[l.id] = l.space_id;
     });
 
     const counts = {};
     data.forEach((t) => {
+      const folderId = t.folder_id || listToFolder[t.list_id];
       counts[t.space_id] = (counts[t.space_id] || 0) + 1;
-      if (t.folder_id) {
-        counts[t.folder_id] = (counts[t.folder_id] || 0) + 1;
-      }
-      if (t.list_id) {
-        counts[t.list_id] = (counts[t.list_id] || 0) + 1;
-      } else if (t.folder_id) {
-        // Tasks imported before list_id tracking: assign to the sole list in the folder
-        const listsInFolder = folderToLists[t.folder_id] || [];
-        if (listsInFolder.length === 1) {
-          counts[listsInFolder[0]] = (counts[listsInFolder[0]] || 0) + 1;
-        }
-      }
+      if (folderId) counts[folderId] = (counts[folderId] || 0) + 1;
+      if (t.list_id) counts[t.list_id] = (counts[t.list_id] || 0) + 1;
     });
     setTaskCounts(counts);
   }
