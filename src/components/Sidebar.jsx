@@ -133,6 +133,7 @@ export default function Sidebar({
 }) {
   // ── Lists (within folders) ──
   const [lists, setLists] = useState([]); // [{id, folder_id, space_id, name}]
+  const [listTaskCounts, setListTaskCounts] = useState({}); // list.id → count (direct query)
   const [expandedFolders, setExpandedFolders] = useState({});
   const [newListFolderId, setNewListFolderId] = useState(null); // folder id showing inline create
   const [newListName, setNewListName] = useState("");
@@ -145,8 +146,32 @@ export default function Sidebar({
   }, []);
 
   async function fetchLists() {
-    const { data } = await supabase.from("lists").select("*").is("deleted_at", null).order("created_at");
-    setLists(data || []);
+    const [{ data }, { data: taskData }] = await Promise.all([
+      supabase.from("lists").select("*").is("deleted_at", null).order("created_at"),
+      supabase.from("tasks").select("list_id, folder_id").is("deleted_at", null),
+    ]);
+    const fetchedLists = data || [];
+    setLists(fetchedLists);
+
+    // Count tasks per list: tasks with list_id set count directly;
+    // tasks with only folder_id count toward the list if it's the sole list in that folder.
+    const folderToLists = {};
+    fetchedLists.forEach((l) => {
+      if (!folderToLists[l.folder_id]) folderToLists[l.folder_id] = [];
+      folderToLists[l.folder_id].push(l.id);
+    });
+    const counts = {};
+    (taskData || []).forEach((t) => {
+      if (t.list_id) {
+        counts[t.list_id] = (counts[t.list_id] || 0) + 1;
+      } else if (t.folder_id) {
+        const siblings = folderToLists[t.folder_id] || [];
+        if (siblings.length === 1) {
+          counts[siblings[0]] = (counts[siblings[0]] || 0) + 1;
+        }
+      }
+    });
+    setListTaskCounts(counts);
     onRefreshTaskCounts?.();
   }
 
@@ -1240,7 +1265,7 @@ export default function Sidebar({
                                   <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                                 </svg>
                                 <span style={{ flex: 1, fontSize: 12 }}>{list.name}</span>
-                                {taskCounts[list.id] > 0 && (
+                                {(listTaskCounts[list.id] > 0 || taskCounts[list.id] > 0) && (
                                   <span
                                     style={{
                                       fontSize: 11,
@@ -1251,7 +1276,7 @@ export default function Sidebar({
                                       flexShrink: 0,
                                     }}
                                   >
-                                    {taskCounts[list.id]}
+                                    {listTaskCounts[list.id] ?? taskCounts[list.id]}
                                   </span>
                                 )}
                                 <span
