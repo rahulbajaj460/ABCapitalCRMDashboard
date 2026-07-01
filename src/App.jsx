@@ -140,11 +140,19 @@ export default function App() {
   }, [user, spaces]);
 
   async function fetchTaskCounts() {
-    const { data } = await supabase
-      .from("tasks")
-      .select("space_id, folder_id, list_id")
-      .is("deleted_at", null);
+    const [{ data }, { data: listsData }] = await Promise.all([
+      supabase.from("tasks").select("space_id, folder_id, list_id").is("deleted_at", null),
+      supabase.from("lists").select("id, folder_id").is("deleted_at", null),
+    ]);
     if (!data) return;
+
+    // Build a map: folder_id → list ids in that folder
+    const folderToLists = {};
+    (listsData || []).forEach((l) => {
+      if (!folderToLists[l.folder_id]) folderToLists[l.folder_id] = [];
+      folderToLists[l.folder_id].push(l.id);
+    });
+
     const counts = {};
     data.forEach((t) => {
       counts[t.space_id] = (counts[t.space_id] || 0) + 1;
@@ -153,6 +161,12 @@ export default function App() {
       }
       if (t.list_id) {
         counts[t.list_id] = (counts[t.list_id] || 0) + 1;
+      } else if (t.folder_id) {
+        // Tasks imported before list_id tracking: assign to the sole list in the folder
+        const listsInFolder = folderToLists[t.folder_id] || [];
+        if (listsInFolder.length === 1) {
+          counts[listsInFolder[0]] = (counts[listsInFolder[0]] || 0) + 1;
+        }
       }
     });
     setTaskCounts(counts);
