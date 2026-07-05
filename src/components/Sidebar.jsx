@@ -131,8 +131,21 @@ export default function Sidebar({
   onLogout,
   taskCounts = {},
   onRefreshTaskCounts,
+  accessRules = {},
   width = 240,
 }) {
+  function canSeeSpace(space) {
+    if (profile?.role === "admin") return true;
+    const { restrictedSpaces, allowedSpaces } = accessRules;
+    if (!restrictedSpaces?.has?.(space.id)) return true;
+    return allowedSpaces?.has?.(space.id) ?? true;
+  }
+  function canSeeFolder(folder) {
+    if (profile?.role === "admin") return true;
+    const { restrictedFolders, allowedFolders } = accessRules;
+    if (!restrictedFolders?.has?.(folder.id)) return true;
+    return allowedFolders?.has?.(folder.id) ?? true;
+  }
   // ── Lists (within folders) ──
   const [lists, setLists] = useState([]); // [{id, folder_id, space_id, name}]
   const [listTaskCounts, setListTaskCounts] = useState({}); // list.id → count (direct query)
@@ -1105,7 +1118,7 @@ export default function Sidebar({
             scrollbarColor: "#e0e0de transparent",
           }}
         >
-          {spaces.map((space) => {
+          {spaces.filter(canSeeSpace).map((space) => {
             const isExpanded = expandedSpaces[space.id] === true;
             const isActive = activeSpace?.id === space.id && !activeFolder;
             return (
@@ -1181,7 +1194,7 @@ export default function Sidebar({
                 {/* Folder rows */}
                 {isExpanded && (
                   <div>
-                    {(space.folders || []).map((folder) => (
+                    {(space.folders || []).filter(canSeeFolder).map((folder) => (
                       <div key={folder.id}>
                         {/* Folder row */}
                         <div

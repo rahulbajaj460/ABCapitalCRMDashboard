@@ -138,10 +138,33 @@ export default function App() {
   }
 
   const [taskCounts, setTaskCounts] = useState({});
+  const [accessRules, setAccessRules] = useState({
+    restrictedSpaces: new Set(), allowedSpaces: new Set(),
+    restrictedFolders: new Set(), allowedFolders: new Set(),
+  });
 
   useEffect(() => {
     if (user) fetchTaskCounts();
   }, [user, spaces]);
+
+  useEffect(() => {
+    if (profile && profile.role !== "admin") fetchAccessRules(profile);
+    else if (profile?.role === "admin") setAccessRules({ restrictedSpaces: new Set(), allowedSpaces: new Set(), restrictedFolders: new Set(), allowedFolders: new Set() });
+  }, [profile?.id]);
+
+  async function fetchAccessRules(currentProfile) {
+    const [{ data: spaceRules }, { data: folderRules }] = await Promise.all([
+      supabase.from("space_access").select("space_id, profile_id"),
+      supabase.from("folder_access").select("folder_id, profile_id"),
+    ]);
+    const pid = currentProfile?.id;
+    setAccessRules({
+      restrictedSpaces: new Set((spaceRules || []).map((r) => r.space_id)),
+      allowedSpaces: new Set((spaceRules || []).filter((r) => r.profile_id === pid).map((r) => r.space_id)),
+      restrictedFolders: new Set((folderRules || []).map((r) => r.folder_id)),
+      allowedFolders: new Set((folderRules || []).filter((r) => r.profile_id === pid).map((r) => r.folder_id)),
+    });
+  }
 
   async function fetchTaskCounts() {
     if (!spaces.length) return;
@@ -350,6 +373,7 @@ export default function App() {
         onWhiteboardSelect={handleWhiteboardSelect}
         taskCounts={taskCounts}
         onRefreshTaskCounts={fetchTaskCounts}
+        accessRules={accessRules}
         onSpaceCreated={fetchSpaces}
         onLogout={handleLogout}
         width={sidebarWidth}
@@ -406,7 +430,7 @@ export default function App() {
         )}
         {view === "mytasks" && <MyTasks profile={profile} />}
         {view === "settings" && profile?.role === "admin" && (
-          <Settings currentUser={user} profile={profile} />
+          <Settings currentUser={user} profile={profile} spaces={spaces} onAccessChanged={() => fetchAccessRules(profile)} />
         )}
       </main>
     </div>
