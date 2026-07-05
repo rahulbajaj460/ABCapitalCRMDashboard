@@ -1268,24 +1268,26 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   >
                     ✏️ Edit
                   </button>
-                  <button
-                    onClick={() => deleteArticle(activeArticle.id)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      padding: "7px 14px",
-                      borderRadius: 7,
-                      border: "1px solid #fca5a5",
-                      background: "#fef2f2",
-                      fontSize: 12,
-                      cursor: "pointer",
-                      color: "#b91c1c",
-                      fontWeight: 500,
-                    }}
-                  >
-                    🗑 Delete
-                  </button>
+                  {profile?.role === "admin" && (
+                    <button
+                      onClick={() => deleteArticle(activeArticle.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        padding: "7px 14px",
+                        borderRadius: 7,
+                        border: "1px solid #fca5a5",
+                        background: "#fef2f2",
+                        fontSize: 12,
+                        cursor: "pointer",
+                        color: "#b91c1c",
+                        fontWeight: 500,
+                      }}
+                    >
+                      🗑 Delete
+                    </button>
+                  )}
                   <button
                     onClick={() => setActiveArticle(null)}
                     style={{

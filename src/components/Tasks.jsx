@@ -1617,6 +1617,16 @@ export default function Tasks({
   }
 
   async function deleteTask(taskId) {
+    if (profile?.role === "member") {
+      const task = tasks.find((t) => t.id === taskId);
+      const assignedToMe =
+        task?.assignee_id === profile.id ||
+        (task?.assignees || []).includes(profile.full_name);
+      if (!assignedToMe) {
+        alert("You can only delete tasks assigned to you.");
+        return;
+      }
+    }
     if (!confirm("Move this task to Trash? You can restore it later.")) return;
     if (drawerTask?.id === taskId) closeDrawer();
     await supabase
@@ -2393,13 +2403,17 @@ export default function Tasks({
           </select>
         </div>
         <div style={cellStyle} onClick={(e) => e.stopPropagation()}>
-          <button
-            className="btn btn-sm btn-danger"
-            onClick={() => deleteTask(task.id)}
-            style={{ padding: "3px 8px", fontSize: 11 }}
-          >
-            🗑
-          </button>
+          {(profile?.role === "admin" ||
+            task.assignee_id === profile?.id ||
+            (task.assignees || []).includes(profile?.full_name)) && (
+            <button
+              className="btn btn-sm btn-danger"
+              onClick={() => deleteTask(task.id)}
+              style={{ padding: "3px 8px", fontSize: 11 }}
+            >
+              🗑
+            </button>
+          )}
         </div>
       </div>
     );
@@ -4063,24 +4077,28 @@ export default function Tasks({
                     marginTop: 8,
                   }}
                 >
-                  <button
-                    onClick={() => deleteTask(drawerTask.id)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "7px 14px",
-                      borderRadius: 7,
-                      border: "1px solid #fca5a5",
-                      background: "#fef2f2",
-                      color: "#b91c1c",
-                      fontSize: 12,
-                      cursor: "pointer",
-                      fontWeight: 500,
-                    }}
-                  >
-                    🗑 Delete task
-                  </button>
+                  {(profile?.role === "admin" ||
+                    drawerTask.assignee_id === profile?.id ||
+                    (drawerTask.assignees || []).includes(profile?.full_name)) && (
+                    <button
+                      onClick={() => deleteTask(drawerTask.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "7px 14px",
+                        borderRadius: 7,
+                        border: "1px solid #fca5a5",
+                        background: "#fef2f2",
+                        color: "#b91c1c",
+                        fontSize: 12,
+                        cursor: "pointer",
+                        fontWeight: 500,
+                      }}
+                    >
+                      🗑 Delete task
+                    </button>
+                  )}
                 </div>
               </div>
             )}
