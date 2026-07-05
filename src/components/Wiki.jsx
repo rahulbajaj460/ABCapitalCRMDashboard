@@ -886,67 +886,73 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
             </span>
           </span>
           <div className="wiki-sidebar-actions">
-            <button
-              onClick={() => {
-                fetchTrash();
-                setShowTrashModal(true);
-              }}
-              title="Trash"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 28,
-                height: 28,
-                borderRadius: 7,
-                border: "1px solid #e0e0e0",
-                background: "#fff",
-                fontSize: 13,
-                cursor: "pointer",
-                color: "#888",
-                flexShrink: 0,
-              }}
-            >
-              🗑
-            </button>
-            <button
-              onClick={() => openNewCat()}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "5px 10px",
-                borderRadius: 7,
-                border: "1px solid #e0e0e0",
-                background: "#fff",
-                fontSize: 11,
-                cursor: "pointer",
-                color: "#555",
-                fontWeight: 500,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Category
-            </button>
-            <button
-              onClick={() => openNewArticle()}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "5px 10px",
-                borderRadius: 7,
-                border: "none",
-                background: "#1d4ed8",
-                color: "#fff",
-                fontSize: 11,
-                cursor: "pointer",
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
-            >
-              + Page
-            </button>
+            {profile?.role === "admin" && (
+              <button
+                onClick={() => {
+                  fetchTrash();
+                  setShowTrashModal(true);
+                }}
+                title="Trash"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 7,
+                  border: "1px solid #e0e0e0",
+                  background: "#fff",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  color: "#888",
+                  flexShrink: 0,
+                }}
+              >
+                🗑
+              </button>
+            )}
+            {profile?.role === "admin" && (
+              <button
+                onClick={() => openNewCat()}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "5px 10px",
+                  borderRadius: 7,
+                  border: "1px solid #e0e0e0",
+                  background: "#fff",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  color: "#555",
+                  fontWeight: 500,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                + Category
+              </button>
+            )}
+            {profile?.role === "admin" && (
+              <button
+                onClick={() => openNewArticle()}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "5px 10px",
+                  borderRadius: 7,
+                  border: "none",
+                  background: "#1d4ed8",
+                  color: "#fff",
+                  fontSize: 11,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                + Page
+              </button>
+            )}
           </div>
         </div>
 
@@ -1054,6 +1060,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   getCatArticles={getCatArticles}
                   getCatIndex={getCatIndex}
                   depth={0}
+                  profile={profile}
                 />
               ))}
 
@@ -2160,6 +2167,7 @@ function CategoryNode({
   getCatArticles,
   getCatIndex,
   depth,
+  profile,
 }) {
   const isExpanded = expandedCats ? expandedCats[cat.id] === true : false;
   const subCats = getSubCats(cat.id);
@@ -2230,46 +2238,54 @@ function CategoryNode({
 
         {/* Actions */}
         <div className="wiki-cat-actions">
-          <button
-            className="wiki-cat-action-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNewArticle(cat.id);
-            }}
-            title="Add page"
-          >
-            + Page
-          </button>
-          <button
-            className="wiki-cat-action-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onNewSubCat(cat.id);
-            }}
-            title="Add subcategory"
-          >
-            + Sub
-          </button>
-          <button
-            className="wiki-cat-action-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditCat(cat);
-            }}
-            title="Rename"
-          >
-            ✏️
-          </button>
-          <button
-            className="wiki-cat-action-btn danger"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteCat(cat.id, cat.name);
-            }}
-            title="Delete"
-          >
-            🗑
-          </button>
+          {profile?.role === "admin" && (
+            <button
+              className="wiki-cat-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNewArticle(cat.id);
+              }}
+              title="Add page"
+            >
+              + Page
+            </button>
+          )}
+          {profile?.role === "admin" && (
+            <button
+              className="wiki-cat-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNewSubCat(cat.id);
+              }}
+              title="Add subcategory"
+            >
+              + Sub
+            </button>
+          )}
+          {profile?.role === "admin" && (
+            <button
+              className="wiki-cat-action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditCat(cat);
+              }}
+              title="Rename"
+            >
+              ✏️
+            </button>
+          )}
+          {profile?.role === "admin" && (
+            <button
+              className="wiki-cat-action-btn danger"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteCat(cat.id, cat.name);
+              }}
+              title="Delete"
+            >
+              🗑
+            </button>
+          )}
         </div>
       </div>
 
@@ -2291,6 +2307,7 @@ function CategoryNode({
               getCatArticles={getCatArticles}
               getCatIndex={getCatIndex}
               depth={depth + 1}
+              profile={profile}
             />
           ))}
           {catArticles.map((a) => (
