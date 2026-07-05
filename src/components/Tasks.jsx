@@ -1608,15 +1608,9 @@ export default function Tasks({
   }
 
   async function deleteTask(taskId) {
-    if (profile?.role === "member") {
-      const task = tasks.find((t) => t.id === taskId);
-      const assignedToMe =
-        task?.assignee_id === profile.id ||
-        (task?.assignees || []).includes(profile.full_name);
-      if (!assignedToMe) {
-        alert("You can only delete tasks assigned to you.");
-        return;
-      }
+    if (profile?.role !== "admin") {
+      alert("Only admins can delete tasks.");
+      return;
     }
     if (!confirm("Move this task to Trash? You can restore it later.")) return;
     if (drawerTask?.id === taskId) closeDrawer();
@@ -2394,9 +2388,7 @@ export default function Tasks({
           </select>
         </div>
         <div style={cellStyle} onClick={(e) => e.stopPropagation()}>
-          {(profile?.role === "admin" ||
-            task.assignee_id === profile?.id ||
-            (task.assignees || []).includes(profile?.full_name)) && (
+          {profile?.role === "admin" && (
             <button
               className="btn btn-sm btn-danger"
               onClick={() => deleteTask(task.id)}
@@ -4068,9 +4060,7 @@ export default function Tasks({
                     marginTop: 8,
                   }}
                 >
-                  {(profile?.role === "admin" ||
-                    drawerTask.assignee_id === profile?.id ||
-                    (drawerTask.assignees || []).includes(profile?.full_name)) && (
+                  {profile?.role === "admin" && (
                     <button
                       onClick={() => deleteTask(drawerTask.id)}
                       style={{
