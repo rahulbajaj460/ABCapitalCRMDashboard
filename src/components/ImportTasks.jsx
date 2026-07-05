@@ -238,8 +238,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   }
 
   function normalizeStatus(csvStatus) {
+    if (!csvStatus) return "To Do";
     if (statusMap[csvStatus]) return statusMap[csvStatus];
-    const s = (csvStatus || "").toLowerCase().trim();
+    const s = csvStatus.toLowerCase().trim();
     if (s === "complete" || s === "done" || s === "completed") return "Done";
     if (s === "in progress" || s === "in_progress") return "In Progress";
     if (s === "to do" || s === "todo" || s === "open") return "To Do";
