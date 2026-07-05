@@ -1136,13 +1136,13 @@ export default function Sidebar({
                   >
                     {space.icon || "🏢"}
                   </span>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                  <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>
                     {space.name}
                   </span>
                   {taskCounts[space.id] > 0 && (
                     <span
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         color: "#aaa",
                         background: "#f0f0ef",
                         borderRadius: 20,
@@ -1216,13 +1216,13 @@ export default function Sidebar({
                               fill="currentColor"
                             />
                           </svg>
-                          <span style={{ flex: 1, fontSize: 12 }}>
+                          <span style={{ flex: 1, fontSize: 13 }}>
                             {folder.name}
                           </span>
                           {taskCounts[folder.id] > 0 && (
                             <span
                               style={{
-                                fontSize: 11,
+                                fontSize: 12,
                                 color: "#aaa",
                                 background: "#f0f0ef",
                                 borderRadius: 20,
@@ -1277,11 +1277,11 @@ export default function Sidebar({
                                   <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
                                   <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                                 </svg>
-                                <span style={{ flex: 1, fontSize: 12 }}>{list.name}</span>
+                                <span style={{ flex: 1, fontSize: 13 }}>{list.name}</span>
                                 {(listTaskCounts[list.id] > 0 || taskCounts[list.id] > 0) && (
                                   <span
                                     style={{
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       color: "#aaa",
                                       background: "#f0f0ef",
                                       borderRadius: 20,
@@ -1318,7 +1318,7 @@ export default function Sidebar({
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                                 </svg>
-                                <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.title}</span>
+                                <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.title}</span>
                               </div>
                             ))}
                             {/* Whiteboards under folder */}
@@ -1332,7 +1332,7 @@ export default function Sidebar({
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                   <rect x="3" y="3" width="18" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
                                 </svg>
-                                <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wb.name}</span>
+                                <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{wb.name}</span>
                               </div>
                             ))}
                             {/* Inline new list input */}
@@ -1387,7 +1387,7 @@ export default function Sidebar({
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                                 </svg>
-                                <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
+                                <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
                               </div>
 
                               {isExpanded && (
@@ -1410,9 +1410,9 @@ export default function Sidebar({
                                             <path d="M1 3C1 2.17 1.67 1.5 2.5 1.5H5.8L7.3 3H13.5C14.33 3 15 3.67 15 4.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V3Z" fill="currentColor" opacity="0.7"/>
                                             <path d="M1 5.5C1 4.67 1.67 4 2.5 4H13.5C14.33 4 15 4.67 15 5.5V11C15 11.83 14.33 12.5 13.5 12.5H2.5C1.67 12.5 1 11.83 1 11V5.5Z" fill="currentColor"/>
                                           </svg>
-                                          <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
+                                          <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
                                           {subArts.length > 0 && (
-                                            <span style={{ fontSize: 11, color: "#aaa", background: "#f0f0ef", borderRadius: 20, padding: "0 6px", flexShrink: 0 }}>{subArts.length}</span>
+                                            <span style={{ fontSize: 12, color: "#aaa", background: "#f0f0ef", borderRadius: 20, padding: "0 6px", flexShrink: 0 }}>{subArts.length}</span>
                                           )}
                                         </div>
                                         {isSubExpanded && subArts.map((art) => (
@@ -1425,7 +1425,7 @@ export default function Sidebar({
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                                             </svg>
-                                            <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</span>
+                                            <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{art.title}</span>
                                           </div>
                                         ))}
                                       </div>
