@@ -73,7 +73,9 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
   // ── Members actions ──
   async function updateRole(userId, newRole) {
     if (userId === currentUser.id) return;
-    await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
+    const client = supabaseAdmin || supabase;
+    const { error } = await client.from("profiles").update({ role: newRole }).eq("id", userId);
+    if (error) { showMsg(error.message, "error"); return; }
     showMsg("Role updated.");
     fetchMembers();
   }
