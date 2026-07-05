@@ -562,15 +562,6 @@ export default function Tasks({
     if (activeList) q = q.eq("list_id", activeList.id);
     else if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
-    if (profile?.role === "member") {
-      // Match either the legacy single assignee_id OR if the member's
-      // name appears anywhere in the assignees array (multi-assignee
-      // tasks), so co-assigned members aren't hidden from their own list.
-      const nameFilter = profile.full_name
-        ? `,assignees.cs.{${profile.full_name}}`
-        : "";
-      q = q.or(`assignee_id.eq.${profile.id}${nameFilter}`);
-    }
     const { data } = await q;
     if (data) {
       setTasks(data);
