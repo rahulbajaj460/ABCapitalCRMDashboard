@@ -1073,6 +1073,7 @@ export default function Sidebar({
           { key: "dashboard", icon: "📊", label: "Dashboard" },
           { key: "wiki", icon: "📗", label: "Wiki" },
           { key: "mytasks", icon: "👤", label: "My Tasks" },
+          ...(profile?.role === "admin" ? [{ key: "settings", icon: "⚙️", label: "Settings" }] : []),
         ].map((item) => (
           <div
             key={item.key}
@@ -1105,7 +1106,7 @@ export default function Sidebar({
           }}
         >
           {spaces.map((space) => {
-            const isExpanded = expandedSpaces[space.id] !== false;
+            const isExpanded = expandedSpaces[space.id] === true;
             const isActive = activeSpace?.id === space.id && !activeFolder;
             return (
               <div key={space.id}>
