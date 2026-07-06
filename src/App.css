@@ -209,6 +209,23 @@ textarea:focus {
   color: #333;
 }
 
+/* Folder icon swaps to arrow on hover */
+.folder-icon-wrap {
+  position: relative;
+}
+.folder-arrow {
+  display: none;
+}
+.folder-icon-svg {
+  display: block;
+}
+.folder-item:hover .folder-arrow {
+  display: block;
+}
+.folder-item:hover .folder-icon-svg {
+  display: none;
+}
+
 .space-dot {
   width: 8px;
   height: 8px;
