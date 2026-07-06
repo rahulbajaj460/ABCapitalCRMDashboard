@@ -1132,8 +1132,9 @@ export default function Sidebar({
                   }}
                   style={{ position: "relative" }}
                 >
-                  <span style={{ fontSize: 10, color: "#aaa", marginRight: 2 }}>
-                    {isExpanded ? "▾" : "▸"}
+                  {/* Arrow — visible only on hover */}
+                  <span className="space-arrow">
+                    {isExpanded ? "▾" : "▶"}
                   </span>
                   <span
                     style={{
@@ -1153,42 +1154,40 @@ export default function Sidebar({
                   <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>
                     {space.name}
                   </span>
+                  {/* Task count — hidden on hover */}
                   {taskCounts[space.id] > 0 && (
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "#aaa",
-                        background: "#f0f0ef",
-                        borderRadius: 20,
-                        padding: "0 6px",
-                        flexShrink: 0,
-                      }}
-                    >
+                    <span className="space-count-badge">
                       {taskCounts[space.id]}
                     </span>
                   )}
-                  {/* Three dot menu */}
-                  <span
-                    className="space-delete-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setSpaceMenu({ id: space.id, x: r.right + 4, y: r.top });
-                      setFolderMenu(null);
-                    }}
-                    style={{
-                      opacity: 0,
-                      fontSize: 14,
-                      color: "#888",
-                      padding: "1px 4px",
-                      borderRadius: 4,
-                      marginLeft: 2,
-                      cursor: "pointer",
-                      lineHeight: 1,
-                    }}
-                  >
-                    •••
-                  </span>
+                  {/* Hover actions: ••• and + */}
+                  <div className="space-hover-actions">
+                    <button
+                      className="space-hover-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setSpaceMenu({ id: space.id, x: r.right + 4, y: r.top });
+                        setFolderMenu(null);
+                      }}
+                      title="Options"
+                    >
+                      •••
+                    </button>
+                    <button
+                      className="space-hover-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // open add-folder flow — reuse existing space menu with direct folder creation
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setSpaceMenu({ id: space.id, x: r.right + 4, y: r.top });
+                        setFolderMenu(null);
+                      }}
+                      title="Add folder"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
 
                 {/* Folder rows */}

@@ -156,8 +156,57 @@ textarea:focus {
   opacity: 1 !important;
 }
 .space-delete-btn:hover {
-  background: #fee2e2;
-  color: #b91c1c !important;
+  background: #e8e8e8;
+  color: #333 !important;
+}
+.space-arrow {
+  opacity: 0;
+  transition: opacity 0.1s;
+  font-size: 10px;
+  color: #888;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+.space-item:hover .space-arrow {
+  opacity: 1;
+}
+.space-count-badge {
+  font-size: 12px;
+  color: #aaa;
+  background: #f0f0ef;
+  border-radius: 20px;
+  padding: 0 6px;
+  flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+.space-item:hover .space-count-badge {
+  opacity: 0;
+  pointer-events: none;
+}
+.space-hover-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.1s;
+  flex-shrink: 0;
+}
+.space-item:hover .space-hover-actions {
+  opacity: 1;
+}
+.space-hover-btn {
+  font-size: 13px;
+  color: #888;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+  background: transparent;
+  border: none;
+}
+.space-hover-btn:hover {
+  background: #e8e8e8;
+  color: #333;
 }
 
 .space-dot {
