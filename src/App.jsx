@@ -418,6 +418,7 @@ export default function App() {
             openArticleId={openArticleId}
             newDocFolderId={newDocFolderId}
             newDocSpaceId={newDocSpaceId}
+            spaces={spaces}
             onDocCreated={() => { setNewDocFolderId(null); setNewDocSpaceId(null); }}
           />
         )}

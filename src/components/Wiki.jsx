@@ -434,7 +434,7 @@ function RichEditor({ content, onChange }) {
   );
 }
 
-export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpaceId, onDocCreated }) {
+export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpaceId, spaces = [], onDocCreated }) {
   const [categories, setCategories] = useState([]);
   const [articles, setArticles] = useState([]);
   const [activeArticle, setActiveArticle] = useState(null);
@@ -2034,27 +2034,43 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   style={{ width: "100%" }}
                 />
               </div>
-              <div style={{ width: 220 }}>
-                <label className="form-label">Category</label>
-                <select
-                  value={newArticle.category_id}
-                  onChange={(e) =>
-                    setNewArticle((prev) => ({
-                      ...prev,
-                      category_id: e.target.value,
-                    }))
-                  }
-                  style={{ width: "100%" }}
-                >
-                  <option value="">Uncategorised</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.parent_id ? "  ↳ " : ""}
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {newArticle.folder_id ? (
+                <div style={{ width: 220 }}>
+                  <label className="form-label">Folder</label>
+                  <div style={{
+                    padding: "6px 10px",
+                    borderRadius: 7,
+                    border: "1px solid #e0e0e0",
+                    background: "#f9f9f9",
+                    fontSize: 13,
+                    color: "#444",
+                  }}>
+                    📁 {spaces.flatMap((s) => s.folders || []).find((f) => f.id === newArticle.folder_id)?.name || "Selected folder"}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ width: 220 }}>
+                  <label className="form-label">Category</label>
+                  <select
+                    value={newArticle.category_id}
+                    onChange={(e) =>
+                      setNewArticle((prev) => ({
+                        ...prev,
+                        category_id: e.target.value,
+                      }))
+                    }
+                    style={{ width: "100%" }}
+                  >
+                    <option value="">Uncategorised</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.parent_id ? "  ↳ " : ""}
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div style={{ flex: 1, overflow: "auto", marginBottom: 14 }}>
               <label className="form-label" style={{ marginBottom: 6 }}>
