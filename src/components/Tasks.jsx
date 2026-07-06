@@ -145,6 +145,13 @@ const FORMULA_PRESETS = [
   { key: "custom", label: "Custom (manual text)", fn: () => null },
 ];
 
+function fmtDate(str) {
+  if (!str) return "—";
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  return d.toISOString().slice(0, 10);
+}
+
 function parseFlexibleDate(str) {
   if (!str) return null;
   // Strip ordinal suffixes: 26th → 26, 2nd → 2, 1st → 1, 3rd → 3
@@ -2174,19 +2181,19 @@ export default function Tasks({
     if (colKey === "date_done")
       return (
         <span style={{ fontSize: 12, color: "#555" }}>
-          {task.date_done || "—"}
+          {fmtDate(task.date_done)}
         </span>
       );
     if (colKey === "date_closed")
       return (
         <span style={{ fontSize: 12, color: "#555" }}>
-          {task.date_closed || "—"}
+          {fmtDate(task.date_closed)}
         </span>
       );
     if (colKey === "date_updated_manual")
       return (
         <span style={{ fontSize: 12, color: "#555" }}>
-          {task.date_updated_manual || "—"}
+          {fmtDate(task.date_updated_manual)}
         </span>
       );
     if (colKey.startsWith("field_")) {
@@ -2245,10 +2252,7 @@ export default function Tasks({
         );
       if (f.field_type === "date") {
         const parsed = parseFlexibleDate(fv.value);
-        const display = parsed
-          ? parsed.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
-          : fv.value;
-        return <span style={{ fontSize: 12, color: "#555" }}>{display}</span>;
+        return <span style={{ fontSize: 12, color: "#555" }}>{parsed ? parsed.toISOString().slice(0, 10) : fv.value}</span>;
       }
       return <span style={{ fontSize: 12, color: "#555" }}>{fv.value}</span>;
     }
