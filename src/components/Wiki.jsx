@@ -440,7 +440,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
   const [activeArticle, setActiveArticle] = useState(null);
   const [expandedCats, setExpandedCats] = useState(null);
   const [search, setSearch] = useState("");
-  const [sidebarWidth, setSidebarWidth] = useState(270);
+  const [sidebarWidth, setSidebarWidth] = useState(320);
   const isResizing = useRef(false);
   const tooltipRef = useRef(null);
 

@@ -580,6 +580,10 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .wiki-sidebar-actions {
   display: flex;
