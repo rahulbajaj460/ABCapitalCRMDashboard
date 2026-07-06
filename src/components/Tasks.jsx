@@ -2243,6 +2243,13 @@ export default function Tasks({
             {fv.value}
           </span>
         );
+      if (f.field_type === "date") {
+        const parsed = parseFlexibleDate(fv.value);
+        const display = parsed
+          ? parsed.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
+          : fv.value;
+        return <span style={{ fontSize: 12, color: "#555" }}>{display}</span>;
+      }
       return <span style={{ fontSize: 12, color: "#555" }}>{fv.value}</span>;
     }
     return "—";
