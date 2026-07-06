@@ -757,6 +757,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
       title: article.title,
       content: article.content || "",
       category_id: article.category_id || "",
+      folder_id: article.folder_id || null,
     });
     setShowArticleModal(true);
   }
