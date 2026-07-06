@@ -219,10 +219,12 @@ textarea:focus {
 .folder-icon-svg {
   display: block;
 }
-.folder-item:hover .folder-arrow {
+.folder-item:hover .folder-arrow,
+.space-item:hover .folder-arrow {
   display: block;
 }
-.folder-item:hover .folder-icon-svg {
+.folder-item:hover .folder-icon-svg,
+.space-item:hover .folder-icon-svg {
   display: none;
 }
 

@@ -1132,24 +1132,30 @@ export default function Sidebar({
                   }}
                   style={{ position: "relative" }}
                 >
-                  {/* Arrow — visible only on hover */}
-                  <span className="space-arrow">
-                    {isExpanded ? "▾" : "▶"}
-                  </span>
+                  {/* Space icon / arrow — arrow replaces icon on hover */}
                   <span
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 5,
-                      background: space.color || "#378ADD",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 12,
-                      flexShrink: 0,
-                    }}
+                    className="folder-icon-wrap"
+                    onClick={(e) => { e.stopPropagation(); toggleSpace(space.id); }}
+                    style={{ flexShrink: 0, cursor: "pointer", userSelect: "none", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center" }}
                   >
-                    {space.icon || "🏢"}
+                    <span className="folder-arrow" style={{ fontSize: 10, color: "#888" }}>
+                      {isExpanded ? "▾" : "▶"}
+                    </span>
+                    <span
+                      className="folder-icon-svg"
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 5,
+                        background: space.color || "#378ADD",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 12,
+                      }}
+                    >
+                      {space.icon || "🏢"}
+                    </span>
                   </span>
                   <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>
                     {space.name}
