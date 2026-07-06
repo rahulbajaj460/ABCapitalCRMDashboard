@@ -798,7 +798,13 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
     return articles.filter((a) => a.category_id === categoryId);
   }
   function getUncategorised() {
-    return articles.filter((a) => !a.category_id);
+    return articles.filter((a) => !a.category_id && !a.folder_id);
+  }
+  function getFolderArticles(folderId) {
+    return articles.filter((a) => a.folder_id === folderId && !a.category_id);
+  }
+  function getFolderIds() {
+    return [...new Set(articles.filter((a) => a.folder_id && !a.category_id).map((a) => a.folder_id))];
   }
   function getCatIndex(catId) {
     return categories.findIndex((c) => c.id === catId);
@@ -1063,6 +1069,21 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   profile={profile}
                 />
               ))}
+
+              {getFolderIds().map((fid) => {
+                const folder = spaces.flatMap((s) => s.folders || []).find((f) => f.id === fid);
+                const folderArticles = getFolderArticles(fid);
+                return (
+                  <div key={fid} style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", padding: "6px 12px 4px", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      📁 {folder?.name || "Folder"}
+                    </div>
+                    {folderArticles.map((a) => (
+                      <ArticleTreeItem key={a.id} article={a} active={activeArticle?.id === a.id} onSelect={setActiveArticle} depth={0} />
+                    ))}
+                  </div>
+                );
+              })}
 
               {uncategorised.length > 0 && (
                 <div style={{ marginTop: 8 }}>
