@@ -1201,14 +1201,13 @@ export default function Sidebar({
                           onClick={() => onFolderSelect(space, folder)}
                           style={{ position: "relative" }}
                         >
-                          {/* Expand/collapse chevron for folders with lists */}
+                          {/* Arrow — visible only on hover */}
                           <span
+                            className="space-arrow"
                             onClick={(e) => { e.stopPropagation(); toggleFolder(folder.id); }}
-                            style={{ fontSize: 10, color: "#aaa", marginRight: 2, flexShrink: 0, cursor: "pointer", userSelect: "none" }}
+                            style={{ cursor: "pointer", userSelect: "none" }}
                           >
-                            {(lists.some((l) => l.folder_id === folder.id) || (folderDocs[folder.id]?.length > 0) || (folderWhiteboards[folder.id]?.length > 0))
-                              ? (expandedFolders[folder.id] ? "▾" : "▸")
-                              : " "}
+                            {expandedFolders[folder.id] ? "▾" : "▶"}
                           </span>
                           <svg
                             width="15"
@@ -1232,47 +1231,27 @@ export default function Sidebar({
                           <span style={{ flex: 1, fontSize: 13 }}>
                             {folder.name}
                           </span>
+                          {/* Task count — hidden on hover */}
                           {taskCounts[folder.id] > 0 && (
-                            <span
-                              style={{
-                                fontSize: 12,
-                                color: "#aaa",
-                                background: "#f0f0ef",
-                                borderRadius: 20,
-                                padding: "0 6px",
-                                flexShrink: 0,
-                              }}
-                            >
+                            <span className="space-count-badge">
                               {taskCounts[folder.id]}
                             </span>
                           )}
-                          {/* Three dot menu for folder */}
-                          <span
-                            className="space-delete-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const r = e.currentTarget.getBoundingClientRect();
-                              setFolderMenu({
-                                id: folder.id,
-                                space,
-                                folder,
-                                x: r.right + 4,
-                                y: r.top,
-                              });
-                              setSpaceMenu(null);
-                            }}
-                            style={{
-                              opacity: 0,
-                              fontSize: 14,
-                              color: "#888",
-                              padding: "1px 4px",
-                              borderRadius: 4,
-                              cursor: "pointer",
-                              lineHeight: 1,
-                            }}
-                          >
-                            •••
-                          </span>
+                          {/* Hover actions */}
+                          <div className="space-hover-actions">
+                            <button
+                              className="space-hover-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const r = e.currentTarget.getBoundingClientRect();
+                                setFolderMenu({ id: folder.id, space, folder, x: r.right + 4, y: r.top });
+                                setSpaceMenu(null);
+                              }}
+                              title="Options"
+                            >
+                              •••
+                            </button>
+                          </div>
                         </div>
 
                         {/* Lists under folder */}
