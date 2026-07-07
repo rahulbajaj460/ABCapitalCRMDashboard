@@ -807,7 +807,7 @@ export default function Tasks({
     setCommentsLoading(true);
     const { data, error } = await supabase
       .from("task_comments")
-      .select("*, profiles(full_name, avatar_url)")
+      .select("*")
       .eq("task_id", taskId)
       .order("created_at", { ascending: true });
     if (error) console.error("fetchComments error:", error);
@@ -4607,7 +4607,8 @@ export default function Tasks({
                   ) : comments.map((c) => {
                     const isOwn = c.profile_id === profile?.id;
                     const isEditing = editingCommentId === c.id;
-                    const initials = (c.profiles?.full_name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                    const commenterName = members.find((m) => m.id === c.profile_id)?.full_name || "Unknown";
+                    const initials = commenterName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
                     const ts = new Date(c.created_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
                     const edited = c.updated_at && c.updated_at !== c.created_at;
                     return (
@@ -4618,7 +4619,7 @@ export default function Tasks({
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a" }}>{c.profiles?.full_name || "Unknown"}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a" }}>{commenterName}</span>
                             <span style={{ fontSize: 11, color: "#aaa" }}>{ts}{edited ? " · edited" : ""}</span>
                           </div>
                           {isEditing ? (
