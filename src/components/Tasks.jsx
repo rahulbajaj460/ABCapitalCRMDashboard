@@ -1512,20 +1512,19 @@ export default function Tasks({
         (drawerEdits.due_date !== undefined
           ? drawerEdits.due_date
           : drawerTask.due_date) || null,
-      date_done:
-        (drawerEdits.date_done !== undefined
-          ? drawerEdits.date_done
-          : drawerTask.date_done) || null,
-      date_closed:
-        (drawerEdits.date_closed !== undefined
-          ? drawerEdits.date_closed
-          : drawerTask.date_closed) || null,
-      date_updated_manual:
-        (drawerEdits.date_updated_manual !== undefined
-          ? drawerEdits.date_updated_manual
-          : drawerTask.date_updated_manual) || null,
       updated_by: profile?.full_name || "Unknown",
       updated_at: new Date().toISOString(),
+      date_updated_manual: new Date().toISOString().slice(0, 10),
+      date_done: (() => {
+        const newStatus = drawerEdits.status ?? drawerTask.status;
+        if (newStatus === "Done") return drawerTask.date_done || new Date().toISOString().slice(0, 10);
+        return null;
+      })(),
+      date_closed: (() => {
+        const newStatus = drawerEdits.status ?? drawerTask.status;
+        if (isClosedStatus(newStatus)) return drawerTask.date_closed || new Date().toISOString().slice(0, 10);
+        return null;
+      })(),
     };
     const changes = buildChanges(drawerTask, payload);
     const { error } = await supabase
@@ -1679,15 +1678,29 @@ export default function Tasks({
     fetchTasks();
   }
 
+  function isClosedStatus(st) {
+    if (!st) return false;
+    const s = st.toLowerCase();
+    return s.includes("cancel") || s.includes("closed") || s === "rejected";
+  }
+
   async function updateTaskStatus(taskId, newSt) {
     const task = tasks.find((t) => t.id === taskId);
     const oldStatus = task?.status;
+    const now = new Date().toISOString();
+    const wasDone = oldStatus === "Done";
+    const nowDone = newSt === "Done";
+    const wasClosed = isClosedStatus(oldStatus);
+    const nowClosed = isClosedStatus(newSt);
     await supabase
       .from("tasks")
       .update({
         status: newSt,
         updated_by: profile?.full_name || "Unknown",
-        updated_at: new Date().toISOString(),
+        updated_at: now,
+        date_updated_manual: now.slice(0, 10),
+        date_done: nowDone ? now.slice(0, 10) : (wasDone && !nowDone ? null : task?.date_done || null),
+        date_closed: nowClosed ? now.slice(0, 10) : (wasClosed && !nowClosed ? null : task?.date_closed || null),
       })
       .eq("id", taskId);
     if (task && oldStatus !== newSt) {
