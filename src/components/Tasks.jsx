@@ -531,6 +531,7 @@ export default function Tasks({
   }
 
   useEffect(() => {
+    if (!activeSpace) return; // wait until space context is restored after refresh
     fetchTasks();
   }, [activeSpace, activeFolder, activeList]);
   useEffect(() => {
