@@ -432,7 +432,13 @@ export default function Tasks({
   const [drawerFieldValues, setDrawerFieldValues] = useState({});
   const [drawerSaving, setDrawerSaving] = useState(false);
   const [drawerSaved, setDrawerSaved] = useState(false);
-  const [drawerTab, setDrawerTab] = useState("details"); // "details" | "history" | "attachments"
+  const [drawerTab, setDrawerTab] = useState("details"); // "details" | "history" | "attachments" | "comments"
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState("");
   const [taskHistory, setTaskHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [attachments, setAttachments] = useState([]);
@@ -796,6 +802,43 @@ export default function Tasks({
   }
 
   // ── Checklist helpers ──
+  async function fetchComments(taskId) {
+    setCommentsLoading(true);
+    const { data } = await supabase
+      .from("task_comments")
+      .select("*, profiles(full_name, avatar_url)")
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: true });
+    setComments(data || []);
+    setCommentsLoading(false);
+  }
+
+  async function submitComment() {
+    if (!commentText.trim() || !drawerTask) return;
+    setCommentSubmitting(true);
+    await supabase.from("task_comments").insert({
+      task_id: drawerTask.id,
+      profile_id: profile?.id,
+      content: commentText.trim(),
+    });
+    setCommentText("");
+    await fetchComments(drawerTask.id);
+    setCommentSubmitting(false);
+  }
+
+  async function deleteComment(commentId) {
+    await supabase.from("task_comments").delete().eq("id", commentId);
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+  }
+
+  async function saveEditComment(commentId) {
+    if (!editingCommentText.trim()) return;
+    await supabase.from("task_comments").update({ content: editingCommentText.trim(), updated_at: new Date().toISOString() }).eq("id", commentId);
+    setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, content: editingCommentText.trim() } : c));
+    setEditingCommentId(null);
+    setEditingCommentText("");
+  }
+
   async function fetchChecklists(taskId) {
     setChecklistsLoading(true);
     const { data: lists } = await supabase
@@ -1380,6 +1423,7 @@ export default function Tasks({
   // Drawer
   function openDrawer(task) {
     setDrawerTask(task);
+    fetchComments(task.id);
     const fvMap = {};
     (task.task_field_values || []).forEach((fv) => {
       fvMap[fv.field_id] = fv.value;
@@ -1415,6 +1459,9 @@ export default function Tasks({
     setTaskHistory([]);
     setAttachments([]);
     setChecklists([]);
+    setComments([]);
+    setCommentText("");
+    setEditingCommentId(null);
     setLinkedDocs([]);
     setShowDocPicker(false);
     setDocSearch("");
@@ -3486,6 +3533,7 @@ export default function Tasks({
           >
             {[
               { key: "details", label: "Details" },
+              { key: "comments", label: `Comments${comments.length > 0 ? ` (${comments.length})` : ""}` },
               { key: "history", label: "History" },
               {
                 key: "attachments",
@@ -3506,6 +3554,7 @@ export default function Tasks({
                 onClick={() => {
                   setDrawerTab(tab.key);
                   if (tab.key === "history") fetchTaskHistory(drawerTask.id);
+                  if (tab.key === "comments") fetchComments(drawerTask.id);
                   if (tab.key === "attachments") { fetchAttachments(drawerTask.id); fetchLinkedDocs(drawerTask.id); fetchAllWikiArticles(); }
                   if (tab.key === "checklist") fetchChecklists(drawerTask.id);
                 }}
@@ -4524,6 +4573,91 @@ export default function Tasks({
             )}
 
             {/* CHECKLIST TAB */}
+            {drawerTab === "comments" && (
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+                {/* Comment list */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+                  {commentsLoading ? (
+                    <div style={{ fontSize: 12, color: "#aaa", textAlign: "center", padding: 24 }}>Loading comments...</div>
+                  ) : comments.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "32px 0", color: "#bbb" }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>💬</div>
+                      <div style={{ fontSize: 13 }}>No comments yet. Start the conversation.</div>
+                    </div>
+                  ) : comments.map((c) => {
+                    const isOwn = c.profile_id === profile?.id;
+                    const isEditing = editingCommentId === c.id;
+                    const initials = (c.profiles?.full_name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                    const ts = new Date(c.created_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+                    const edited = c.updated_at && c.updated_at !== c.created_at;
+                    return (
+                      <div key={c.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        {/* Avatar */}
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#1d4ed8", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                          {initials}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a" }}>{c.profiles?.full_name || "Unknown"}</span>
+                            <span style={{ fontSize: 11, color: "#aaa" }}>{ts}{edited ? " · edited" : ""}</span>
+                          </div>
+                          {isEditing ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <textarea
+                                value={editingCommentText}
+                                onChange={(e) => setEditingCommentText(e.target.value)}
+                                rows={3}
+                                style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "1px solid #d1d5db", resize: "vertical", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                                autoFocus
+                              />
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button onClick={() => saveEditComment(c.id)} style={{ fontSize: 12, padding: "4px 12px", background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}>Save</button>
+                                <button onClick={() => { setEditingCommentId(null); setEditingCommentText(""); }} style={{ fontSize: 12, padding: "4px 12px", background: "#f0f0ef", color: "#555", border: "none", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", background: "#f9f9f9", borderRadius: 8, padding: "8px 12px" }}>
+                              {c.content}
+                            </div>
+                          )}
+                          {isOwn && !isEditing && (
+                            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                              <button onClick={() => { setEditingCommentId(c.id); setEditingCommentText(c.content); }} style={{ fontSize: 11, color: "#888", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Edit</button>
+                              <button onClick={() => deleteComment(c.id)} style={{ fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Delete</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Comment input */}
+                <div style={{ padding: "12px 20px", borderTop: "1px solid #ebebeb", display: "flex", gap: 10, alignItems: "flex-end" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#1d4ed8", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                    {(profile?.full_name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <textarea
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submitComment(); }}
+                      placeholder="Add a comment… (⌘+Enter to send)"
+                      rows={2}
+                      style={{ width: "100%", fontSize: 13, padding: "8px 10px", borderRadius: 7, border: "1px solid #d1d5db", resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                    />
+                    <button
+                      onClick={submitComment}
+                      disabled={!commentText.trim() || commentSubmitting}
+                      style={{ alignSelf: "flex-end", fontSize: 12, padding: "5px 14px", background: commentText.trim() ? "#1d4ed8" : "#e5e7eb", color: commentText.trim() ? "#fff" : "#aaa", border: "none", borderRadius: 6, cursor: commentText.trim() ? "pointer" : "default", transition: "background 0.15s" }}
+                    >
+                      {commentSubmitting ? "Sending…" : "Send"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {drawerTab === "checklist" && (
               <div
                 style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}
