@@ -805,11 +805,12 @@ export default function Tasks({
   // ── Checklist helpers ──
   async function fetchComments(taskId) {
     setCommentsLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("task_comments")
       .select("*, profiles(full_name, avatar_url)")
       .eq("task_id", taskId)
       .order("created_at", { ascending: true });
+    if (error) console.error("fetchComments error:", error);
     setComments(data || []);
     setCommentsLoading(false);
   }
@@ -817,11 +818,16 @@ export default function Tasks({
   async function submitComment() {
     if (!commentText.trim() || !drawerTask) return;
     setCommentSubmitting(true);
-    await supabase.from("task_comments").insert({
+    const { error } = await supabase.from("task_comments").insert({
       task_id: drawerTask.id,
       profile_id: profile?.id,
       content: commentText.trim(),
     });
+    if (error) {
+      console.error("submitComment error:", error);
+      setCommentSubmitting(false);
+      return;
+    }
     setCommentText("");
     await fetchComments(drawerTask.id);
     setCommentSubmitting(false);
