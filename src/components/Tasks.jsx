@@ -311,18 +311,21 @@ export default function Tasks({
   const [fieldAddedFlash, setFieldAddedFlash] = useState(false);
   const [members, setMembers] = useState([]);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState(() => {
-    try {
-      const s = localStorage.getItem("abc_visible_columns");
-      return s ? JSON.parse(s) : ["priority", "assignees", "due_date"];
-    } catch {
-      return ["priority", "assignees", "due_date"];
-    }
-  });
+  const DEFAULT_VISIBLE_COLUMNS = ["priority", "assignees", "due_date"];
+  const DEFAULT_COLUMN_ORDER = [
+    "priority", "assignees", "due_date", "date_done", "date_closed", "date_updated_manual",
+  ];
+  const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE_COLUMNS);
+  // columnOrder defines the display sequence of ALL orderable columns (visible + hidden)
+  const [columnOrder, setColumnOrder] = useState(DEFAULT_COLUMN_ORDER);
+  const [viewSaved, setViewSaved] = useState(false);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const draggedColKey = useRef(null);
+  const viewSaveTimer = useRef(null);
 
   // Column widths in px — shared across every group's table so columns
   // always line up, and resizable by dragging the handle on each header.
-  const DEFAULT_COLUMN_WIDTHS = {
+  const DEFAULT_COLUMN_WIDTHS = { // eslint-disable-line no-unused-vars
     name: 320,
     status_inline: 130,
     priority: 130,
@@ -334,54 +337,42 @@ export default function Tasks({
     status_select: 160,
     actions: 60,
   };
-  const [columnWidths, setColumnWidths] = useState(() => {
-    try {
-      const s = localStorage.getItem("abc_column_widths");
-      return s
-        ? { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(s) }
-        : { ...DEFAULT_COLUMN_WIDTHS };
-    } catch {
-      return { ...DEFAULT_COLUMN_WIDTHS };
-    }
-  });
+  const [columnWidths, setColumnWidths] = useState({ ...DEFAULT_COLUMN_WIDTHS });
   const resizingCol = useRef(null);
 
   function getColWidth(key) {
     return columnWidths[key] || DEFAULT_COLUMN_WIDTHS[key] || 120;
   }
 
+  const COLUMN_LABELS = {
+    priority: "Priority",
+    assignees: "Assignees",
+    due_date: "Due date",
+    date_done: "Date Done",
+    date_closed: "Date Closed",
+    date_updated_manual: "Date Updated",
+  };
+
   // Single source of truth for which data columns are active and in what
-  // order — used by the header, every row, and the grid-template-columns
-  // string, so all three always agree and stay aligned across every group.
+  // order — respects columnOrder so users can reorder via drag or arrows.
   function getActiveColumns(fieldList) {
-    const cols = [];
-    if (visibleColumns.includes("priority"))
-      cols.push({ key: "priority", label: "Priority", sortable: true });
-    if (visibleColumns.includes("assignees"))
-      cols.push({ key: "assignees", label: "Assignees", sortable: true });
-    if (visibleColumns.includes("due_date"))
-      cols.push({ key: "due_date", label: "Due date", sortable: true });
-    if (visibleColumns.includes("date_done"))
-      cols.push({ key: "date_done", label: "Date Done", sortable: true });
-    if (visibleColumns.includes("date_closed"))
-      cols.push({ key: "date_closed", label: "Date Closed", sortable: true });
-    if (visibleColumns.includes("date_updated_manual"))
-      cols.push({
-        key: "date_updated_manual",
-        label: "Date Updated",
-        sortable: true,
-      });
-    fieldList
-      .filter((f) => visibleColumns.includes(`field_${f.id}`))
-      .forEach((f) =>
-        cols.push({
-          key: `field_${f.id}`,
-          label: f.field_name,
-          sortable: true,
-          field: f,
-        }),
-      );
-    return cols;
+    const fieldKeys = fieldList.map((f) => `field_${f.id}`);
+    // merge saved order with any new custom fields not yet tracked
+    const fullOrder = [
+      ...columnOrder,
+      ...fieldKeys.filter((k) => !columnOrder.includes(k)),
+    ];
+    return fullOrder
+      .filter((key) => visibleColumns.includes(key))
+      .map((key) => {
+        if (key.startsWith("field_")) {
+          const f = fieldList.find((f) => `field_${f.id}` === key);
+          if (!f) return null;
+          return { key, label: f.field_name, sortable: true, field: f };
+        }
+        return { key, label: COLUMN_LABELS[key] || key, sortable: true };
+      })
+      .filter(Boolean);
   }
 
   function buildGridTemplate(fieldList, indented) {
@@ -397,9 +388,88 @@ export default function Tasks({
     return parts.join(" ");
   }
 
+  // ── View persistence helpers ──────────────────────────────────────────────
+
+  function getCurrentScope() {
+    if (activeList) return { scope_type: "list", scope_id: activeList.id };
+    if (activeFolder) return { scope_type: "folder", scope_id: activeFolder.id };
+    if (activeSpace) return { scope_type: "space", scope_id: activeSpace.id };
+    return null;
+  }
+
+  async function fetchViewConfig() {
+    const scope = getCurrentScope();
+    if (!scope) return;
+    const { data } = await supabase
+      .from("task_list_views")
+      .select("columns")
+      .eq("scope_type", scope.scope_type)
+      .eq("scope_id", scope.scope_id)
+      .maybeSingle();
+    if (!data?.columns) return;
+    const saved = data.columns; // array of { key, visible, width }
+    const order = saved.map((c) => c.key);
+    const visible = saved.filter((c) => c.visible).map((c) => c.key);
+    const widths = {};
+    saved.forEach((c) => { if (c.width) widths[c.key] = c.width; });
+    setColumnOrder(order.length ? order : DEFAULT_COLUMN_ORDER);
+    setVisibleColumns(visible.length ? visible : DEFAULT_VISIBLE_COLUMNS);
+    setColumnWidths((prev) => ({ ...prev, ...widths }));
+  }
+
+  function saveViewConfig(overrideOrder, overrideVisible, overrideWidths) {
+    const scope = getCurrentScope();
+    if (!scope) return;
+    if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
+    viewSaveTimer.current = setTimeout(async () => {
+      const order = overrideOrder ?? columnOrder;
+      const visible = overrideVisible ?? visibleColumns;
+      const widths = overrideWidths ?? columnWidths;
+      const columns = order.map((key) => ({
+        key,
+        visible: visible.includes(key),
+        width: widths[key] || null,
+      }));
+      await supabase.from("task_list_views").upsert(
+        { ...scope, columns, updated_at: new Date().toISOString() },
+        { onConflict: "scope_type,scope_id" }
+      );
+      setViewSaved(true);
+      setTimeout(() => setViewSaved(false), 2000);
+    }, 400);
+  }
+
+  function moveColumnOrder(key, direction) {
+    setColumnOrder((prev) => {
+      const idx = prev.indexOf(key);
+      if (idx < 0) return prev;
+      const next = [...prev];
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= next.length) return prev;
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      saveViewConfig(next, undefined, undefined);
+      return next;
+    });
+  }
+
+  function dropColumn(dragKey, overKey) {
+    if (!dragKey || dragKey === overKey) return;
+    setColumnOrder((prev) => {
+      const next = prev.filter((k) => k !== dragKey);
+      const insertAt = next.indexOf(overKey);
+      next.splice(insertAt >= 0 ? insertAt : next.length, 0, dragKey);
+      saveViewConfig(next, undefined, undefined);
+      return next;
+    });
+    setDragOverColKey(null);
+    draggedColKey.current = null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   function persistColumnWidths(next) {
     setColumnWidths(next);
-    localStorage.setItem("abc_column_widths", JSON.stringify(next));
+    saveViewConfig(undefined, undefined, next);
   }
 
   function startColumnResize(key, e) {
@@ -418,7 +488,7 @@ export default function Tasks({
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       setColumnWidths((prev) => {
-        localStorage.setItem("abc_column_widths", JSON.stringify(prev));
+        saveViewConfig(undefined, undefined, prev);
         return prev;
       });
     }
@@ -527,12 +597,13 @@ export default function Tasks({
 
   function updateVisibleColumns(cols) {
     setVisibleColumns(cols);
-    localStorage.setItem("abc_visible_columns", JSON.stringify(cols));
+    saveViewConfig(undefined, cols, undefined);
   }
 
   useEffect(() => {
     if (!activeSpace) return; // wait until space context is restored after refresh
     fetchTasks();
+    fetchViewConfig();
   }, [activeSpace, activeFolder, activeList]);
   useEffect(() => {
     fetchMembers();
@@ -2048,11 +2119,27 @@ export default function Tasks({
     sortable,
     indented,
     sticky,
+    draggableCol,
   }) {
     const isActive = sortConfig.key === colKey;
     const widthKey = resizeKey || colKey;
+    const isDragOver = draggableCol && dragOverColKey === colKey;
     return (
       <div
+        draggable={!!draggableCol}
+        onDragStart={draggableCol ? (e) => {
+          draggedColKey.current = colKey;
+          e.dataTransfer.effectAllowed = "move";
+        } : undefined}
+        onDragOver={draggableCol ? (e) => {
+          e.preventDefault();
+          setDragOverColKey(colKey);
+        } : undefined}
+        onDragLeave={draggableCol ? () => setDragOverColKey(null) : undefined}
+        onDrop={draggableCol ? (e) => {
+          e.preventDefault();
+          dropColumn(draggedColKey.current, colKey);
+        } : undefined}
         style={{
           position: sticky ? "sticky" : "relative",
           left: sticky ? 0 : undefined,
@@ -2066,17 +2153,18 @@ export default function Tasks({
           color: isActive ? "#1d4ed8" : "#999",
           textTransform: "uppercase",
           letterSpacing: "0.05em",
-          borderBottom: "1px solid #ebebeb",
+          borderBottom: isDragOver ? "2px solid #3b82f6" : "1px solid #ebebeb",
+          borderLeft: isDragOver ? "2px solid #3b82f6" : undefined,
           borderRight: sticky ? "1px solid #ebebeb" : undefined,
-          background: "#fafaf9",
+          background: isDragOver ? "#eff6ff" : "#fafaf9",
           boxShadow: sticky ? "2px 0 4px -2px rgba(0,0,0,0.08)" : undefined,
-          cursor: sortable ? "pointer" : "default",
+          cursor: draggableCol ? "grab" : sortable ? "pointer" : "default",
           userSelect: "none",
           overflow: "hidden",
           whiteSpace: "nowrap",
         }}
         onClick={sortable ? () => handleSort(colKey) : undefined}
-        title={sortable ? "Click to sort" : undefined}
+        title={draggableCol ? "Drag to reorder" : sortable ? "Click to sort" : undefined}
       >
         <span
           style={{
@@ -2165,6 +2253,7 @@ export default function Tasks({
             colKey={c.key}
             label={c.label}
             sortable={c.sortable}
+            draggableCol
           />
         ))}
         <div
@@ -2698,102 +2787,109 @@ export default function Tasks({
               >
                 ⊞ Columns
               </button>
-              {showColumnPicker && (
-                <div
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    top: "110%",
-                    background: "#fff",
-                    border: "1px solid #e8e8e8",
-                    borderRadius: 8,
-                    padding: "12px 14px",
-                    boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
-                    zIndex: 100,
-                    minWidth: 200,
-                  }}
-                >
+              {showColumnPicker && (() => {
+                const fieldList = getFields();
+                const fieldKeys = fieldList.map((f) => `field_${f.id}`);
+                const allColMap = {
+                  priority: "Priority",
+                  assignees: "Assignees",
+                  due_date: "Due date",
+                  date_done: "Date Done",
+                  date_closed: "Date Closed",
+                  date_updated_manual: "Date Updated",
+                  ...Object.fromEntries(fieldList.map((f) => [`field_${f.id}`, f.field_name])),
+                };
+                const fullOrder = [
+                  ...columnOrder,
+                  ...fieldKeys.filter((k) => !columnOrder.includes(k)),
+                ];
+                return (
                   <div
                     style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: "#888",
-                      marginBottom: 10,
-                      textTransform: "uppercase",
-                      letterSpacing: ".04em",
+                      position: "absolute",
+                      right: 0,
+                      top: "110%",
+                      background: "#fff",
+                      border: "1px solid #e8e8e8",
+                      borderRadius: 8,
+                      padding: "12px 14px",
+                      boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                      zIndex: 100,
+                      minWidth: 220,
                     }}
                   >
-                    Visible columns
-                  </div>
-                  {[
-                    { key: "priority", label: "Priority" },
-                    { key: "assignees", label: "Assignees" },
-                    { key: "due_date", label: "Due date" },
-                    { key: "date_done", label: "Date Done" },
-                    { key: "date_closed", label: "Date Closed" },
-                    { key: "date_updated_manual", label: "Date Updated" },
-                    ...getFields().map((f) => ({
-                      key: `field_${f.id}`,
-                      label: f.field_name,
-                    })),
-                  ].map((col) => (
-                    <label
-                      key={col.key}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "5px 0",
-                        cursor: "pointer",
-                        fontSize: 13,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns.includes(col.key)}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? [...visibleColumns, col.key]
-                            : visibleColumns.filter((c) => c !== col.key);
-                          updateVisibleColumns(next);
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                        Columns
+                      </span>
+                      {viewSaved && (
+                        <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Saved</span>
+                      )}
+                    </div>
+                    {fullOrder.map((key, idx) => (
+                      <div
+                        key={key}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}
+                      >
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, cursor: "pointer", fontSize: 13 }}>
+                          <input
+                            type="checkbox"
+                            checked={visibleColumns.includes(key)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...visibleColumns, key]
+                                : visibleColumns.filter((c) => c !== key);
+                              updateVisibleColumns(next);
+                            }}
+                            style={{ width: 14, height: 14, cursor: "pointer" }}
+                          />
+                          {allColMap[key] || key}
+                        </label>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                          <button
+                            disabled={idx === 0}
+                            onClick={() => moveColumnOrder(key, "up")}
+                            title="Move up"
+                            style={{
+                              background: "none", border: "none", padding: "0 2px", cursor: idx === 0 ? "default" : "pointer",
+                              color: idx === 0 ? "#ccc" : "#666", fontSize: 10, lineHeight: 1,
+                            }}
+                          >▲</button>
+                          <button
+                            disabled={idx === fullOrder.length - 1}
+                            onClick={() => moveColumnOrder(key, "down")}
+                            title="Move down"
+                            style={{
+                              background: "none", border: "none", padding: "0 2px", cursor: idx === fullOrder.length - 1 ? "default" : "pointer",
+                              color: idx === fullOrder.length - 1 ? "#ccc" : "#666", fontSize: 10, lineHeight: 1,
+                            }}
+                          >▼</button>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ borderTop: "1px solid #e8e8e8", marginTop: 8, paddingTop: 8, display: "flex", gap: 6 }}>
+                      <button
+                        className="btn btn-sm"
+                        style={{ fontSize: 11 }}
+                        onClick={() => {
+                          setColumnOrder(DEFAULT_COLUMN_ORDER);
+                          updateVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+                          saveViewConfig(DEFAULT_COLUMN_ORDER, DEFAULT_VISIBLE_COLUMNS, undefined);
                         }}
-                        style={{ width: 14, height: 14, cursor: "pointer" }}
-                      />
-                      {col.label}
-                    </label>
-                  ))}
-                  <div
-                    style={{
-                      borderTop: "1px solid #e8e8e8",
-                      marginTop: 8,
-                      paddingTop: 8,
-                      display: "flex",
-                      gap: 6,
-                    }}
-                  >
-                    <button
-                      className="btn btn-sm"
-                      style={{ fontSize: 11 }}
-                      onClick={() =>
-                        updateVisibleColumns([
-                          "priority",
-                          "assignees",
-                          "due_date",
-                        ])
-                      }
-                    >
-                      Reset
-                    </button>
-                    <button
-                      className="btn btn-sm btn-primary"
-                      style={{ fontSize: 11 }}
-                      onClick={() => setShowColumnPicker(false)}
-                    >
-                      Done
-                    </button>
+                      >
+                        Reset
+                      </button>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        style={{ fontSize: 11 }}
+                        onClick={() => setShowColumnPicker(false)}
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
             <select
               className="toolbar-select"
