@@ -530,7 +530,16 @@ export default function Tasks({
   useEffect(() => {
     if (!activeList) { setListFields([]); return; }
     supabase.from("space_fields").select("*").eq("list_id", activeList.id).order("field_order")
-      .then(({ data }) => setListFields(data || []));
+      .then(({ data }) => {
+        const fields = data || [];
+        setListFields(fields);
+        // Ensure custom field keys are tracked in columnOrder so ↑↓ arrows work
+        const fieldKeys = fields.map((f) => `field_${f.id}`);
+        setColumnOrder((prev) => {
+          const missing = fieldKeys.filter((k) => !prev.includes(k));
+          return missing.length ? [...prev, ...missing] : prev;
+        });
+      });
   }, [activeList]);
 
   useEffect(() => {
@@ -610,6 +619,16 @@ export default function Tasks({
   }, []);
   useEffect(() => {
     if (activeSpace) setNewTask((p) => ({ ...p, space_id: activeSpace.id }));
+  }, [activeSpace]);
+  // Merge space-level field keys into columnOrder so ↑↓ arrows work before any drag-drop
+  useEffect(() => {
+    const fields = activeSpace?.space_fields || [];
+    if (!fields.length) return;
+    const fieldKeys = fields.map((f) => `field_${f.id}`);
+    setColumnOrder((prev) => {
+      const missing = fieldKeys.filter((k) => !prev.includes(k));
+      return missing.length ? [...prev, ...missing] : prev;
+    });
   }, [activeSpace]);
   useEffect(() => {
     function h(e) {
