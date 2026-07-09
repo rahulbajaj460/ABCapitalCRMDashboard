@@ -598,6 +598,7 @@ export default function Tasks({
   const [taskFieldValues, setTaskFieldValues] = useState({});
   const [newStatus, setNewStatus] = useState({ name: "", color: "#378ADD" });
   const [showImport, setShowImport] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [modalSpaceStatuses, setModalSpaceStatuses] = useState([]);
   const [statusActionMsg, setStatusActionMsg] = useState("");
   const [statusLoading, setStatusLoading] = useState(false);
@@ -714,66 +715,103 @@ export default function Tasks({
     return s;
   }
 
-  function exportTasksToCSV() {
+  function exportTasksToCSV(currentViewOnly = false) {
     const fieldList = getFields();
-    const exportTasks = filteredTasks; // respects current search + status filter
+    const exportTasks = filteredTasks;
 
-    const headers = [
-      "Task Name",
-      "Status",
-      "Priority",
-      "Assignee",
-      "Due Date",
-      "Date Created",
-      "Date Done",
-      "Date Closed",
-      "Date Updated",
-      "Description",
-      ...fieldList.map((f) => f.field_name),
+    const BUILTIN_ALL = [
+      { key: "title",               label: "Task Name" },
+      { key: "status",              label: "Status" },
+      { key: "priority",            label: "Priority" },
+      { key: "assignees",           label: "Assignee" },
+      { key: "due_date",            label: "Due Date" },
+      { key: "created_at",          label: "Date Created" },
+      { key: "date_done",           label: "Date Done" },
+      { key: "date_closed",         label: "Date Closed" },
+      { key: "date_updated_manual", label: "Date Updated" },
+      { key: "description",         label: "Description" },
     ];
+
+    // Visible built-in keys (from the column picker mapping)
+    const VISIBLE_BUILTIN_MAP = {
+      priority:             "Priority",
+      assignees:            "Assignee",
+      due_date:             "Due Date",
+      date_done:            "Date Done",
+      date_closed:          "Date Closed",
+      date_updated_manual:  "Date Updated",
+    };
+    // Always-on builtins (not toggleable)
+    const ALWAYS_ON = ["title", "status", "created_at", "description"];
+
+    let builtins, fields;
+    if (currentViewOnly) {
+      builtins = BUILTIN_ALL.filter(
+        (c) => ALWAYS_ON.includes(c.key) || visibleColumns.includes(c.key)
+      );
+      fields = fieldList.filter((f) => visibleColumns.includes(`field_${f.id}`));
+      // respect columnOrder for builtins
+      const orderedBuiltinKeys = [
+        ...ALWAYS_ON.filter((k) => ["title", "status", "created_at", "description"].includes(k)),
+      ];
+      // insert togglable builtins in columnOrder sequence
+      const toggleableInOrder = columnOrder.filter((k) => VISIBLE_BUILTIN_MAP[k] && visibleColumns.includes(k));
+      builtins = [
+        BUILTIN_ALL.find((c) => c.key === "title"),
+        BUILTIN_ALL.find((c) => c.key === "status"),
+        ...toggleableInOrder.map((k) => ({ key: k, label: VISIBLE_BUILTIN_MAP[k] })),
+        BUILTIN_ALL.find((c) => c.key === "created_at"),
+        BUILTIN_ALL.find((c) => c.key === "description"),
+      ];
+      // fields in columnOrder sequence
+      const orderedFieldIds = columnOrder
+        .filter((k) => k.startsWith("field_") && visibleColumns.includes(k))
+        .map((k) => k.replace("field_", ""));
+      fields = orderedFieldIds.map((id) => fieldList.find((f) => f.id === id)).filter(Boolean);
+    } else {
+      builtins = BUILTIN_ALL;
+      fields = fieldList;
+    }
+
+    const headers = [...builtins.map((c) => c.label), ...fields.map((f) => f.field_name)];
 
     const rows = exportTasks.map((task) => {
       const assigneeStr = (
-        task.assignees?.length > 0
-          ? task.assignees
-          : task.assignee
-            ? [task.assignee]
-            : []
+        task.assignees?.length > 0 ? task.assignees : task.assignee ? [task.assignee] : []
       ).join(", ");
 
-      const customValues = fieldList.map((f) => {
+      const builtinValues = builtins.map((c) => {
+        if (c.key === "title")               return task.title || "";
+        if (c.key === "status")              return task.status || "";
+        if (c.key === "priority")            return task.priority || "";
+        if (c.key === "assignees")           return assigneeStr;
+        if (c.key === "due_date")            return task.due_date || "";
+        if (c.key === "created_at")          return task.created_at ? task.created_at.split("T")[0] : "";
+        if (c.key === "date_done")           return task.date_done || "";
+        if (c.key === "date_closed")         return task.date_closed || "";
+        if (c.key === "date_updated_manual") return task.date_updated_manual || "";
+        if (c.key === "description")         return task.description || "";
+        return "";
+      });
+
+      const customValues = fields.map((f) => {
         if (f.field_type === "formula") return computeFormula(f, task, fieldList, activeSpace?.space_fields) || "";
         const fv = task.task_field_values?.find((v) => v.field_id === f.id);
         return fv?.value || "";
       });
 
-      return [
-        task.title || "",
-        task.status || "",
-        task.priority || "",
-        assigneeStr,
-        task.due_date || "",
-        task.created_at ? task.created_at.split("T")[0] : "",
-        task.date_done || "",
-        task.date_closed || "",
-        task.date_updated_manual || "",
-        task.description || "",
-        ...customValues,
-      ];
+      return [...builtinValues, ...customValues];
     });
 
-    const csvLines = [headers, ...rows].map((row) =>
-      row.map(csvEscape).join(","),
-    );
-    const csvContent = csvLines.join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const csvLines = [headers, ...rows].map((row) => row.map(csvEscape).join(","));
+    const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    const scopeName = activeFolder?.name || activeSpace?.name || "tasks";
+    const scopeName = activeList?.name || activeFolder?.name || activeSpace?.name || "tasks";
     const dateStr = new Date().toISOString().split("T")[0];
+    const suffix = currentViewOnly ? "_view" : "_all";
     link.href = url;
-    link.download = `${scopeName.replace(/[^a-z0-9]+/gi, "_")}_export_${dateStr}.csv`;
+    link.download = `${scopeName.replace(/[^a-z0-9]+/gi, "_")}_export${suffix}_${dateStr}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -2762,7 +2800,7 @@ export default function Tasks({
             <button className="btn btn-sm" onClick={() => setShowImport(true)}>
               ⬆ Import CSV
             </button>
-            <button className="btn btn-sm" onClick={exportTasksToCSV}>
+            <button className="btn btn-sm" onClick={() => setShowExportModal(true)}>
               ⬇ Export CSV
             </button>
             <button className="btn btn-primary" onClick={openNewTask}>
@@ -2845,47 +2883,84 @@ export default function Tasks({
                         <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Saved</span>
                       )}
                     </div>
-                    {fullOrder.map((key, idx) => (
-                      <div
-                        key={key}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 0" }}
-                      >
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, cursor: "pointer", fontSize: 13 }}>
-                          <input
-                            type="checkbox"
-                            checked={visibleColumns.includes(key)}
-                            onChange={(e) => {
-                              const next = e.target.checked
-                                ? [...visibleColumns, key]
-                                : visibleColumns.filter((c) => c !== key);
-                              updateVisibleColumns(next);
-                            }}
-                            style={{ width: 14, height: 14, cursor: "pointer" }}
-                          />
-                          {allColMap[key] || key}
-                        </label>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                          <button
-                            disabled={idx === 0}
-                            onClick={() => moveColumnOrder(key, "up")}
-                            title="Move up"
-                            style={{
-                              background: "none", border: "none", padding: "0 2px", cursor: idx === 0 ? "default" : "pointer",
-                              color: idx === 0 ? "#ccc" : "#666", fontSize: 10, lineHeight: 1,
-                            }}
-                          >▲</button>
-                          <button
-                            disabled={idx === fullOrder.length - 1}
-                            onClick={() => moveColumnOrder(key, "down")}
-                            title="Move down"
-                            style={{
-                              background: "none", border: "none", padding: "0 2px", cursor: idx === fullOrder.length - 1 ? "default" : "pointer",
-                              color: idx === fullOrder.length - 1 ? "#ccc" : "#666", fontSize: 10, lineHeight: 1,
-                            }}
-                          >▼</button>
+                    {(() => {
+                      const checkedKeys = fullOrder.filter((k) => visibleColumns.includes(k));
+                      const uncheckedKeys = fullOrder.filter((k) => !visibleColumns.includes(k));
+                      const renderRow = (key, isChecked, idxInSection, sectionLen) => (
+                        <div
+                          key={key}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "4px 0",
+                            opacity: isChecked ? 1 : 0.55,
+                          }}
+                        >
+                          <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, cursor: "pointer", fontSize: 13 }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  // move key to end of checked section in columnOrder
+                                  const newOrder = [
+                                    ...checkedKeys,
+                                    key,
+                                    ...uncheckedKeys.filter((k) => k !== key),
+                                  ];
+                                  setColumnOrder(newOrder);
+                                  const nextVisible = [...visibleColumns, key];
+                                  setVisibleColumns(nextVisible);
+                                  saveViewConfig(newOrder, nextVisible, undefined);
+                                } else {
+                                  // move key to start of unchecked section
+                                  const newOrder = [
+                                    ...checkedKeys.filter((k) => k !== key),
+                                    key,
+                                    ...uncheckedKeys,
+                                  ];
+                                  setColumnOrder(newOrder);
+                                  const nextVisible = visibleColumns.filter((c) => c !== key);
+                                  setVisibleColumns(nextVisible);
+                                  saveViewConfig(newOrder, nextVisible, undefined);
+                                }
+                              }}
+                              style={{ width: 14, height: 14, cursor: "pointer" }}
+                            />
+                            {allColMap[key] || key}
+                          </label>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                            <button
+                              disabled={!isChecked || idxInSection === 0}
+                              onClick={() => isChecked && moveColumnOrder(key, "up")}
+                              title={isChecked ? "Move up" : undefined}
+                              style={{
+                                background: "none", border: "none", padding: "0 2px",
+                                cursor: isChecked && idxInSection > 0 ? "pointer" : "default",
+                                color: isChecked && idxInSection > 0 ? "#666" : "#ccc", fontSize: 10, lineHeight: 1,
+                              }}
+                            >▲</button>
+                            <button
+                              disabled={!isChecked || idxInSection === sectionLen - 1}
+                              onClick={() => isChecked && moveColumnOrder(key, "down")}
+                              title={isChecked ? "Move down" : undefined}
+                              style={{
+                                background: "none", border: "none", padding: "0 2px",
+                                cursor: isChecked && idxInSection < sectionLen - 1 ? "pointer" : "default",
+                                color: isChecked && idxInSection < sectionLen - 1 ? "#666" : "#ccc", fontSize: 10, lineHeight: 1,
+                              }}
+                            >▼</button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                      return (
+                        <>
+                          {checkedKeys.map((key, i) => renderRow(key, true, i, checkedKeys.length))}
+                          {uncheckedKeys.length > 0 && checkedKeys.length > 0 && (
+                            <div style={{ borderTop: "1px solid #f0f0f0", margin: "6px 0" }} />
+                          )}
+                          {uncheckedKeys.map((key, i) => renderRow(key, false, i, uncheckedKeys.length))}
+                        </>
+                      );
+                    })()}
                     <div style={{ borderTop: "1px solid #e8e8e8", marginTop: 8, paddingTop: 8, display: "flex", gap: 6 }}>
                       <button
                         className="btn btn-sm"
@@ -5704,6 +5779,54 @@ export default function Tasks({
                 Create task
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXPORT CSV MODAL */}
+      {showExportModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowExportModal(false)}
+          style={{ zIndex: 1000 }}
+        >
+          <div
+            className="modal-box"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 400, padding: 28 }}
+          >
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Export CSV</div>
+            <div style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>
+              Choose what to include in the export:
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
+                className="btn btn-primary"
+                style={{ width: "100%", padding: "10px 16px", fontSize: 14, textAlign: "left" }}
+                onClick={() => { exportTasksToCSV(true); setShowExportModal(false); }}
+              >
+                <div style={{ fontWeight: 600 }}>Current view only</div>
+                <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 400, marginTop: 2 }}>
+                  Exports only the columns you have selected and in the order you've arranged them
+                </div>
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ width: "100%", padding: "10px 16px", fontSize: 14, textAlign: "left", border: "1px solid #e0e0e0" }}
+                onClick={() => { exportTasksToCSV(false); setShowExportModal(false); }}
+              >
+                <div style={{ fontWeight: 600 }}>All columns</div>
+                <div style={{ fontSize: 12, color: "#888", fontWeight: 400, marginTop: 2 }}>
+                  Exports every column regardless of current view settings
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowExportModal(false)}
+              style={{ marginTop: 16, background: "none", border: "none", color: "#999", fontSize: 13, cursor: "pointer", width: "100%", textAlign: "center" }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
