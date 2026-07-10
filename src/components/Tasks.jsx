@@ -2131,6 +2131,20 @@ export default function Tasks({
     setAllListStatuses(data || []);
   }
 
+  // Refetch the active list's statuses and fields (their useEffects are keyed
+  // on [activeList], so they don't re-run after an import into the same list).
+  async function refreshActiveListScoped() {
+    if (activeList) {
+      const [{ data: st }, { data: fl }] = await Promise.all([
+        supabase.from("space_statuses").select("*").eq("list_id", activeList.id).order("status_order"),
+        supabase.from("space_fields").select("*").eq("list_id", activeList.id).order("field_order"),
+      ]);
+      setListStatuses(st || []);
+      setListFields(fl || []);
+    }
+    await refreshAllListStatuses();
+  }
+
   async function fetchModalStatuses() {
     if (!activeSpace) return;
     if (activeList) {
@@ -2675,6 +2689,7 @@ export default function Tasks({
         spaces={spaces}
         onDone={async () => {
           await onRefreshSpaces();
+          await refreshActiveListScoped();
           setShowImport(false);
           fetchTasks();
         }}
