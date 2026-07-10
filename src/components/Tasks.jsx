@@ -1297,8 +1297,8 @@ export default function Tasks({
     return result;
   }
   function getFields() {
-    if (activeList && listFields.length > 0) {
-      // List-scoped fields only (don't show folder-level fields that aren't for this list)
+    if (activeList) {
+      // List-scoped fields only — never fall through to folder/sibling fields
       return applyFieldOverrides(
         [...listFields].sort((a, b) => a.field_order - b.field_order),
         activeSpace?.id,
