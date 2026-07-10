@@ -574,13 +574,16 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
             }
           });
           if (fieldValues.length > 0) {
-            console.log("[Import] inserting field values:", fieldValues);
-            const { error: fvErr } = await supabase.from("task_field_values").insert(fieldValues);
-            if (fvErr) {
-              console.error("[Import] field values insert error:", fvErr.message, fvErr.details);
-              errs.push(`Field values: ${fvErr.message}`);
-            } else {
-              console.log("[Import] field values inserted OK:", fieldValues.length);
+            console.log("[Import] inserting field values:", fieldValues.length);
+            // Insert in small batches to stay within payload limits
+            const FV_BATCH = 50;
+            for (let fi = 0; fi < fieldValues.length; fi += FV_BATCH) {
+              const fvBatch = fieldValues.slice(fi, fi + FV_BATCH);
+              const { error: fvErr } = await supabase.from("task_field_values").insert(fvBatch);
+              if (fvErr) {
+                console.error("[Import] field values insert error:", JSON.stringify(fvErr));
+                errs.push(`Field values (batch ${Math.floor(fi / FV_BATCH) + 1}): ${fvErr.message || fvErr.code || JSON.stringify(fvErr)}`);
+              }
             }
           }
         }
