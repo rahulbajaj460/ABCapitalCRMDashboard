@@ -774,29 +774,17 @@ export default function Tasks({
       date_closed:          "Date Closed",
       date_updated_manual:  "Date Updated",
     };
-    // Always-on builtins (not toggleable)
-    const ALWAYS_ON = ["title", "status", "created_at", "description"];
-
     let builtins, fields;
     if (currentViewOnly) {
-      builtins = BUILTIN_ALL.filter(
-        (c) => ALWAYS_ON.includes(c.key) || visibleColumns.includes(c.key)
-      );
-      fields = fieldList.filter((f) => visibleColumns.includes(`field_${f.id}`));
-      // respect columnOrder for builtins
-      const orderedBuiltinKeys = [
-        ...ALWAYS_ON.filter((k) => ["title", "status", "created_at", "description"].includes(k)),
-      ];
-      // insert togglable builtins in columnOrder sequence
+      // Current view = Task Name + Status + only the visible toggleable columns
+      // (Date Created / Description are NOT forced in).
       const toggleableInOrder = columnOrder.filter((k) => VISIBLE_BUILTIN_MAP[k] && visibleColumns.includes(k));
       builtins = [
         BUILTIN_ALL.find((c) => c.key === "title"),
         BUILTIN_ALL.find((c) => c.key === "status"),
         ...toggleableInOrder.map((k) => ({ key: k, label: VISIBLE_BUILTIN_MAP[k] })),
-        BUILTIN_ALL.find((c) => c.key === "created_at"),
-        BUILTIN_ALL.find((c) => c.key === "description"),
       ];
-      // fields in columnOrder sequence
+      // custom fields in columnOrder sequence, only visible ones
       const orderedFieldIds = columnOrder
         .filter((k) => k.startsWith("field_") && visibleColumns.includes(k))
         .map((k) => k.replace("field_", ""));
@@ -837,7 +825,9 @@ export default function Tasks({
     });
 
     const csvLines = [headers, ...rows].map((row) => row.map(csvEscape).join(","));
-    const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    // Prepend a UTF-8 BOM so Excel decodes special characters (—, é, etc.)
+    // correctly instead of mangling them (e.g. "—" -> ",Äî").
+    const blob = new Blob(["﻿" + csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     const scopeName = activeList?.name || activeFolder?.name || activeSpace?.name || "tasks";
