@@ -211,17 +211,16 @@ function computeFormula(field, task, allFields, lookupFields) {
     return `${days} day${days !== 1 ? "s" : ""} left`;
   }
   if (key === "days_since_date_field") {
-    const dateFieldName = (opts[1] || "").trim();
-    if (!dateFieldName) return "—";
+    const norm = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const target = norm(opts[1]);
+    if (!target) return "—";
     // Duplicate field names can exist across scopes/imports, so match ALL
     // fields with this name and find the value stored against any of them.
     const pool = [...(allFields || []), ...(lookupFields || [])];
     const matchingIds = new Set(
-      pool
-        .filter((f) => f.field_name.toLowerCase() === dateFieldName.toLowerCase())
-        .map((f) => f.id),
+      pool.filter((f) => norm(f.field_name) === target).map((f) => f.id),
     );
-    if (matchingIds.size === 0) return `(field "${dateFieldName}" not found)`;
+    if (matchingIds.size === 0) return `(field "${opts[1]}" not found)`;
     const fv = (task.task_field_values || []).find(
       (v) => matchingIds.has(v.field_id) && v.value,
     );
