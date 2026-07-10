@@ -2611,6 +2611,42 @@ export default function Tasks({
     return "—";
   }
 
+  // Small circular status indicator shown before a task name (ClickUp-style):
+  // filled+check = done, half-filled = in progress, dashed outline = to-do/other.
+  function statusGlyph(status) {
+    const color = getStatusColor(status);
+    const s = (status || "").toLowerCase();
+    if (isDoneStatus(status)) {
+      return (
+        <svg width="15" height="15" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="10" fill={color} />
+          <path d="M7.5 12.5l3 3 6-7" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    }
+    if (s.includes("progress")) {
+      return (
+        <svg width="15" height="15" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="2.2" />
+          <path d="M12 3 A9 9 0 0 1 12 21 Z" fill={color} />
+        </svg>
+      );
+    }
+    if (s.includes("cancel") || s.includes("discontinu") || s === "rejected" || s.includes("liquidation")) {
+      return (
+        <svg width="15" height="15" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+          <circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="2.2" />
+          <path d="M8.5 8.5l7 7M15.5 8.5l-7 7" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+        </svg>
+      );
+    }
+    return (
+      <svg width="15" height="15" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+        <circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="2.2" strokeDasharray="3.2 3.2" />
+      </svg>
+    );
+  }
+
   function renderTaskRow(task, statusList, fieldList, folderCtx = null, depth = 0) {
     const statusColor = folderCtx
       ? getStatusColorForFolder(task.status, folderCtx)
@@ -2675,6 +2711,9 @@ export default function Tasks({
               title={hasKids ? (subExpanded ? "Collapse subtasks" : "Expand subtasks") : undefined}
             >
               {subExpanded ? "▼" : "▶"}
+            </span>
+            <span style={{ display: "inline-flex", flexShrink: 0 }} title={task.status}>
+              {statusGlyph(task.status)}
             </span>
             <span
               style={{
