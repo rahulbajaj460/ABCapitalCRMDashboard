@@ -2847,6 +2847,9 @@ export default function Tasks({
               {showColumnPicker && (() => {
                 const fieldList = getFields();
                 const fieldKeys = fieldList.map((f) => `field_${f.id}`);
+                // Use ALL space fields for label lookup so keys merged into
+                // columnOrder from other scopes still show their real name.
+                const allSpaceFields = activeSpace?.space_fields || [];
                 const allColMap = {
                   priority: "Priority",
                   assignees: "Assignees",
@@ -2854,7 +2857,7 @@ export default function Tasks({
                   date_done: "Date Done",
                   date_closed: "Date Closed",
                   date_updated_manual: "Date Updated",
-                  ...Object.fromEntries(fieldList.map((f) => [`field_${f.id}`, f.field_name])),
+                  ...Object.fromEntries(allSpaceFields.map((f) => [`field_${f.id}`, f.field_name])),
                 };
                 const fullOrder = [
                   ...columnOrder,
