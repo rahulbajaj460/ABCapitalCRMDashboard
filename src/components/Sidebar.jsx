@@ -1005,7 +1005,7 @@ export default function Sidebar({
   }
 
   // ── Context menu component ──
-  function ContextMenu({ items, onClose }) {
+  function ContextMenu({ items, onClose, x, y }) {
     return (
       <div
         ref={menuRef}
@@ -1018,8 +1018,8 @@ export default function Sidebar({
           zIndex: 9999,
           minWidth: 180,
           padding: "4px 0",
-          left: spaceMenu?.x || folderMenu?.x || listMenu?.x,
-          top: spaceMenu?.y || folderMenu?.y || listMenu?.y,
+          left: x,
+          top: y,
         }}
       >
         {items.map((item, i) =>
@@ -1602,6 +1602,8 @@ export default function Sidebar({
                 },
               ]}
               onClose={() => setSpaceMenu(null)}
+              x={spaceMenu?.x}
+              y={spaceMenu?.y}
             />
           );
         })()}
@@ -1674,6 +1676,8 @@ export default function Sidebar({
             },
           ]}
           onClose={() => setFolderMenu(null)}
+          x={folderMenu?.x}
+          y={folderMenu?.y}
         />
       )}
 
@@ -1699,6 +1703,8 @@ export default function Sidebar({
             },
           ]}
           onClose={() => setListMenu(null)}
+          x={listMenu?.x}
+          y={listMenu?.y}
         />
       )}
 
