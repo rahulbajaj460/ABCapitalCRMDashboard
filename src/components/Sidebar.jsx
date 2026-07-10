@@ -1166,7 +1166,7 @@ export default function Sidebar({
                       {taskCounts[space.id]}
                     </span>
                   )}
-                  {/* Hover actions: ••• and + */}
+                  {/* Hover actions */}
                   <div className="space-hover-actions">
                     <button
                       className="space-hover-btn"
@@ -1179,19 +1179,6 @@ export default function Sidebar({
                       title="Options"
                     >
                       •••
-                    </button>
-                    <button
-                      className="space-hover-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // open add-folder flow — reuse existing space menu with direct folder creation
-                        const r = e.currentTarget.getBoundingClientRect();
-                        setSpaceMenu({ id: space.id, x: r.right + 4, y: r.top });
-                        setFolderMenu(null);
-                      }}
-                      title="Add folder"
-                    >
-                      +
                     </button>
                   </div>
                 </div>
