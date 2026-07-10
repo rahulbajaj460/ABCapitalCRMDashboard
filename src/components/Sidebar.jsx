@@ -1327,8 +1327,9 @@ export default function Sidebar({
                             {newListFolderId === folder.id && (
                               <div style={{ paddingLeft: 32, paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
                                 <input
+                                  type="search"
                                   autoFocus
-                                  autoComplete="new-password"
+                                  autoComplete="off"
                                   value={newListName}
                                   onChange={(e) => setNewListName(e.target.value)}
                                   onKeyDown={(e) => {
@@ -1345,6 +1346,7 @@ export default function Sidebar({
                                     padding: "3px 6px",
                                     outline: "none",
                                     background: "#fff",
+                                    WebkitAppearance: "none",
                                   }}
                                 />
                               </div>
