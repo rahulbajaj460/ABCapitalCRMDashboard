@@ -82,6 +82,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
   const [selectedList, setSelectedList] = useState("");
   const [folderLists, setFolderLists] = useState([]);
   const [listScopedFields, setListScopedFields] = useState([]);
+  const [listScopedStatuses, setListScopedStatuses] = useState([]);
   const [statusMap, setStatusMap] = useState({});
 
   // Status review state
@@ -117,6 +118,12 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
       .then(({ data }) => setListScopedFields(data || []));
   }, [selectedList]);
 
+  useEffect(() => {
+    if (!selectedList) { setListScopedStatuses([]); return; }
+    supabase.from("space_statuses").select("*").eq("list_id", selectedList).order("status_order")
+      .then(({ data }) => setListScopedStatuses(data || []));
+  }, [selectedList]);
+
   const unmappedColumns = headers.filter(
     (h) => !Object.values(mapping).includes(h),
   );
@@ -139,12 +146,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     const space = spaces.find((s) => s.id === selectedSpace);
     if (!space) return [];
     if (selectedList) {
-      // List selected: show only statuses scoped to this specific list
-      const listStatuses = (space.space_statuses || []).filter(
-        (s) => s.list_id === selectedList
-      );
-      if (listStatuses.length > 0) return listStatuses;
-      // Fall back to folder-scoped statuses if list has none yet
+      // Use freshly-fetched list statuses (avoids stale spaces prop)
+      if (listScopedStatuses.length > 0) return listScopedStatuses;
+      // Fall back to folder-scoped statuses if list has none seeded yet
       if (selectedFolder) {
         const folderStatuses = (space.space_statuses || []).filter(
           (s) => s.folder_id === selectedFolder && !s.list_id
