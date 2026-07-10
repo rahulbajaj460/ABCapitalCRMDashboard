@@ -1312,22 +1312,34 @@ export default function Tasks({
       );
     }
     if (activeFolder) {
-      // Folder-scoped fields only — don't aggregate child-list fields
-      const ff = (activeSpace?.space_fields || []).filter(
-        (f) => f.folder_id === activeFolder.id && !f.list_id
+      // Folder-scoped fields + fields scoped to any list inside this folder,
+      // deduplicated by name so the folder aggregates its lists' columns.
+      const folderListIds = new Set(
+        spaceLists.filter((l) => l.folder_id === activeFolder.id).map((l) => l.id)
       );
+      const seen = new Set();
+      const ff = (activeSpace?.space_fields || [])
+        .filter((f) => f.folder_id === activeFolder.id || (f.list_id && folderListIds.has(f.list_id)))
+        .filter((f) => {
+          if (seen.has(f.field_name)) return false;
+          seen.add(f.field_name);
+          return true;
+        });
       return applyFieldOverrides(
         [...ff].sort((a, b) => a.field_order - b.field_order),
         activeSpace?.id,
         activeFolder.id,
       );
     }
-    // Space level: space-scoped fields only (no folder/list binding)
-    const ff = (activeSpace?.space_fields || []).filter(
-      (f) => !f.folder_id && !f.list_id
-    );
+    // Space level: all fields (space + folder + list scoped), deduplicated by name
+    const seen = new Set();
+    const allSpaceFields = (activeSpace?.space_fields || []).filter((f) => {
+      if (seen.has(f.field_name)) return false;
+      seen.add(f.field_name);
+      return true;
+    });
     return applyFieldOverrides(
-      [...ff].sort((a, b) => a.field_order - b.field_order),
+      [...allSpaceFields].sort((a, b) => a.field_order - b.field_order),
       activeSpace?.id,
       null,
     );
