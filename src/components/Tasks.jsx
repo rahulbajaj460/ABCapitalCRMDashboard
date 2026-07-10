@@ -212,14 +212,18 @@ function computeFormula(field, task, allFields, lookupFields) {
   }
   if (key === "days_since_date_field") {
     const dateFieldName = (opts[1] || "").trim();
-    if (!dateFieldName || !allFields) return "—";
-    const pool = lookupFields || allFields || [];
-    const dateField = pool.find(
-      (f) => f.field_name.toLowerCase() === dateFieldName.toLowerCase(),
+    if (!dateFieldName) return "—";
+    // Duplicate field names can exist across scopes/imports, so match ALL
+    // fields with this name and find the value stored against any of them.
+    const pool = [...(allFields || []), ...(lookupFields || [])];
+    const matchingIds = new Set(
+      pool
+        .filter((f) => f.field_name.toLowerCase() === dateFieldName.toLowerCase())
+        .map((f) => f.id),
     );
-    if (!dateField) return `(field "${dateFieldName}" not found)`;
+    if (matchingIds.size === 0) return `(field "${dateFieldName}" not found)`;
     const fv = (task.task_field_values || []).find(
-      (v) => v.field_id === dateField.id,
+      (v) => matchingIds.has(v.field_id) && v.value,
     );
     if (!fv?.value) return "—";
     const d = parseFlexibleDate(fv.value);
