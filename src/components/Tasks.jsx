@@ -4246,18 +4246,8 @@ export default function Tasks({
                                 gap: 8,
                               }}
                             >
-                              <span
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  color: "#7c3aed",
-                                  background: "#faf5ff",
-                                  border: "1px solid #e9d5ff",
-                                  borderRadius: 7,
-                                  padding: "5px 12px",
-                                }}
-                              >
-                                ƒ {computeFormula(field, drawerTask, drawerFields, activeSpace?.space_fields)}
+                              <span style={{ fontSize: 13, color: "#333" }}>
+                                {computeFormula(field, drawerTask, drawerFields, activeSpace?.space_fields)}
                               </span>
                               <span style={{ fontSize: 11, color: "#aaa" }}>
                                 {describeFormula(field)}
