@@ -1353,15 +1353,19 @@ export default function Tasks({
     );
   }
   function getStatusColor(status) {
-    if (activeFolder) {
-      const f = (activeSpace?.space_statuses || [])
-        .filter((s) => s.folder_id === activeFolder.id)
-        .find((s) => s.name === status);
+    const allStatuses = activeSpace?.space_statuses || [];
+    // Most specific first: list-scoped
+    if (activeList) {
+      const f = allStatuses.find((s) => s.list_id === activeList.id && s.name === status);
       if (f) return f.color;
     }
-    const f = (activeSpace?.space_statuses || []).find(
-      (s) => s.name === status,
-    );
+    // Then folder-scoped
+    if (activeFolder) {
+      const f = allStatuses.find((s) => s.folder_id === activeFolder.id && !s.list_id && s.name === status);
+      if (f) return f.color;
+    }
+    // Then any match (space-level)
+    const f = allStatuses.find((s) => !s.list_id && !s.folder_id && s.name === status);
     if (f) return f.color;
     return (
       {
@@ -1374,9 +1378,8 @@ export default function Tasks({
     );
   }
   function getStatusColorForFolder(status, folder) {
-    const f = (activeSpace?.space_statuses || [])
-      .filter((s) => s.folder_id === folder.id)
-      .find((s) => s.name === status);
+    const allStatuses = activeSpace?.space_statuses || [];
+    const f = allStatuses.find((s) => s.folder_id === folder.id && !s.list_id && s.name === status);
     return f ? f.color : getStatusColor(status);
   }
   function getPriorityStyle(priority) {
