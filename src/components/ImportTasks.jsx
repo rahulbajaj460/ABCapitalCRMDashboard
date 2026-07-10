@@ -1257,280 +1257,144 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
 
         {/* STEP 2.5 — Status review */}
         {step === 25 && (
-          <div style={{ maxWidth: 700 }}>
+          <div style={{ maxWidth: 740 }}>
             {/* New statuses from CSV */}
             {statusReview.newStatuses.length > 0 && (
-              <div
-                style={{
-                  background: "#fff",
-                  border: "1px solid #e8e8e8",
-                  borderRadius: 8,
-                  padding: 20,
-                  marginBottom: 16,
-                }}
-              >
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  🆕 New statuses found in CSV (
-                  {statusReview.newStatuses.length})
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✦</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>New statuses in CSV <span style={{ background: "#16a34a", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700, marginLeft: 4 }}>{statusReview.newStatuses.length}</span></div>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 1 }}>Found in the CSV but not yet in this list. Create or map each one.</div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-                  These statuses exist in your CSV but are not in your portal.
-                  Choose what to do with each.
-                </div>
-                {statusReview.newStatuses.map((statusName) => {
-                  const cfg = newStatusActions[statusName] || {
-                    action: "create",
-                    color: "#378ADD",
-                    mapTo: "",
-                  };
-                  const portalStatuses = getPortalStatuses();
-                  return (
-                    <div
-                      key={statusName}
-                      style={{
-                        border: "1px solid #e8e8e8",
-                        borderRadius: 8,
-                        padding: "12px 14px",
-                        marginBottom: 10,
-                        background:
-                          cfg.action === "create" ? "#f0fdf4" : "#eff6ff",
-                      }}
-                    >
+                <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #e5e7eb" }}>
+                  {statusReview.newStatuses.map((statusName, idx) => {
+                    const cfg = newStatusActions[statusName] || { action: "create", color: "#378ADD", mapTo: "" };
+                    const portalStatuses = getPortalStatuses();
+                    const taskCount = rows.filter((r) => normalizeStatus(r[mapping.status]) === statusName).length;
+                    return (
                       <div
+                        key={statusName}
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                          flexWrap: "wrap",
+                          padding: "14px 16px",
+                          background: "#fff",
+                          borderBottom: idx < statusReview.newStatuses.length - 1 ? "1px solid #f0f0ef" : "none",
                         }}
                       >
-                        <div style={{ flex: 1 }}>
-                          <span
-                            style={{
-                              background:
-                                cfg.action === "create"
-                                  ? cfg.color || "#378ADD"
-                                  : "#f0f0ef",
-                              color: cfg.action === "create" ? "#fff" : "#333",
-                              borderRadius: 20,
-                              padding: "2px 10px",
-                              fontSize: 12,
-                              fontWeight: 600,
-                            }}
-                          >
-                            {cfg.action === "create" && cfg.customName != null
-                              ? cfg.customName || statusName
-                              : statusName}
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                          {/* Status pill */}
+                          <span style={{
+                            background: cfg.action === "create" ? (cfg.color || "#378ADD") : "#e5e7eb",
+                            color: cfg.action === "create" ? "#fff" : "#374151",
+                            borderRadius: 20, padding: "3px 12px", fontSize: 12, fontWeight: 600, flexShrink: 0,
+                          }}>
+                            {cfg.action === "create" && cfg.customName != null ? cfg.customName || statusName : statusName}
                           </span>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#aaa",
-                              marginLeft: 8,
-                            }}
-                          >
-                            {
-                              rows.filter(
-                                (r) =>
-                                  normalizeStatus(r[mapping.status]) ===
-                                  statusName,
-                              ).length
-                            }{" "}
-                            tasks
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                          }}
-                        >
+                          <span style={{ fontSize: 12, color: "#9ca3af", flexShrink: 0 }}>{taskCount} task{taskCount !== 1 ? "s" : ""}</span>
+                          <div style={{ flex: 1 }} />
+                          {/* Action selector */}
                           <select
                             value={cfg.action}
-                            onChange={(e) =>
-                              setNewStatusActions((prev) => ({
-                                ...prev,
-                                [statusName]: {
-                                  ...cfg,
-                                  action: e.target.value,
-                                },
-                              }))
-                            }
-                            style={{ fontSize: 12, padding: "4px 8px" }}
+                            onChange={(e) => setNewStatusActions((prev) => ({ ...prev, [statusName]: { ...cfg, action: e.target.value } }))}
+                            style={{ fontSize: 12, padding: "5px 8px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", cursor: "pointer" }}
                           >
                             <option value="create">Create this status</option>
-                            <option value="map">Map to existing status</option>
+                            <option value="map">Map to existing</option>
                           </select>
                           {cfg.action === "create" && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                               <input
                                 value={cfg.customName ?? statusName}
-                                onChange={(e) =>
-                                  setNewStatusActions((prev) => ({
-                                    ...prev,
-                                    [statusName]: { ...cfg, customName: e.target.value },
-                                  }))
-                                }
+                                onChange={(e) => setNewStatusActions((prev) => ({ ...prev, [statusName]: { ...cfg, customName: e.target.value } }))}
                                 placeholder="Status name"
-                                style={{ fontSize: 12, padding: "4px 8px", border: "1px solid #d1d5db", borderRadius: 4, width: 140 }}
+                                style={{ fontSize: 12, padding: "5px 8px", border: "1px solid #d1d5db", borderRadius: 6, width: 130 }}
                               />
-                              <input
-                                type="color"
-                                value={cfg.color || "#378ADD"}
-                                onChange={(e) =>
-                                  setNewStatusActions((prev) => ({
-                                    ...prev,
-                                    [statusName]: { ...cfg, color: e.target.value },
-                                  }))
-                                }
-                                title="Pick color"
-                                style={{ width: 32, height: 28, padding: 2, cursor: "pointer" }}
-                              />
+                              <div style={{ position: "relative", width: 28, height: 28, flexShrink: 0 }}>
+                                <div style={{ width: 28, height: 28, borderRadius: 6, background: cfg.color || "#378ADD", border: "2px solid #e5e7eb", cursor: "pointer" }} />
+                                <input
+                                  type="color"
+                                  value={cfg.color || "#378ADD"}
+                                  onChange={(e) => setNewStatusActions((prev) => ({ ...prev, [statusName]: { ...cfg, color: e.target.value } }))}
+                                  style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
+                                />
+                              </div>
                             </div>
                           )}
                           {cfg.action === "map" && (
                             <select
                               value={cfg.mapTo || ""}
-                              onChange={(e) =>
-                                setNewStatusActions((prev) => ({
-                                  ...prev,
-                                  [statusName]: {
-                                    ...cfg,
-                                    mapTo: e.target.value,
-                                  },
-                                }))
-                              }
-                              style={{ fontSize: 12, padding: "4px 8px" }}
+                              onChange={(e) => setNewStatusActions((prev) => ({ ...prev, [statusName]: { ...cfg, mapTo: e.target.value } }))}
+                              style={{ fontSize: 12, padding: "5px 8px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", cursor: "pointer" }}
                             >
-                              <option value="">Map to...</option>
+                              <option value="">Select status…</option>
                               {portalStatuses.map((s) => (
-                                <option key={s.id} value={s.name}>
-                                  {s.name}
-                                </option>
+                                <option key={s.id} value={s.name}>{s.name}</option>
                               ))}
                             </select>
                           )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
 
             {/* Empty statuses in portal */}
             {statusReview.emptyStatuses.length > 0 && (
-              <div
-                style={{
-                  background: "#fff",
-                  border: "1px solid #e8e8e8",
-                  borderRadius: 8,
-                  padding: 20,
-                  marginBottom: 16,
-                }}
-              >
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  🗑 Will remain empty after import (
-                  {statusReview.emptyStatuses.length})
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>◎</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Will stay empty after import <span style={{ background: "#6b7280", color: "#fff", borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700, marginLeft: 4 }}>{statusReview.emptyStatuses.length}</span></div>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginTop: 1 }}>No existing tasks, and none coming from this CSV. Keep for future use or remove.</div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-                  These statuses have no existing tasks, and this CSV doesn't
-                  contain any rows matching them either — they'll still be empty
-                  after the import completes. Keep them for future use, or
-                  delete them now if you don't need them.
-                </div>
-                {statusReview.emptyStatuses.map((status) => {
-                  const action = emptyStatusActions[status.id] || "keep";
-                  return (
-                    <div
-                      key={status.id}
-                      style={{
-                        border: "1px solid #e8e8e8",
-                        borderRadius: 8,
-                        padding: "12px 14px",
-                        marginBottom: 10,
-                        background: action === "delete" ? "#fef2f2" : "#fafaf9",
-                      }}
-                    >
+                <div style={{ borderRadius: 10, overflow: "hidden", border: "1px solid #e5e7eb" }}>
+                  {statusReview.emptyStatuses.map((status, idx) => {
+                    const action = emptyStatusActions[status.id] || "keep";
+                    return (
                       <div
+                        key={status.id}
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
+                          padding: "14px 16px",
+                          background: action === "delete" ? "#fff5f5" : "#fff",
+                          borderBottom: idx < statusReview.emptyStatuses.length - 1 ? "1px solid #f0f0ef" : "none",
+                          transition: "background 0.15s",
                         }}
                       >
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: "50%",
-                            background: status.color,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span
-                          style={{ flex: 1, fontSize: 13, fontWeight: 500 }}
-                        >
-                          {status.name}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#aaa",
-                            marginRight: 8,
-                          }}
-                        >
-                          0 tasks
-                        </span>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button
-                            onClick={() =>
-                              setEmptyStatusActions((prev) => ({
-                                ...prev,
-                                [status.id]: "keep",
-                              }))
-                            }
-                            style={{
-                              padding: "4px 12px",
-                              fontSize: 12,
-                              borderRadius: 6,
-                              cursor: "pointer",
-                              border: "1px solid #e8e8e8",
-                              background:
-                                action === "keep" ? "#1d4ed8" : "#fff",
-                              color: action === "keep" ? "#fff" : "#333",
-                              fontWeight: action === "keep" ? 600 : 400,
-                            }}
-                          >
-                            Keep
-                          </button>
-                          <button
-                            onClick={() =>
-                              setEmptyStatusActions((prev) => ({
-                                ...prev,
-                                [status.id]: "delete",
-                              }))
-                            }
-                            style={{
-                              padding: "4px 12px",
-                              fontSize: 12,
-                              borderRadius: 6,
-                              cursor: "pointer",
-                              border: "1px solid #fca5a5",
-                              background:
-                                action === "delete" ? "#fee2e2" : "#fff",
-                              color: action === "delete" ? "#b91c1c" : "#333",
-                              fontWeight: action === "delete" ? 600 : 400,
-                            }}
-                          >
-                            Delete
-                          </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: "50%", background: status.color, flexShrink: 0 }} />
+                          <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: "#374151" }}>{status.name}</span>
+                          <span style={{ fontSize: 12, color: "#9ca3af" }}>0 tasks</span>
+                          <div style={{ display: "flex", gap: 6, marginLeft: 8 }}>
+                            <button
+                              onClick={() => setEmptyStatusActions((prev) => ({ ...prev, [status.id]: "keep" }))}
+                              style={{
+                                padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                                border: action === "keep" ? "1.5px solid #1d4ed8" : "1px solid #d1d5db",
+                                background: action === "keep" ? "#eff6ff" : "#fff",
+                                color: action === "keep" ? "#1d4ed8" : "#374151",
+                                fontWeight: action === "keep" ? 600 : 400,
+                              }}
+                            >Keep</button>
+                            <button
+                              onClick={() => setEmptyStatusActions((prev) => ({ ...prev, [status.id]: "delete" }))}
+                              style={{
+                                padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                                border: action === "delete" ? "1.5px solid #dc2626" : "1px solid #d1d5db",
+                                background: action === "delete" ? "#fef2f2" : "#fff",
+                                color: action === "delete" ? "#dc2626" : "#374151",
+                                fontWeight: action === "delete" ? 600 : 400,
+                              }}
+                            >Remove</button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
 
