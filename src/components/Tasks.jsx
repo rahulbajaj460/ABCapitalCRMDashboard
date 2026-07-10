@@ -1306,12 +1306,9 @@ export default function Tasks({
       );
     }
     if (activeFolder) {
-      // Fields scoped to this folder + fields scoped to any list inside this folder
-      const folderListIds = new Set(
-        spaceLists.filter((l) => l.folder_id === activeFolder.id).map((l) => l.id)
-      );
+      // Folder-scoped fields only — don't aggregate child-list fields
       const ff = (activeSpace?.space_fields || []).filter(
-        (f) => f.folder_id === activeFolder.id || (f.list_id && folderListIds.has(f.list_id))
+        (f) => f.folder_id === activeFolder.id && !f.list_id
       );
       return applyFieldOverrides(
         [...ff].sort((a, b) => a.field_order - b.field_order),
@@ -1319,15 +1316,12 @@ export default function Tasks({
         activeFolder.id,
       );
     }
-    // Space level: all fields (space + folder + list scoped), deduplicated by name
-    const seen = new Set();
-    const allSpaceFields = (activeSpace?.space_fields || []).filter((f) => {
-      if (seen.has(f.field_name)) return false;
-      seen.add(f.field_name);
-      return true;
-    });
+    // Space level: space-scoped fields only (no folder/list binding)
+    const ff = (activeSpace?.space_fields || []).filter(
+      (f) => !f.folder_id && !f.list_id
+    );
     return applyFieldOverrides(
-      [...allSpaceFields].sort((a, b) => a.field_order - b.field_order),
+      [...ff].sort((a, b) => a.field_order - b.field_order),
       activeSpace?.id,
       null,
     );
@@ -2885,8 +2879,15 @@ export default function Tasks({
                   date_updated_manual: "Date Updated",
                   ...Object.fromEntries(allSpaceFields.map((f) => [`field_${f.id}`, f.field_name])),
                 };
+                // Only keep columnOrder entries valid in the current scope
+                // (built-in columns + this scope's own custom fields) so
+                // fields from other lists/folders don't leak into this panel.
+                const validKeys = new Set([
+                  "priority", "assignees", "due_date", "date_done", "date_closed", "date_updated_manual",
+                  ...fieldKeys,
+                ]);
                 const fullOrder = [
-                  ...columnOrder,
+                  ...columnOrder.filter((k) => validKeys.has(k)),
                   ...fieldKeys.filter((k) => !columnOrder.includes(k)),
                 ];
                 return (
