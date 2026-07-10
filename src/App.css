@@ -191,7 +191,8 @@ textarea:focus {
   transition: opacity 0.1s;
   flex-shrink: 0;
 }
-.space-item:hover .space-hover-actions {
+.space-item:hover .space-hover-actions,
+.folder-item:hover .space-hover-actions {
   opacity: 1;
 }
 .space-hover-btn {
