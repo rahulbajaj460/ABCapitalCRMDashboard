@@ -2723,7 +2723,12 @@ export default function Tasks({
                 const openUp = window.innerHeight - r.bottom < MENU_H && r.top > MENU_H;
                 setStatusMenu({
                   taskId: task.id,
-                  statuses: statusList,
+                  // Resolve each status color with the same (folder-aware) logic
+                  // the row uses, so list-scoped status colors show correctly.
+                  statuses: statusList.map((s) => ({
+                    name: s,
+                    color: folderCtx ? getStatusColorForFolder(s, folderCtx) : getStatusColor(s),
+                  })),
                   x: r.left,
                   y: openUp ? undefined : r.bottom + 4,
                   bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
@@ -2954,8 +2959,7 @@ export default function Tasks({
             <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".04em", padding: "4px 8px 6px" }}>
               Set status
             </div>
-            {statusMenu.statuses.map((s) => {
-              const c = getStatusColor(s);
+            {statusMenu.statuses.map(({ name: s, color: c }) => {
               const cur = tasks.find((t) => t.id === statusMenu.taskId)?.status === s;
               return (
                 <div
