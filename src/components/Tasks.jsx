@@ -3585,7 +3585,7 @@ export default function Tasks({
                                     return (
                                       <div key={groupName} style={{ marginBottom: 4, paddingLeft: 8 }}>
                                         <div
-                                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer" }}
+                                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer", position: "sticky", left: 0, width: "fit-content", zIndex: 2 }}
                                           onClick={() => setExpandedGroups((p) => ({ ...p, [groupKey]: !groupExpanded }))}
                                         >
                                           <span style={{ fontSize: 10, color: "#aaa" }}>{groupExpanded ? "▾" : "▸"}</span>
