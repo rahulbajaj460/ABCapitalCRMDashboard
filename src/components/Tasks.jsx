@@ -5874,7 +5874,13 @@ export default function Tasks({
                 </>
               )}
             </div>
-            {getFields().length > 0 && (
+            {(() => {
+              // Show all space fields in the modal — not scope-filtered — so
+              // users can see and manage every field regardless of which
+              // list/folder they're currently viewing.
+              const allFields = [...(activeSpace?.space_fields || [])]
+                .sort((a, b) => a.field_order - b.field_order);
+              return allFields.length > 0 && (
               <div style={{ marginBottom: 18 }}>
                 <div
                   style={{
@@ -5888,7 +5894,7 @@ export default function Tasks({
                 >
                   Existing fields
                 </div>
-                {getFields().map((f) => (
+                {allFields.map((f) => (
                   <div
                     key={f.id}
                     style={{
@@ -6081,7 +6087,8 @@ export default function Tasks({
                   </div>
                 ))}
               </div>
-            )}
+            );
+            })()}
             <div
               style={{
                 background: "#f9f9f9",
