@@ -1898,10 +1898,12 @@ export default function Tasks({
   }
 
   async function deleteCustomField(fieldId) {
-    if (!confirm("Delete this custom field? All values will also be deleted."))
+    if (!confirm("Delete this custom field? All task values for this field will also be permanently deleted."))
       return;
     // Hide instantly from the UI
     setLocallyDeletedFieldIds((prev) => [...prev, fieldId]);
+    // Delete all task values for this field first, then the field definition
+    await supabase.from("task_field_values").delete().eq("field_id", fieldId);
     await supabase.from("space_fields").delete().eq("id", fieldId);
     onRefreshSpaces();
     fetchTasks();
@@ -5862,25 +5864,39 @@ export default function Tasks({
               </button>
             </div>
             <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-              {activeFolder ? (
-                <>
-                  <span>Folder: </span>
-                  <strong>{activeFolder.name}</strong>
-                </>
+              {activeList ? (
+                <><span>List: </span><strong>{activeList.name}</strong></>
+              ) : activeFolder ? (
+                <><span>Folder: </span><strong>{activeFolder.name}</strong></>
               ) : (
-                <>
-                  <span>Space: </span>
-                  <strong>{activeSpace?.name}</strong>
-                </>
+                <><span>Space: </span><strong>{activeSpace?.name}</strong></>
               )}
             </div>
             {(() => {
-              // Show all space fields in the modal — not scope-filtered — so
-              // users can see and manage every field regardless of which
-              // list/folder they're currently viewing.
-              const allFields = [...(activeSpace?.space_fields || [])]
+              // Scope-aware field list for the modal:
+              // List view  → only list-scoped fields
+              // Folder view → folder-scoped + list-scoped fields in that folder
+              // Space view → all fields
+              const allSpaceFields = activeSpace?.space_fields || [];
+              let modalFields;
+              if (activeList) {
+                modalFields = allSpaceFields.filter((f) => f.list_id === activeList.id);
+              } else if (activeFolder) {
+                const folderListIds = new Set(
+                  (activeSpace?.folders?.find((fo) => fo.id === activeFolder.id)
+                    ?.lists || []).map((l) => l.id)
+                );
+                modalFields = allSpaceFields.filter(
+                  (f) => f.folder_id === activeFolder.id ||
+                    (f.list_id && folderListIds.has(f.list_id))
+                );
+              } else {
+                modalFields = [...allSpaceFields];
+              }
+              modalFields = modalFields
+                .filter((f) => !locallyDeletedFieldIds.includes(f.id))
                 .sort((a, b) => a.field_order - b.field_order);
-              return allFields.length > 0 && (
+              return modalFields.length > 0 && (
               <div style={{ marginBottom: 18 }}>
                 <div
                   style={{
@@ -5894,7 +5910,7 @@ export default function Tasks({
                 >
                   Existing fields
                 </div>
-                {allFields.map((f) => (
+                {modalFields.map((f) => (
                   <div
                     key={f.id}
                     style={{
