@@ -406,7 +406,13 @@ export default function Tasks({
       .eq("scope_type", scope.scope_type)
       .eq("scope_id", scope.scope_id)
       .maybeSingle();
-    if (!data?.columns) return;
+    if (!data?.columns) {
+      // No saved view for this scope — reset to defaults so columns from
+      // the previously-viewed scope don't carry over.
+      setColumnOrder(DEFAULT_COLUMN_ORDER);
+      setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+      return;
+    }
     const saved = data.columns; // array of { key, visible, width }
     const order = saved.map((c) => c.key);
     const visible = saved.filter((c) => c.visible).map((c) => c.key);
