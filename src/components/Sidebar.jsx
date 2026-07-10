@@ -210,6 +210,38 @@ export default function Sidebar({
     if (!name) return;
     const { data } = await supabase.from("lists").insert({ folder_id: folderId, space_id: spaceId, name }).select().single();
     if (data) {
+      // Inherit folder statuses for the new list
+      const { data: folderStatuses } = await supabase
+        .from("space_statuses")
+        .select("*")
+        .eq("folder_id", folderId)
+        .is("list_id", null)
+        .order("status_order");
+      if (folderStatuses && folderStatuses.length > 0) {
+        // Check if any sibling list already has list-scoped statuses — if so, skip seeding
+        const siblingListIds = lists.filter((l) => l.folder_id === folderId).map((l) => l.id);
+        let alreadySeeded = false;
+        if (siblingListIds.length > 0) {
+          const { data: existingListStatuses } = await supabase
+            .from("space_statuses")
+            .select("id")
+            .in("list_id", siblingListIds)
+            .limit(1);
+          alreadySeeded = existingListStatuses && existingListStatuses.length > 0;
+        }
+        if (!alreadySeeded) {
+          await supabase.from("space_statuses").insert(
+            folderStatuses.map((s, i) => ({
+              space_id: spaceId,
+              folder_id: folderId,
+              list_id: data.id,
+              name: s.name,
+              color: s.color,
+              status_order: i + 1,
+            }))
+          );
+        }
+      }
       setLists((prev) => [...prev, data]);
       setNewListFolderId(null);
       setNewListName("");
