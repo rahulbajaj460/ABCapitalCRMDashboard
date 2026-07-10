@@ -1326,18 +1326,17 @@ export default function Sidebar({
                             {/* Inline new list input */}
                             {newListFolderId === folder.id && (
                               <div style={{ paddingLeft: 32, paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
-                                <input
-                                  type="search"
-                                  autoFocus
-                                  autoComplete="off"
-                                  value={newListName}
-                                  onChange={(e) => setNewListName(e.target.value)}
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  ref={(el) => el && newListFolderId === folder.id && setTimeout(() => el.focus(), 0)}
+                                  onInput={(e) => setNewListName(e.currentTarget.textContent)}
                                   onKeyDown={(e) => {
-                                    if (e.key === "Enter") createList(folder.id, space.id);
+                                    if (e.key === "Enter") { e.preventDefault(); createList(folder.id, space.id); }
                                     if (e.key === "Escape") { setNewListFolderId(null); setNewListName(""); }
                                   }}
-                                  onBlur={() => { if (!newListName.trim()) { setNewListFolderId(null); setNewListName(""); } }}
-                                  placeholder="List name…"
+                                  onBlur={(e) => { if (!e.currentTarget.textContent.trim()) { setNewListFolderId(null); setNewListName(""); } }}
+                                  data-placeholder="List name…"
                                   style={{
                                     width: "100%",
                                     fontSize: 12,
@@ -1346,7 +1345,10 @@ export default function Sidebar({
                                     padding: "3px 6px",
                                     outline: "none",
                                     background: "#fff",
-                                    WebkitAppearance: "none",
+                                    minHeight: "1.4em",
+                                    cursor: "text",
+                                    boxSizing: "border-box",
+                                    color: "#333",
                                   }}
                                 />
                               </div>
