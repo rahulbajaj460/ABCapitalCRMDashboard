@@ -258,9 +258,10 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     });
   }
 
-  function normalizeStatus(csvStatus) {
+  function normalizeStatus(csvStatus, overrideMap) {
     if (!csvStatus) return "To Do";
-    if (statusMap[csvStatus]) return statusMap[csvStatus];
+    const map = overrideMap || statusMap;
+    if (map[csvStatus]) return map[csvStatus];
     const s = csvStatus.toLowerCase().trim();
     if (s === "complete" || s === "done" || s === "completed") return "Done";
     if (s === "in progress" || s === "in_progress") return "In Progress";
@@ -348,8 +349,10 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     }));
   }
 
+  // Returns an effective statusMap to use synchronously during import
   async function applyStatusChanges() {
     const portalStatuses = getPortalStatuses();
+    const effectiveMap = { ...statusMap };
 
     // Create new statuses
     for (const [statusName, cfg] of Object.entries(newStatusActions)) {
@@ -363,15 +366,14 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
           color: cfg.color,
           status_order: portalStatuses.length + 1,
         });
-        // If user renamed the status, remap CSV tasks to the new name
-        if (finalName !== statusName) {
-          setStatusMap((prev) => ({ ...prev, [statusName]: finalName }));
-        }
+        // Always record the mapping so tasks get the correct status name
+        effectiveMap[statusName] = finalName;
       } else if (cfg.action === "map" && cfg.mapTo) {
-        // Update statusMap so CSV tasks with this status get mapped
-        setStatusMap((prev) => ({ ...prev, [statusName]: cfg.mapTo }));
+        effectiveMap[statusName] = cfg.mapTo;
       }
     }
+
+    setStatusMap(effectiveMap);
 
     // Delete empty statuses marked for deletion
     for (const [statusId, action] of Object.entries(emptyStatusActions)) {
@@ -381,6 +383,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     }
 
     await onRefreshSpaces?.();
+    return effectiveMap;
   }
 
   async function createNewFields() {
@@ -462,8 +465,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     setProgress(0);
     setErrors([]);
 
-    // Apply status changes first
-    await applyStatusChanges();
+    // Apply status changes first — returns the effective map synchronously
+    const effectiveStatusMap = await applyStatusChanges();
 
     // Create new custom fields
     const newFieldIds = await createNewFields();
@@ -492,7 +495,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         : null;
       return {
         title: (row[mapping.title] || "").trim(),
-        status: normalizeStatus(row[mapping.status]),
+        status: normalizeStatus(row[mapping.status], effectiveStatusMap),
         priority: normalizePriority(row[mapping.priority]),
         assignee: assignees[0] || "",
         assignees,
