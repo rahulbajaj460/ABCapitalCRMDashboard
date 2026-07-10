@@ -2495,17 +2495,8 @@ export default function Tasks({
       const fv = task.task_field_values?.find((v) => v.field_id === f.id);
       if (f.field_type === "formula")
         return (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "#7c3aed",
-              background: "#faf5ff",
-              borderRadius: 20,
-              padding: "1px 8px",
-            }}
-          >
-            ƒ {computeFormula(f, task, getFields(), activeSpace?.space_fields)}
+          <span style={{ fontSize: 12, color: "#555" }}>
+            {computeFormula(f, task, getFields(), activeSpace?.space_fields)}
           </span>
         );
       if (!fv?.value) return "—";
