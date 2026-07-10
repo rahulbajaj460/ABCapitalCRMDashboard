@@ -321,6 +321,7 @@ export default function Tasks({
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedSubtasks, setExpandedSubtasks] = useState({}); // taskId -> bool
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [statusMenu, setStatusMenu] = useState(null); // { taskId, statuses, x, y }
   const [groupBy, setGroupBy] = useState("status");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [newField, setNewField] = useState({
@@ -2641,8 +2642,8 @@ export default function Tasks({
       );
     }
     return (
-      <svg width="15" height="15" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-        <circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="2.2" strokeDasharray="3.2 3.2" />
+      <svg width="16" height="16" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+        <circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="3.2" strokeDasharray="2.6 2.8" strokeLinecap="round" />
       </svg>
     );
   }
@@ -2712,7 +2713,23 @@ export default function Tasks({
             >
               {subExpanded ? "▼" : "▶"}
             </span>
-            <span style={{ display: "inline-flex", flexShrink: 0 }} title={task.status}>
+            <span
+              style={{ display: "inline-flex", flexShrink: 0, cursor: "pointer" }}
+              title={`${task.status} — click to change`}
+              onClick={(e) => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                const MENU_H = 300;
+                const openUp = window.innerHeight - r.bottom < MENU_H && r.top > MENU_H;
+                setStatusMenu({
+                  taskId: task.id,
+                  statuses: statusList,
+                  x: r.left,
+                  y: openUp ? undefined : r.bottom + 4,
+                  bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
+                });
+              }}
+            >
               {statusGlyph(task.status, statusColor)}
             </span>
             <span
@@ -2912,6 +2929,56 @@ export default function Tasks({
       style={{ display: "flex", flex: 1, overflow: "hidden", height: "100%" }}
     >
       {/* Description hover popup — rendered into body via portal to escape any ancestor overflow/transform */}
+      {statusMenu && createPortal(
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 99998 }}
+            onClick={() => setStatusMenu(null)}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: Math.min(statusMenu.x, window.innerWidth - 240),
+              ...(statusMenu.bottom != null ? { bottom: statusMenu.bottom } : { top: statusMenu.y }),
+              width: 220,
+              maxHeight: 300,
+              overflowY: "auto",
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+              padding: 6,
+              zIndex: 99999,
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".04em", padding: "4px 8px 6px" }}>
+              Set status
+            </div>
+            {statusMenu.statuses.map((s) => {
+              const c = getStatusColor(s);
+              const cur = tasks.find((t) => t.id === statusMenu.taskId)?.status === s;
+              return (
+                <div
+                  key={s}
+                  onClick={() => { updateTaskStatus(statusMenu.taskId, s); setStatusMenu(null); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "7px 8px", borderRadius: 6, cursor: "pointer",
+                    background: cur ? "#f0f7ff" : "transparent",
+                  }}
+                  onMouseEnter={(e) => { if (!cur) e.currentTarget.style.background = "#f5f5f4"; }}
+                  onMouseLeave={(e) => { if (!cur) e.currentTarget.style.background = "transparent"; }}
+                >
+                  {statusGlyph(s, c)}
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: cur ? 600 : 400, color: "#333" }}>{s}</span>
+                  {cur && <span style={{ color: "#1d4ed8", fontSize: 13 }}>✓</span>}
+                </div>
+              );
+            })}
+          </div>
+        </>,
+        document.body,
+      )}
       {descPopup && createPortal(
         <>
           {/* Click-outside backdrop */}
