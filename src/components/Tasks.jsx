@@ -4266,14 +4266,7 @@ export default function Tasks({
                                 ƒ {computeFormula(field, drawerTask, drawerFields, activeSpace?.space_fields)}
                               </span>
                               <span style={{ fontSize: 11, color: "#aaa" }}>
-                                {
-                                  FORMULA_PRESETS.find(
-                                    (p) =>
-                                      p.key ===
-                                      (field.field_options?.[0] ||
-                                        "days_since_created"),
-                                  )?.label
-                                }
+                                {describeFormula(field)}
                               </span>
                             </div>
                           ) : field.field_type === "username" ? (
