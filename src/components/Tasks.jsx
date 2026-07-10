@@ -2613,8 +2613,8 @@ export default function Tasks({
 
   // Small circular status indicator shown before a task name (ClickUp-style):
   // filled+check = done, half-filled = in progress, dashed outline = to-do/other.
-  function statusGlyph(status) {
-    const color = getStatusColor(status);
+  function statusGlyph(status, colorOverride) {
+    const color = colorOverride || getStatusColor(status);
     const s = (status || "").toLowerCase();
     if (isDoneStatus(status)) {
       return (
@@ -2713,7 +2713,7 @@ export default function Tasks({
               {subExpanded ? "▼" : "▶"}
             </span>
             <span style={{ display: "inline-flex", flexShrink: 0 }} title={task.status}>
-              {statusGlyph(task.status)}
+              {statusGlyph(task.status, statusColor)}
             </span>
             <span
               style={{
