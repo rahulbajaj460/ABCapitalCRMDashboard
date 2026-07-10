@@ -354,6 +354,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         await supabase.from("space_statuses").insert({
           space_id: selectedSpace,
           folder_id: selectedFolder || null,
+          list_id: selectedList || null,
           name: finalName,
           color: cfg.color,
           status_order: portalStatuses.length + 1,
