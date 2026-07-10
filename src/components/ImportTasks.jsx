@@ -134,16 +134,31 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     return (space.space_fields || []).filter((f) => !f.list_id);
   })();
 
-  // Get portal statuses for selected space/folder
+  // Get portal statuses for selected space/folder/list
   function getPortalStatuses() {
     const space = spaces.find((s) => s.id === selectedSpace);
     if (!space) return [];
+    if (selectedList) {
+      // List selected: show only statuses scoped to this specific list
+      const listStatuses = (space.space_statuses || []).filter(
+        (s) => s.list_id === selectedList
+      );
+      if (listStatuses.length > 0) return listStatuses;
+      // Fall back to folder-scoped statuses if list has none yet
+      if (selectedFolder) {
+        const folderStatuses = (space.space_statuses || []).filter(
+          (s) => s.folder_id === selectedFolder && !s.list_id
+        );
+        if (folderStatuses.length > 0) return folderStatuses;
+      }
+    }
     if (selectedFolder) {
-      const folder = space.folders?.find((f) => f.id === selectedFolder);
-      const folderStatuses = folder?.space_statuses || [];
+      const folderStatuses = (space.space_statuses || []).filter(
+        (s) => s.folder_id === selectedFolder && !s.list_id
+      );
       if (folderStatuses.length > 0) return folderStatuses;
     }
-    return (space.space_statuses || []).filter((s) => !s.folder_id);
+    return (space.space_statuses || []).filter((s) => !s.folder_id && !s.list_id);
   }
 
   async function buildStatusReview() {
@@ -188,7 +203,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         .eq("status", ps.name)
         .eq("space_id", selectedSpace);
 
-      if (selectedFolder) {
+      if (selectedList) {
+        query = query.eq("list_id", selectedList);
+      } else if (selectedFolder) {
         query = query.eq("folder_id", selectedFolder);
       }
 
