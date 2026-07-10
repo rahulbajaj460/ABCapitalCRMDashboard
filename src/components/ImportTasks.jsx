@@ -333,13 +333,18 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
     // Create new statuses
     for (const [statusName, cfg] of Object.entries(newStatusActions)) {
       if (cfg.action === "create") {
+        const finalName = (cfg.customName ?? statusName).trim() || statusName;
         await supabase.from("space_statuses").insert({
           space_id: selectedSpace,
           folder_id: selectedFolder || null,
-          name: statusName,
+          name: finalName,
           color: cfg.color,
           status_order: portalStatuses.length + 1,
         });
+        // If user renamed the status, remap CSV tasks to the new name
+        if (finalName !== statusName) {
+          setStatusMap((prev) => ({ ...prev, [statusName]: finalName }));
+        }
       } else if (cfg.action === "map" && cfg.mapTo) {
         // Update statusMap so CSV tasks with this status get mapped
         setStatusMap((prev) => ({ ...prev, [statusName]: cfg.mapTo }));
@@ -1296,7 +1301,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                               fontWeight: 600,
                             }}
                           >
-                            {statusName}
+                            {cfg.action === "create" && cfg.customName != null
+                              ? cfg.customName || statusName
+                              : statusName}
                           </span>
                           <span
                             style={{
@@ -1339,34 +1346,29 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                             <option value="map">Map to existing status</option>
                           </select>
                           {cfg.action === "create" && (
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                              }}
-                            >
-                              <label style={{ fontSize: 11, color: "#888" }}>
-                                Color:
-                              </label>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <input
+                                value={cfg.customName ?? statusName}
+                                onChange={(e) =>
+                                  setNewStatusActions((prev) => ({
+                                    ...prev,
+                                    [statusName]: { ...cfg, customName: e.target.value },
+                                  }))
+                                }
+                                placeholder="Status name"
+                                style={{ fontSize: 12, padding: "4px 8px", border: "1px solid #d1d5db", borderRadius: 4, width: 140 }}
+                              />
                               <input
                                 type="color"
                                 value={cfg.color || "#378ADD"}
                                 onChange={(e) =>
                                   setNewStatusActions((prev) => ({
                                     ...prev,
-                                    [statusName]: {
-                                      ...cfg,
-                                      color: e.target.value,
-                                    },
+                                    [statusName]: { ...cfg, color: e.target.value },
                                   }))
                                 }
-                                style={{
-                                  width: 36,
-                                  height: 28,
-                                  padding: 2,
-                                  cursor: "pointer",
-                                }}
+                                title="Pick color"
+                                style={{ width: 32, height: 28, padding: 2, cursor: "pointer" }}
                               />
                             </div>
                           )}
