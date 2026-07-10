@@ -2773,10 +2773,20 @@ export default function Tasks({
           <select
             value={task.status}
             onChange={(e) => updateTaskStatus(task.id, e.target.value)}
-            style={{ fontSize: 11, padding: "3px 6px", width: "100%" }}
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              padding: "3px 6px",
+              width: "100%",
+              borderRadius: 20,
+              border: `1px solid ${statusColor}`,
+              background: statusColor + "1f",
+              color: statusColor,
+              cursor: "pointer",
+            }}
           >
             {statusList.map((s) => (
-              <option key={s} value={s}>
+              <option key={s} value={s} style={{ color: "#333", background: "#fff" }}>
                 {s}
               </option>
             ))}
@@ -3193,6 +3203,7 @@ export default function Tasks({
               <option value="folder">Group by: Folder</option>
               <option value="assignee">Group by: Assignee</option>
               <option value="priority">Group by: Priority</option>
+              <option value="none">Group by: None</option>
             </select>
             {sortConfig.key && (
               <button
@@ -3645,8 +3656,10 @@ export default function Tasks({
                     {Object.entries(getGroupedTasks()).map(
                       ([groupName, groupTasks]) => {
                         const isExpanded = expandedGroups[groupName] !== false;
+                        const hideHeader = groupBy === "none";
                         return (
                           <div key={groupName} style={{ marginBottom: 16 }}>
+                            {!hideHeader && (
                             <div
                               className="status-group-header"
                               onClick={() =>
@@ -3682,7 +3695,8 @@ export default function Tasks({
                                 {groupTasks.length}
                               </span>
                             </div>
-                            {isExpanded && groupTasks.length > 0 && (
+                            )}
+                            {(hideHeader || isExpanded) && groupTasks.length > 0 && (
                               <div
                                 style={{
                                   background: "#fff",
