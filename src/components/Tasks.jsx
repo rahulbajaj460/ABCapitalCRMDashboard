@@ -162,6 +162,30 @@ function parseFlexibleDate(str) {
   return isNaN(d) ? null : d;
 }
 
+// Returns a human-readable formula expression for a formula field, e.g.
+// "TODAY() − [Pre-approved date]" so users see the actual computation.
+function describeFormula(field) {
+  if (field.field_type !== "formula") return "";
+  const opts = field.field_options || [];
+  const key = opts[0] || "days_since_created";
+  switch (key) {
+    case "days_since_created":
+      return "TODAY() − Created Date";
+    case "days_since_updated":
+      return "TODAY() − Last Updated";
+    case "days_until_due":
+      return "Due Date − TODAY()";
+    case "days_since_date_field": {
+      const name = (opts[1] || "").trim();
+      return name ? `TODAY() − [${name}]` : "TODAY() − [date field]";
+    }
+    case "custom":
+      return (opts[1] || "").trim() || "(no formula)";
+    default:
+      return key;
+  }
+}
+
 function computeFormula(field, task, allFields, lookupFields) {
   if (field.field_type !== "formula") return null;
   const opts = field.field_options || [];
@@ -6026,10 +6050,7 @@ export default function Tasks({
                                 marginTop: 2,
                               }}
                             >
-                              ƒ{" "}
-                              {FORMULA_PRESETS.find(
-                                (p) => p.key === f.field_options[0],
-                              )?.label || f.field_options[0]}
+                              ƒ {describeFormula(f)}
                             </div>
                           )}
                       </div>
