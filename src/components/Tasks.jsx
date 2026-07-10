@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
@@ -319,6 +319,8 @@ export default function Tasks({
   const [showFieldModal, setShowFieldModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [expandedSubtasks, setExpandedSubtasks] = useState({}); // taskId -> bool
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [groupBy, setGroupBy] = useState("status");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [newField, setNewField] = useState({
@@ -1537,7 +1539,39 @@ export default function Tasks({
     return sorted;
   }
 
+  // A status counts as "done" if its name is Done/Complete/Completed/Closed.
+  function isDoneStatus(status) {
+    const s = (status || "").toLowerCase().trim();
+    return s === "done" || s === "complete" || s === "completed" || s === "closed";
+  }
+
+  // Map of parent_task_id -> [child tasks], built from all fetched tasks so
+  // subtasks can be rendered nested under their parent everywhere.
+  const childrenByParent = (() => {
+    const m = {};
+    for (const t of tasks) {
+      if (t.parent_task_id) {
+        (m[t.parent_task_id] ||= []).push(t);
+      }
+    }
+    return m;
+  })();
+  // Recursively count subtask completion (done vs total) for a parent.
+  function subtaskProgress(taskId) {
+    const kids = childrenByParent[taskId] || [];
+    let done = 0, total = 0;
+    for (const k of kids) {
+      total += 1;
+      if (isDoneStatus(k.status)) done += 1;
+      const sub = subtaskProgress(k.id);
+      done += sub.done;
+      total += sub.total;
+    }
+    return { done, total };
+  }
+
   const filteredTasks = tasks.filter((t) => {
+    if (t.parent_task_id) return false; // subtasks render nested under parents
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase()))
       return false;
@@ -1622,6 +1656,7 @@ export default function Tasks({
       date_updated_manual: task.date_updated_manual || "",
     });
     setDrawerTab("details");
+    setNewSubtaskTitle("");
     setAttachments([]);
     setChecklists([]);
     setLinkedDocs([]);
@@ -1790,6 +1825,38 @@ export default function Tasks({
     if (drawerTab === "history") fetchTaskHistory(drawerTask.id);
   }
 
+  async function createSubtask(parent) {
+    const title = newSubtaskTitle.trim();
+    if (!title || !parent) return;
+    const statuses = parent.list_id
+      ? getStatusesForList(parent.list_id)
+      : getStatuses();
+    const firstStatus = statuses[0] || "To Do";
+    const { data } = await supabase
+      .from("tasks")
+      .insert({
+        title,
+        description: "",
+        space_id: parent.space_id,
+        folder_id: parent.folder_id || null,
+        list_id: parent.list_id || null,
+        parent_task_id: parent.id,
+        status: firstStatus,
+        priority: "Medium",
+        assignee: "",
+        assignees: [],
+        updated_by: profile?.full_name || "Unknown",
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (data) {
+      setNewSubtaskTitle("");
+      setExpandedSubtasks((p) => ({ ...p, [parent.id]: true }));
+      await fetchTasks();
+    }
+  }
+
   async function saveTask() {
     if (!newTask.title.trim()) return;
     if (!newTask.space_id) {
@@ -1846,7 +1913,19 @@ export default function Tasks({
       alert("Only admins can delete tasks.");
       return;
     }
-    if (!confirm("Move this task to Trash? You can restore it later.")) return;
+    // Collect this task plus all descendant subtasks so they're trashed together
+    const idsToDelete = [taskId];
+    const collect = (pid) => {
+      for (const c of childrenByParent[pid] || []) {
+        idsToDelete.push(c.id);
+        collect(c.id);
+      }
+    };
+    collect(taskId);
+    const msg = idsToDelete.length > 1
+      ? `Move this task and its ${idsToDelete.length - 1} subtask(s) to Trash? You can restore later.`
+      : "Move this task to Trash? You can restore it later.";
+    if (!confirm(msg)) return;
     if (drawerTask?.id === taskId) closeDrawer();
     await supabase
       .from("tasks")
@@ -1854,7 +1933,7 @@ export default function Tasks({
         deleted_at: new Date().toISOString(),
         deleted_by: profile?.full_name || "Unknown",
       })
-      .eq("id", taskId);
+      .in("id", idsToDelete);
     fetchTasks();
   }
 
@@ -2532,13 +2611,17 @@ export default function Tasks({
     return "—";
   }
 
-  function renderTaskRow(task, statusList, fieldList, folderCtx = null) {
+  function renderTaskRow(task, statusList, fieldList, folderCtx = null, depth = 0) {
     const statusColor = folderCtx
       ? getStatusColorForFolder(task.status, folderCtx)
       : getStatusColor(task.status);
     const isActive = drawerTask?.id === task.id;
     const activeCols = getActiveColumns(fieldList);
     const gridTemplate = buildGridTemplate(fieldList, !!folderCtx);
+    const kids = childrenByParent[task.id] || [];
+    const hasKids = kids.length > 0;
+    const subExpanded = expandedSubtasks[task.id];
+    const prog = hasKids ? subtaskProgress(task.id) : null;
     const cellStyle = {
       display: "flex",
       alignItems: "center",
@@ -2548,8 +2631,8 @@ export default function Tasks({
       overflow: "hidden",
     };
     return (
+      <Fragment key={task.id}>
       <div
-        key={task.id}
         style={{
           display: "grid",
           gridTemplateColumns: gridTemplate,
@@ -2565,7 +2648,7 @@ export default function Tasks({
           className="task-name-cell"
           style={{
             ...cellStyle,
-            paddingLeft: folderCtx ? 32 : 14,
+            paddingLeft: (folderCtx ? 32 : 14) + depth * 20,
             flexDirection: "column",
             alignItems: "flex-start",
             justifyContent: "center",
@@ -2579,6 +2662,21 @@ export default function Tasks({
         >
           <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, maxWidth: "100%" }}>
             <span
+              onClick={(e) => {
+                e.stopPropagation();
+                if (hasKids) setExpandedSubtasks((p) => ({ ...p, [task.id]: !p[task.id] }));
+              }}
+              style={{
+                width: 14, flexShrink: 0, color: "#888", fontSize: 10,
+                cursor: hasKids ? "pointer" : "default",
+                visibility: hasKids ? "visible" : "hidden",
+                userSelect: "none",
+              }}
+              title={hasKids ? (subExpanded ? "Collapse subtasks" : "Expand subtasks") : undefined}
+            >
+              {subExpanded ? "▼" : "▶"}
+            </span>
+            <span
               style={{
                 fontWeight: 500,
                 overflow: "hidden",
@@ -2590,6 +2688,19 @@ export default function Tasks({
             >
               {task.title}
             </span>
+            {hasKids && (
+              <span
+                style={{
+                  flexShrink: 0, fontSize: 10, fontWeight: 600,
+                  color: prog.done === prog.total ? "#16a34a" : "#6b7280",
+                  background: prog.done === prog.total ? "#dcfce7" : "#f0f0ef",
+                  borderRadius: 20, padding: "1px 7px", whiteSpace: "nowrap",
+                }}
+                title="Subtask progress"
+              >
+                {prog.done}/{prog.total}
+              </span>
+            )}
             {taskMeta[task.id]?.attachmentCount > 0 && (
               <span style={{ display: "flex", alignItems: "center", gap: 2, color: "#999", fontSize: 11, flexShrink: 0, whiteSpace: "nowrap" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2683,6 +2794,11 @@ export default function Tasks({
           )}
         </div>
       </div>
+      {hasKids && subExpanded &&
+        sortTasks(kids).map((child) =>
+          renderTaskRow(child, statusList, fieldList, folderCtx, depth + 1),
+        )}
+      </Fragment>
     );
   }
 
@@ -3100,7 +3216,7 @@ export default function Tasks({
                   <div>
                     {(activeSpace.folders || []).map((folder) => {
                       const folderTasks = tasks.filter(
-                        (t) => t.folder_id === folder.id,
+                        (t) => t.folder_id === folder.id && !t.parent_task_id,
                       );
                       const filteredFolderTasks = folderTasks.filter((t) => {
                         if (statusFilter !== "all" && t.status !== statusFilter)
@@ -3346,7 +3462,7 @@ export default function Tasks({
                       );
                     })}
                     {(() => {
-                      const nft = sortTasks(tasks.filter((t) => !t.folder_id));
+                      const nft = sortTasks(tasks.filter((t) => !t.folder_id && !t.parent_task_id));
                       if (nft.length === 0) return null;
                       return (
                         <div
@@ -3426,7 +3542,7 @@ export default function Tasks({
                     return (
                       <div>
                         {folderListItems.map((list) => {
-                          const listTasks = tasks.filter((t) => t.list_id === list.id);
+                          const listTasks = tasks.filter((t) => t.list_id === list.id && !t.parent_task_id);
                           const filteredListTasks = listTasks.filter((t) => {
                             if (statusFilter !== "all" && t.status !== statusFilter) return false;
                             if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -3495,7 +3611,7 @@ export default function Tasks({
                         })}
                         {/* Tasks in folder not assigned to any list */}
                         {(() => {
-                          const unlistedTasks = sortTasks(tasks.filter((t) => !t.list_id).filter((t) => {
+                          const unlistedTasks = sortTasks(tasks.filter((t) => !t.list_id && !t.parent_task_id).filter((t) => {
                             if (statusFilter !== "all" && t.status !== statusFilter) return false;
                             if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
                             return true;
@@ -3814,6 +3930,13 @@ export default function Tasks({
           >
             {[
               { key: "details", label: "Details" },
+              {
+                key: "subtasks",
+                label: (() => {
+                  const n = (childrenByParent[drawerTask.id] || []).length;
+                  return n > 0 ? `Subtasks (${n})` : "Subtasks";
+                })(),
+              },
               { key: "comments", label: `Comments${comments.length > 0 ? ` (${comments.length})` : ""}` },
               { key: "history", label: "History" },
               {
@@ -4405,6 +4528,94 @@ export default function Tasks({
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* SUBTASKS TAB */}
+            {drawerTab === "subtasks" && (
+              <div style={{ padding: "16px 20px" }}>
+                <div style={{ fontSize: 12, color: "#aaa", marginBottom: 12 }}>
+                  Subtasks are full tasks linked to this one — each has its own
+                  status, assignee, and fields.
+                </div>
+                {(() => {
+                  const kids = sortTasks(childrenByParent[drawerTask.id] || []);
+                  const parentStatuses = drawerTask.list_id
+                    ? getStatusesForList(drawerTask.list_id)
+                    : getStatuses();
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {kids.length === 0 && (
+                        <div style={{ fontSize: 13, color: "#bbb", padding: "8px 0" }}>
+                          No subtasks yet.
+                        </div>
+                      )}
+                      {kids.map((child) => {
+                        const cp = subtaskProgress(child.id);
+                        const cColor = getStatusColor(child.status);
+                        return (
+                          <div
+                            key={child.id}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 10,
+                              padding: "8px 12px", border: "1px solid #e8e8e8",
+                              borderRadius: 8, background: "#fff",
+                            }}
+                          >
+                            <span
+                              onClick={() => openDrawer(child)}
+                              style={{ flex: 1, fontSize: 13, fontWeight: 500, cursor: "pointer", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                              title="Open subtask"
+                            >
+                              {child.title}
+                              {cp.total > 0 && (
+                                <span style={{ marginLeft: 8, fontSize: 11, color: "#9ca3af" }}>
+                                  {cp.done}/{cp.total}
+                                </span>
+                              )}
+                            </span>
+                            <select
+                              value={child.status}
+                              onChange={(e) => updateTaskStatus(child.id, e.target.value)}
+                              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 6, border: "1px solid #e0e0e0", color: cColor }}
+                            >
+                              {parentStatuses.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                            {profile?.role === "admin" && (
+                              <button
+                                className="btn btn-sm btn-danger"
+                                onClick={() => deleteTask(child.id)}
+                                style={{ padding: "3px 8px", fontSize: 11 }}
+                                title="Delete subtask"
+                              >
+                                🗑
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                        <input
+                          value={newSubtaskTitle}
+                          onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") createSubtask(drawerTask); }}
+                          placeholder="Add a subtask (e.g. child company)…"
+                          style={{ flex: 1, fontSize: 13, padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8 }}
+                        />
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={() => createSubtask(drawerTask)}
+                          disabled={!newSubtaskTitle.trim()}
+                          style={{ fontSize: 12 }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
