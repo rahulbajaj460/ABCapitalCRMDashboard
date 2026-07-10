@@ -1417,18 +1417,30 @@ export default function Tasks({
   function getSelectedSpaceFields() {
     const space = spaces.find((s) => s.id === newTask.space_id);
     if (!space) return [];
-    if (newTask.folder_id) {
-      const folder = space.folders?.find((f) => f.id === newTask.folder_id);
-      const ff = folder?.space_fields || [];
-      if (ff.length > 0)
-        return applyFieldOverrides(
-          ff.sort((a, b) => a.field_order - b.field_order),
-          space.id,
-          newTask.folder_id,
-        );
+    // When creating a task in an active list context, show only that list's fields
+    if (activeList) {
+      return applyFieldOverrides(
+        [...listFields].sort((a, b) => a.field_order - b.field_order),
+        space.id,
+        activeFolder?.id || null,
+      );
     }
+    if (newTask.folder_id) {
+      // Folder view: show only folder-scoped fields (not list-scoped ones from siblings)
+      const ff = (space.space_fields || []).filter(
+        (f) => f.folder_id === newTask.folder_id && !f.list_id
+      );
+      return applyFieldOverrides(
+        ff.sort((a, b) => a.field_order - b.field_order),
+        space.id,
+        newTask.folder_id,
+      );
+    }
+    // Space level: only space-scoped fields (no folder_id, no list_id)
     return applyFieldOverrides(
-      (space.space_fields || []).sort((a, b) => a.field_order - b.field_order),
+      (space.space_fields || [])
+        .filter((f) => !f.folder_id && !f.list_id)
+        .sort((a, b) => a.field_order - b.field_order),
       space.id,
       null,
     );
