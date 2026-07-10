@@ -1328,7 +1328,7 @@ export default function Sidebar({
                               <div style={{ paddingLeft: 32, paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
                                 <input
                                   autoFocus
-                                  autoComplete="off"
+                                  autoComplete="new-password"
                                   value={newListName}
                                   onChange={(e) => setNewListName(e.target.value)}
                                   onKeyDown={(e) => {
