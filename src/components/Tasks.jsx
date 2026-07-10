@@ -4550,49 +4550,85 @@ export default function Tasks({
                           No subtasks yet.
                         </div>
                       )}
-                      {kids.map((child) => {
+                      {kids.map((child, i) => {
                         const cp = subtaskProgress(child.id);
                         const cColor = getStatusColor(child.status);
+                        const assignees = child.assignees?.length
+                          ? child.assignees
+                          : child.assignee
+                            ? [child.assignee]
+                            : [];
                         return (
                           <div
                             key={child.id}
                             style={{
-                              display: "flex", alignItems: "center", gap: 10,
-                              padding: "8px 12px", border: "1px solid #e8e8e8",
+                              padding: "10px 12px", border: "1px solid #e8e8e8",
                               borderRadius: 8, background: "#fff",
                             }}
                           >
-                            <span
-                              onClick={() => openDrawer(child)}
-                              style={{ flex: 1, fontSize: 13, fontWeight: 500, cursor: "pointer", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                              title="Open subtask"
-                            >
-                              {child.title}
+                            {/* Row 1: index + title + open + delete */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 11, color: "#c0c0c0", fontWeight: 600, flexShrink: 0, width: 18 }}>
+                                {i + 1}.
+                              </span>
+                              <span
+                                onClick={() => openDrawer(child)}
+                                style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#1f2937", cursor: "pointer", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                title="Open subtask"
+                              >
+                                {child.title}
+                              </span>
                               {cp.total > 0 && (
-                                <span style={{ marginLeft: 8, fontSize: 11, color: "#9ca3af" }}>
+                                <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, color: cp.done === cp.total ? "#16a34a" : "#6b7280", background: cp.done === cp.total ? "#dcfce7" : "#f0f0ef", borderRadius: 20, padding: "1px 7px" }} title="Subtask progress">
                                   {cp.done}/{cp.total}
                                 </span>
                               )}
-                            </span>
-                            <select
-                              value={child.status}
-                              onChange={(e) => updateTaskStatus(child.id, e.target.value)}
-                              style={{ fontSize: 11, padding: "3px 6px", borderRadius: 6, border: "1px solid #e0e0e0", color: cColor }}
-                            >
-                              {parentStatuses.map((s) => (
-                                <option key={s} value={s}>{s}</option>
-                              ))}
-                            </select>
-                            {profile?.role === "admin" && (
                               <button
-                                className="btn btn-sm btn-danger"
-                                onClick={() => deleteTask(child.id)}
-                                style={{ padding: "3px 8px", fontSize: 11 }}
-                                title="Delete subtask"
+                                onClick={() => openDrawer(child)}
+                                title="Open subtask"
+                                style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 14, padding: "0 2px" }}
                               >
-                                🗑
+                                ↗
                               </button>
-                            )}
+                              {profile?.role === "admin" && (
+                                <button
+                                  onClick={() => deleteTask(child.id)}
+                                  title="Delete subtask"
+                                  style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, padding: "0 2px" }}
+                                >
+                                  🗑
+                                </button>
+                              )}
+                            </div>
+                            {/* Row 2: status dropdown + assignees */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingLeft: 26, flexWrap: "wrap" }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: "50%", background: cColor, flexShrink: 0 }} />
+                                <select
+                                  value={child.status}
+                                  onChange={(e) => updateTaskStatus(child.id, e.target.value)}
+                                  style={{ fontSize: 11, padding: "3px 6px", borderRadius: 6, border: "1px solid #e0e0e0", color: cColor, fontWeight: 500, maxWidth: 150 }}
+                                >
+                                  {parentStatuses.map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </span>
+                              {assignees.length > 0 ? (
+                                <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+                                  {assignees.map((a) => (
+                                    <span key={a} style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "1px 8px" }}>
+                                      {a}
+                                    </span>
+                                  ))}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 11, color: "#c0c0c0" }}>Unassigned</span>
+                              )}
+                              {child.due_date && (
+                                <span style={{ fontSize: 11, color: "#9ca3af" }}>· due {child.due_date}</span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
