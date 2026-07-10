@@ -1379,7 +1379,9 @@ export default function Tasks({
   }
   function getStatusColorForFolder(status, folder) {
     const allStatuses = activeSpace?.space_statuses || [];
-    const f = allStatuses.find((s) => s.folder_id === folder.id && !s.list_id && s.name === status);
+    // Check folder-scoped first, then any list-scoped status within this folder
+    const f = allStatuses.find((s) => s.folder_id === folder.id && !s.list_id && s.name === status)
+      || allStatuses.find((s) => s.folder_id === folder.id && s.list_id && s.name === status);
     return f ? f.color : getStatusColor(status);
   }
   function getPriorityStyle(priority) {
@@ -2131,14 +2133,21 @@ export default function Tasks({
       return data || [];
     }
     if (activeFolder) {
+      // Include both folder-scoped and list-scoped statuses for lists in this folder
       const { data } = await supabase
         .from("space_statuses")
         .select("*")
         .eq("folder_id", activeFolder.id)
-        .is("list_id", null)
         .order("status_order");
-      setModalSpaceStatuses(data || []);
-      return data || [];
+      // Deduplicate by name, preferring list-scoped over folder-scoped
+      const seen = new Set();
+      const unique = (data || []).filter((s) => {
+        if (seen.has(s.name)) return false;
+        seen.add(s.name);
+        return true;
+      });
+      setModalSpaceStatuses(unique);
+      return unique;
     }
     const folderIds = (activeSpace.folders || []).map((f) => f.id);
     if (folderIds.length === 0) {
