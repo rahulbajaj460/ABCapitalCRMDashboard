@@ -417,7 +417,6 @@ export default function Tasks({
     const parts = [];
     parts.push(
       `${getColWidth("name")}px`,
-      ...(groupBy !== "status" ? [`${getColWidth("status_inline")}px`] : []),
       ...activeCols.map((c) => `${getColWidth(c.key)}px`),
       `${getColWidth("status_select")}px`,
       `${getColWidth("actions")}px`,
@@ -2758,24 +2757,6 @@ export default function Tasks({
           indented={indented}
           sticky
         />
-        {groupBy !== "status" && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              padding: "10px 14px",
-              fontSize: 11,
-              fontWeight: 700,
-              color: "#999",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-              borderBottom: "1px solid #ebebeb",
-              background: "#fafaf9",
-            }}
-          >
-            Status
-          </div>
-        )}
         {activeCols.map((c) => (
           <GridHeaderCell
             key={c.key}
@@ -3138,16 +3119,6 @@ export default function Tasks({
             </div>
           )}
         </div>
-        {groupBy !== "status" && (
-          <div style={cellStyle}>
-            <span
-              className="badge"
-              style={{ background: statusColor + "22", color: statusColor }}
-            >
-              {task.status}
-            </span>
-          </div>
-        )}
         {activeCols.map((c) => (
           <div key={c.key} style={cellStyle}>
             {renderColumnCell(c.key, task, fieldList)}
