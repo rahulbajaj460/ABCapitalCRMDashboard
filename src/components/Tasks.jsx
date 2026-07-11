@@ -1746,7 +1746,13 @@ export default function Tasks({
       return list.length ? list : getStatuses();
     }
     if (field === "priority") return ["High", "Medium", "Low"];
-    if (field === "assignee") return members.map((m) => m.full_name);
+    if (field === "assignee") {
+      // Union of registered members and any assignee names present on tasks
+      // (e.g. imported free-text names that aren't member records).
+      const set = new Set(members.map((m) => m.full_name).filter(Boolean));
+      tasks.forEach((t) => taskAssigneeNames(t).forEach((n) => n && set.add(n)));
+      return [...set].sort((a, b) => a.localeCompare(b));
+    }
     const meta = filterFieldMeta(field);
     if (meta.ftype === "dropdown" && meta.options?.length) return meta.options;
     return null; // free text / date input
