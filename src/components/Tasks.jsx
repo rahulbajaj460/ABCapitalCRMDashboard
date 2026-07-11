@@ -1729,7 +1729,10 @@ export default function Tasks({
     return [["is", "is"], ["is_not", "is not"], ["contains", "contains"], ["is_set", "is set"], ["is_empty", "is empty"]];
   }
   function filterValueOptions(field) {
-    if (field === "status") return getStatuses();
+    if (field === "status") {
+      const list = getUniqueStatuses();
+      return list.length ? list : getStatuses();
+    }
     if (field === "priority") return ["High", "Medium", "Low"];
     if (field === "assignee") return members.map((m) => m.full_name);
     const meta = filterFieldMeta(field);
@@ -1777,14 +1780,14 @@ export default function Tasks({
         <select
           value={cond.op}
           onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { op: e.target.value }))}
-          style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6 }}
+          style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, flexShrink: 0, width: 96 }}
         >
           {filterOps(cond.field).map(([op, label]) => (
             <option key={op} value={op}>{label}</option>
           ))}
         </select>
         {needsValue &&
-          (valOpts ? (
+          (valOpts && valOpts.length ? (
             <select
               value={cond.value}
               onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { value: e.target.value }))}
