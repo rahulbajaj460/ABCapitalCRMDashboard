@@ -322,6 +322,12 @@ export default function Tasks({
   const [expandedSubtasks, setExpandedSubtasks] = useState({}); // taskId -> bool
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [statusMenu, setStatusMenu] = useState(null); // { taskId, statuses, x, y }
+  // Filter tree: a group has { id, kind:"group", conj:"AND"|"OR", children:[] }
+  // children are conditions { id, kind:"cond", field, op, value } or nested groups.
+  const [filterTree, setFilterTree] = useState({ id: "root", kind: "group", conj: "AND", children: [] });
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [savedFilters, setSavedFilters] = useState([]); // [{ name, tree }]
+  const [showSavedMenu, setShowSavedMenu] = useState(false);
   const [groupBy, setGroupBy] = useState("status");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [newField, setNewField] = useState({
@@ -675,6 +681,14 @@ export default function Tasks({
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [showColumnPicker]);
+  useEffect(() => {
+    function h(e) {
+      if (showFilterPanel && !e.target.closest(".filter-panel-wrap"))
+        setShowFilterPanel(false);
+    }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [showFilterPanel]);
   useEffect(() => {
     function h(e) {
       if (e.key === "Escape") {
@@ -1571,11 +1585,262 @@ export default function Tasks({
     return { done, total };
   }
 
+  function taskAssigneeNames(task) {
+    return task.assignees?.length
+      ? task.assignees
+      : task.assignee
+        ? [task.assignee]
+        : [];
+  }
+  function taskFieldValue(task, fieldId) {
+    return task.task_field_values?.find((v) => v.field_id === fieldId)?.value || "";
+  }
+  // Evaluate a single condition against a task.
+  function condMatch(f, task) {
+    if (!f.field) return true;
+    let raw;
+    if (f.field === "status") raw = task.status || "";
+    else if (f.field === "priority") raw = task.priority || "";
+    else if (f.field === "assignee") raw = taskAssigneeNames(task);
+    else if (f.field === "due_date") raw = task.due_date || "";
+    else if (f.field.startsWith("field_")) raw = taskFieldValue(task, f.field.replace("field_", ""));
+    else raw = "";
+    const isArr = Array.isArray(raw);
+    const val = f.value;
+    switch (f.op) {
+      case "is": return isArr ? raw.includes(val) : String(raw) === String(val);
+      case "is_not": return isArr ? !raw.includes(val) : String(raw) !== String(val);
+      case "contains": return String(isArr ? raw.join(",") : raw).toLowerCase().includes(String(val || "").toLowerCase());
+      case "is_set": return isArr ? raw.length > 0 : !!raw;
+      case "is_empty": return isArr ? raw.length === 0 : !raw;
+      case "before": return !!raw && !!val && new Date(raw) < new Date(val);
+      case "after": return !!raw && !!val && new Date(raw) > new Date(val);
+      case "on": return !!raw && !!val && String(raw).slice(0, 10) === val;
+      default: return true;
+    }
+  }
+  // Recursively evaluate a group (AND/OR of its children).
+  function groupMatch(group, task) {
+    if (!group.children || group.children.length === 0) return true;
+    const results = group.children.map((ch) =>
+      ch.kind === "group" ? groupMatch(ch, task) : condMatch(ch, task),
+    );
+    return group.conj === "OR" ? results.some(Boolean) : results.every(Boolean);
+  }
+  function passesFilters(task) {
+    return groupMatch(filterTree, task);
+  }
+  // Count leaf conditions in the tree (for the Filter button badge).
+  function countConditions(group) {
+    return (group.children || []).reduce(
+      (n, ch) => n + (ch.kind === "group" ? countConditions(ch) : 1),
+      0,
+    );
+  }
+  const filterCount = countConditions(filterTree);
+
+  // ── Immutable tree edit helpers ──
+  const newId = () => `f_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  function treeAddChild(root, groupId, child) {
+    const rec = (g) =>
+      g.id === groupId
+        ? { ...g, children: [...g.children, child] }
+        : { ...g, children: g.children.map((c) => (c.kind === "group" ? rec(c) : c)) };
+    return rec(root);
+  }
+  function treeUpdate(root, id, patch) {
+    const rec = (g) => ({
+      ...g,
+      ...(g.id === id ? patch : {}),
+      children: g.children.map((c) =>
+        c.id === id ? { ...c, ...patch } : c.kind === "group" ? rec(c) : c,
+      ),
+    });
+    return rec(root);
+  }
+  function treeRemove(root, id) {
+    const rec = (g) => ({
+      ...g,
+      children: g.children
+        .filter((c) => c.id !== id)
+        .map((c) => (c.kind === "group" ? rec(c) : c)),
+    });
+    return rec(root);
+  }
+  function addCondition(groupId) {
+    setFilterTree((t) => treeAddChild(t, groupId, { id: newId(), kind: "cond", field: "status", op: "is", value: "" }));
+  }
+  function addNestedGroup(groupId) {
+    setFilterTree((t) => treeAddChild(t, groupId, { id: newId(), kind: "group", conj: "AND", children: [{ id: newId(), kind: "cond", field: "status", op: "is", value: "" }] }));
+  }
+
+  // ── Saved filters (persisted in localStorage) ──
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("abc_saved_filters");
+      if (raw) setSavedFilters(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, []);
+  function persistSavedFilters(next) {
+    setSavedFilters(next);
+    try { localStorage.setItem("abc_saved_filters", JSON.stringify(next)); } catch { /* ignore */ }
+  }
+  function saveCurrentFilter() {
+    if (filterCount === 0) return;
+    const name = prompt("Name this filter set:");
+    if (!name?.trim()) return;
+    const next = [...savedFilters.filter((s) => s.name !== name.trim()), { name: name.trim(), tree: filterTree }];
+    persistSavedFilters(next);
+  }
+  function loadSavedFilter(s) {
+    setFilterTree(s.tree);
+    setShowSavedMenu(false);
+  }
+  function deleteSavedFilter(name) {
+    persistSavedFilters(savedFilters.filter((s) => s.name !== name));
+  }
+  function clearFilters() {
+    setFilterTree({ id: "root", kind: "group", conj: "AND", children: [] });
+  }
+
+  // ── Filter builder helpers ──
+  function filterableFields() {
+    const base = [
+      { value: "status", label: "Status" },
+      { value: "priority", label: "Priority" },
+      { value: "assignee", label: "Assignee" },
+      { value: "due_date", label: "Due date" },
+    ];
+    const custom = getFields().map((f) => ({ value: `field_${f.id}`, label: f.field_name, ftype: f.field_type, options: f.field_options }));
+    return [...base, ...custom];
+  }
+  function filterFieldMeta(field) {
+    return filterableFields().find((f) => f.value === field) || { value: field, label: field };
+  }
+  function filterFieldType(field) {
+    if (field === "due_date") return "date";
+    const meta = filterFieldMeta(field);
+    if (meta.ftype === "date") return "date";
+    return "choice";
+  }
+  function filterOps(field) {
+    if (filterFieldType(field) === "date")
+      return [["is_set", "is set"], ["is_empty", "is empty"], ["before", "before"], ["after", "after"], ["on", "on"]];
+    return [["is", "is"], ["is_not", "is not"], ["contains", "contains"], ["is_set", "is set"], ["is_empty", "is empty"]];
+  }
+  function filterValueOptions(field) {
+    if (field === "status") return getStatuses();
+    if (field === "priority") return ["High", "Medium", "Low"];
+    if (field === "assignee") return members.map((m) => m.full_name);
+    const meta = filterFieldMeta(field);
+    if (meta.ftype === "dropdown" && meta.options?.length) return meta.options;
+    return null; // free text / date input
+  }
+
+  // Conjunction cell shown before each child (Where / AND-OR dropdown / label).
+  function conjCell(group, idx) {
+    if (idx === 0)
+      return <span style={{ fontSize: 11, color: "#9ca3af", width: 46, flexShrink: 0 }}>Where</span>;
+    if (idx === 1)
+      return (
+        <select
+          value={group.conj}
+          onChange={(e) => setFilterTree((t) => treeUpdate(t, group.id, { conj: e.target.value }))}
+          style={{ fontSize: 11, fontWeight: 600, padding: "4px 4px", border: "1px solid #d1d5db", borderRadius: 6, width: 62, flexShrink: 0 }}
+        >
+          <option value="AND">AND</option>
+          <option value="OR">OR</option>
+        </select>
+      );
+    return <span style={{ fontSize: 11, color: "#6b7280", width: 46, textAlign: "center", flexShrink: 0, fontWeight: 600 }}>{group.conj}</span>;
+  }
+
+  function renderFilterCondition(cond, group, idx) {
+    const valOpts = filterValueOptions(cond.field);
+    const ftype = filterFieldType(cond.field);
+    const needsValue = cond.op !== "is_set" && cond.op !== "is_empty";
+    return (
+      <div key={cond.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        {conjCell(group, idx)}
+        <select
+          value={cond.field}
+          onChange={(e) => {
+            const nf = e.target.value;
+            setFilterTree((t) => treeUpdate(t, cond.id, { field: nf, op: filterOps(nf)[0][0], value: "" }));
+          }}
+          style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, maxWidth: 120 }}
+        >
+          {filterableFields().map((ff) => (
+            <option key={ff.value} value={ff.value}>{ff.label}</option>
+          ))}
+        </select>
+        <select
+          value={cond.op}
+          onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { op: e.target.value }))}
+          style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6 }}
+        >
+          {filterOps(cond.field).map(([op, label]) => (
+            <option key={op} value={op}>{label}</option>
+          ))}
+        </select>
+        {needsValue &&
+          (valOpts ? (
+            <select
+              value={cond.value}
+              onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { value: e.target.value }))}
+              style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, flex: 1, minWidth: 0 }}
+            >
+              <option value="">Select…</option>
+              {valOpts.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type={ftype === "date" ? "date" : "text"}
+              value={cond.value}
+              onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { value: e.target.value }))}
+              placeholder="Value…"
+              style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, flex: 1, minWidth: 0 }}
+            />
+          ))}
+        <button onClick={() => setFilterTree((t) => treeRemove(t, cond.id))} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0 }}>🗑</button>
+      </div>
+    );
+  }
+
+  function renderFilterGroup(group, depth) {
+    return (
+      <div
+        style={depth > 0 ? { border: "1px solid #e5e7eb", borderRadius: 8, padding: 10, background: "#fafafa" } : undefined}
+      >
+        {group.children.map((child, idx) =>
+          child.kind === "group" ? (
+            <div key={child.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 8 }}>
+              {conjCell(group, idx)}
+              <div style={{ flex: 1, minWidth: 0 }}>{renderFilterGroup(child, depth + 1)}</div>
+              <button onClick={() => setFilterTree((t) => treeRemove(t, child.id))} title="Remove group" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0, marginTop: 8 }}>🗑</button>
+            </div>
+          ) : (
+            renderFilterCondition(child, group, idx)
+          ),
+        )}
+        <div style={{ display: "flex", gap: 14, marginTop: group.children.length ? 2 : 0 }}>
+          <button onClick={() => addCondition(group.id)} style={{ background: "none", border: "none", color: "#1d4ed8", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add filter</button>
+          {depth < 2 && (
+            <button onClick={() => addNestedGroup(group.id)} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer", padding: 0 }}>Add nested filter</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const filteredTasks = tasks.filter((t) => {
     if (t.parent_task_id) return false; // subtasks render nested under parents
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (search && !t.title.toLowerCase().includes(search.toLowerCase()))
       return false;
+    if (!passesFilters(t)) return false;
     return true;
   });
 
@@ -3315,6 +3580,65 @@ export default function Tasks({
               <option value="priority">Group by: Priority</option>
               <option value="none">Group by: None</option>
             </select>
+            <div className="filter-panel-wrap" style={{ position: "relative" }}>
+              <button
+                className="toolbar-btn"
+                onClick={() => setShowFilterPanel((v) => !v)}
+                style={filterCount > 0 ? { color: "#1d4ed8", fontWeight: 600, borderColor: "#bfdbfe", background: "#eff6ff" } : undefined}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-2px", marginRight: 4 }}>
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                Filter{filterCount > 0 ? ` (${filterCount})` : ""}
+              </button>
+              {showFilterPanel && (
+                <div
+                  style={{
+                    position: "absolute", top: "110%", right: 0, zIndex: 60,
+                    background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.12)", padding: 14, width: 520,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>Filters</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
+                      <button onClick={() => setShowSavedMenu((v) => !v)} style={{ fontSize: 12, padding: "4px 10px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", cursor: "pointer" }}>
+                        Saved filters ▾
+                      </button>
+                      {showSavedMenu && (
+                        <div style={{ position: "absolute", top: "110%", right: 0, zIndex: 70, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", padding: 6, minWidth: 200 }}>
+                          <button onClick={saveCurrentFilter} disabled={filterCount === 0} style={{ display: "block", width: "100%", textAlign: "left", fontSize: 12, padding: "6px 8px", border: "none", background: "none", cursor: filterCount === 0 ? "default" : "pointer", color: filterCount === 0 ? "#c0c0c0" : "#1d4ed8", fontWeight: 600 }}>
+                            + Save current filter
+                          </button>
+                          {savedFilters.length > 0 && <div style={{ borderTop: "1px solid #f0f0ef", margin: "4px 0" }} />}
+                          {savedFilters.length === 0 && (
+                            <div style={{ fontSize: 11, color: "#bbb", padding: "6px 8px" }}>No saved filters</div>
+                          )}
+                          {savedFilters.map((s) => (
+                            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px", borderRadius: 6 }}>
+                              <span onClick={() => loadSavedFilter(s)} style={{ flex: 1, fontSize: 12, cursor: "pointer" }}>{s.name}</span>
+                              <button onClick={() => deleteSavedFilter(s.name)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 12 }}>🗑</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => setShowFilterPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>×</button>
+                    </div>
+                  </div>
+                  {filterCount === 0 && (
+                    <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>
+                      Add conditions below. Use <strong>nested filters</strong> and <strong>AND/OR</strong> to build complex rules.
+                    </div>
+                  )}
+                  {renderFilterGroup(filterTree, 0)}
+                  {filterCount > 0 && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                      <button className="btn btn-sm" style={{ fontSize: 12, color: "#ef4444", borderColor: "#fca5a5" }} onClick={clearFilters}>Clear all</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             {sortConfig.key && (
               <button
                 className="toolbar-btn"
@@ -3337,7 +3661,7 @@ export default function Tasks({
                   <div>
                     {(activeSpace.folders || []).map((folder) => {
                       const folderTasks = tasks.filter(
-                        (t) => t.folder_id === folder.id && !t.parent_task_id,
+                        (t) => t.folder_id === folder.id && !t.parent_task_id && passesFilters(t),
                       );
                       const filteredFolderTasks = folderTasks.filter((t) => {
                         if (statusFilter !== "all" && t.status !== statusFilter)
@@ -3583,7 +3907,7 @@ export default function Tasks({
                       );
                     })}
                     {(() => {
-                      const nft = sortTasks(tasks.filter((t) => !t.folder_id && !t.parent_task_id));
+                      const nft = sortTasks(tasks.filter((t) => !t.folder_id && !t.parent_task_id && passesFilters(t)));
                       if (nft.length === 0) return null;
                       return (
                         <div
@@ -3663,7 +3987,7 @@ export default function Tasks({
                     return (
                       <div>
                         {folderListItems.map((list) => {
-                          const listTasks = tasks.filter((t) => t.list_id === list.id && !t.parent_task_id);
+                          const listTasks = tasks.filter((t) => t.list_id === list.id && !t.parent_task_id && passesFilters(t));
                           const filteredListTasks = listTasks.filter((t) => {
                             if (statusFilter !== "all" && t.status !== statusFilter) return false;
                             if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -3732,7 +4056,7 @@ export default function Tasks({
                         })}
                         {/* Tasks in folder not assigned to any list */}
                         {(() => {
-                          const unlistedTasks = sortTasks(tasks.filter((t) => !t.list_id && !t.parent_task_id).filter((t) => {
+                          const unlistedTasks = sortTasks(tasks.filter((t) => !t.list_id && !t.parent_task_id && passesFilters(t)).filter((t) => {
                             if (statusFilter !== "all" && t.status !== statusFilter) return false;
                             if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
                             return true;
