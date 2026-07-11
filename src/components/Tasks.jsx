@@ -1804,7 +1804,7 @@ export default function Tasks({
     return (
       <select
         value={child.conj || "AND"}
-        onChange={(e) => setFilterTree((t) => treeUpdate(t, child.id, { conj: e.target.value }))}
+        onChange={(e) => setDraftTree((t) => treeUpdate(t, child.id, { conj: e.target.value }))}
         style={{ fontSize: 11, fontWeight: 600, padding: "4px 4px", border: "1px solid #d1d5db", borderRadius: 6, width: 62, flexShrink: 0 }}
       >
         <option value="AND">AND</option>
@@ -1834,7 +1834,7 @@ export default function Tasks({
         </select>
         <select
           value={cond.op}
-          onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { op: e.target.value }))}
+          onChange={(e) => setDraftTree((t) => treeUpdate(t, cond.id, { op: e.target.value }))}
           style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, flexShrink: 0, width: 96 }}
         >
           {filterOps(cond.field).map(([op, label]) => (
@@ -1845,7 +1845,7 @@ export default function Tasks({
           (valOpts && valOpts.length ? (
             <select
               value={cond.value}
-              onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { value: e.target.value }))}
+              onChange={(e) => setDraftTree((t) => treeUpdate(t, cond.id, { value: e.target.value }))}
               style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, flex: 1, minWidth: 0 }}
             >
               <option value="">Select…</option>
@@ -1857,12 +1857,12 @@ export default function Tasks({
             <input
               type={ftype === "date" ? "date" : "text"}
               value={cond.value}
-              onChange={(e) => setFilterTree((t) => treeUpdate(t, cond.id, { value: e.target.value }))}
+              onChange={(e) => setDraftTree((t) => treeUpdate(t, cond.id, { value: e.target.value }))}
               placeholder="Value…"
               style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, flex: 1, minWidth: 0 }}
             />
           ))}
-        <button onClick={() => setFilterTree((t) => treeRemove(t, cond.id))} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0 }}>🗑</button>
+        <button onClick={() => setDraftTree((t) => treeRemove(t, cond.id))} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0 }}>🗑</button>
       </div>
     );
   }
@@ -1877,7 +1877,7 @@ export default function Tasks({
             <div key={child.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 8 }}>
               {conjCell(child, idx)}
               <div style={{ flex: 1, minWidth: 0 }}>{renderFilterGroup(child, depth + 1)}</div>
-              <button onClick={() => setFilterTree((t) => treeRemove(t, child.id))} title="Remove group" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0, marginTop: 8 }}>🗑</button>
+              <button onClick={() => setDraftTree((t) => treeRemove(t, child.id))} title="Remove group" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0, marginTop: 8 }}>🗑</button>
             </div>
           ) : (
             renderFilterCondition(child, group, idx)
