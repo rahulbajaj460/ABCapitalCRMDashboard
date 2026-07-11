@@ -1619,13 +1619,25 @@ export default function Tasks({
       default: return true;
     }
   }
-  // Recursively evaluate a group (AND/OR of its children).
+  // Recursively evaluate a group. Each child (after the first) carries its own
+  // conjunction linking it to the previous one, evaluated with standard
+  // precedence: AND binds tighter than OR (so A AND B OR C = (A AND B) OR C).
   function groupMatch(group, task) {
-    if (!group.children || group.children.length === 0) return true;
-    const results = group.children.map((ch) =>
-      ch.kind === "group" ? groupMatch(ch, task) : condMatch(ch, task),
-    );
-    return group.conj === "OR" ? results.some(Boolean) : results.every(Boolean);
+    const kids = group.children || [];
+    if (kids.length === 0) return true;
+    const evalChild = (ch) => (ch.kind === "group" ? groupMatch(ch, task) : condMatch(ch, task));
+    let orAcc = false;
+    let andAcc = evalChild(kids[0]);
+    for (let i = 1; i < kids.length; i++) {
+      const res = evalChild(kids[i]);
+      if ((kids[i].conj || "AND") === "OR") {
+        orAcc = orAcc || andAcc;
+        andAcc = res;
+      } else {
+        andAcc = andAcc && res;
+      }
+    }
+    return orAcc || andAcc;
   }
   function passesFilters(task) {
     return groupMatch(filterTree, task);
@@ -1740,22 +1752,48 @@ export default function Tasks({
     return null; // free text / date input
   }
 
-  // Conjunction cell shown before each child (Where / AND-OR dropdown / label).
-  function conjCell(group, idx) {
+  // Human-readable label + expression preview (shows AND-over-OR precedence).
+  const OP_LABELS = { is: "is", is_not: "is not", contains: "contains", is_set: "is set", is_empty: "is empty", before: "before", after: "after", on: "on" };
+  function condLabel(cond) {
+    const meta = filterFieldMeta(cond.field);
+    const opl = OP_LABELS[cond.op] || cond.op;
+    const needsVal = cond.op !== "is_set" && cond.op !== "is_empty";
+    return `${meta.label} ${opl}${needsVal ? ` ${cond.value || "…"}` : ""}`;
+  }
+  function nodeLabel(node) {
+    return node.kind === "group" ? `(${filterExpression(node)})` : condLabel(node);
+  }
+  function filterExpression(group) {
+    const kids = group.children || [];
+    if (!kids.length) return "";
+    const runs = [];
+    let cur = [nodeLabel(kids[0])];
+    for (let i = 1; i < kids.length; i++) {
+      if ((kids[i].conj || "AND") === "OR") { runs.push(cur); cur = [nodeLabel(kids[i])]; }
+      else cur.push(nodeLabel(kids[i]));
+    }
+    runs.push(cur);
+    const hasOr = runs.length > 1;
+    const runStrs = runs.map((r) => (r.length > 1 && hasOr ? `(${r.join(" AND ")})` : r.join(" AND ")));
+    return runStrs.join(" OR ");
+  }
+
+  // Conjunction cell shown before each child: "Where" for the first, and an
+  // editable AND/OR dropdown (bound to that child) for every one after it, so
+  // operators can be mixed within a group.
+  function conjCell(child, idx) {
     if (idx === 0)
-      return <span style={{ fontSize: 11, color: "#9ca3af", width: 46, flexShrink: 0 }}>Where</span>;
-    if (idx === 1)
-      return (
-        <select
-          value={group.conj}
-          onChange={(e) => setFilterTree((t) => treeUpdate(t, group.id, { conj: e.target.value }))}
-          style={{ fontSize: 11, fontWeight: 600, padding: "4px 4px", border: "1px solid #d1d5db", borderRadius: 6, width: 62, flexShrink: 0 }}
-        >
-          <option value="AND">AND</option>
-          <option value="OR">OR</option>
-        </select>
-      );
-    return <span style={{ fontSize: 11, color: "#6b7280", width: 46, textAlign: "center", flexShrink: 0, fontWeight: 600 }}>{group.conj}</span>;
+      return <span style={{ fontSize: 11, color: "#9ca3af", width: 62, flexShrink: 0 }}>Where</span>;
+    return (
+      <select
+        value={child.conj || "AND"}
+        onChange={(e) => setFilterTree((t) => treeUpdate(t, child.id, { conj: e.target.value }))}
+        style={{ fontSize: 11, fontWeight: 600, padding: "4px 4px", border: "1px solid #d1d5db", borderRadius: 6, width: 62, flexShrink: 0 }}
+      >
+        <option value="AND">AND</option>
+        <option value="OR">OR</option>
+      </select>
+    );
   }
 
   function renderFilterCondition(cond, group, idx) {
@@ -1764,7 +1802,7 @@ export default function Tasks({
     const needsValue = cond.op !== "is_set" && cond.op !== "is_empty";
     return (
       <div key={cond.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        {conjCell(group, idx)}
+        {conjCell(cond, idx)}
         <select
           value={cond.field}
           onChange={(e) => {
@@ -1820,7 +1858,7 @@ export default function Tasks({
         {group.children.map((child, idx) =>
           child.kind === "group" ? (
             <div key={child.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 8 }}>
-              {conjCell(group, idx)}
+              {conjCell(child, idx)}
               <div style={{ flex: 1, minWidth: 0 }}>{renderFilterGroup(child, depth + 1)}</div>
               <button onClick={() => setFilterTree((t) => treeRemove(t, child.id))} title="Remove group" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0, marginTop: 8 }}>🗑</button>
             </div>
@@ -3635,9 +3673,22 @@ export default function Tasks({
                   )}
                   {renderFilterGroup(filterTree, 0)}
                   {filterCount > 0 && (
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                      <button className="btn btn-sm" style={{ fontSize: 12, color: "#ef4444", borderColor: "#fca5a5" }} onClick={clearFilters}>Clear all</button>
-                    </div>
+                    <>
+                      <div style={{ marginTop: 12, padding: "8px 10px", background: "#f5f7fb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+                          Matches tasks where
+                        </div>
+                        <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.5, wordBreak: "break-word" }}>
+                          {filterExpression(filterTree)}
+                        </div>
+                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>
+                          AND is evaluated before OR; use nested filters for other groupings.
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                        <button className="btn btn-sm" style={{ fontSize: 12, color: "#ef4444", borderColor: "#fca5a5" }} onClick={clearFilters}>Clear all</button>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
