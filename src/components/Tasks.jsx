@@ -325,6 +325,7 @@ export default function Tasks({
   // Filter tree: a group has { id, kind:"group", conj:"AND"|"OR", children:[] }
   // children are conditions { id, kind:"cond", field, op, value } or nested groups.
   const [filterTree, setFilterTree] = useState({ id: "root", kind: "group", conj: "AND", children: [] });
+  const [draftTree, setDraftTree] = useState({ id: "root", kind: "group", conj: "AND", children: [] });
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [savedFilters, setSavedFilters] = useState([]); // [{ name, tree }]
   const [showSavedMenu, setShowSavedMenu] = useState(false);
@@ -1607,6 +1608,8 @@ export default function Tasks({
     else raw = "";
     const isArr = Array.isArray(raw);
     const val = f.value;
+    // Incomplete condition (value-requiring op with no value) = no constraint.
+    if (f.op !== "is_set" && f.op !== "is_empty" && (val === undefined || val === "")) return true;
     switch (f.op) {
       case "is": return isArr ? raw.includes(val) : String(raw) === String(val);
       case "is_not": return isArr ? !raw.includes(val) : String(raw) !== String(val);
@@ -1650,6 +1653,8 @@ export default function Tasks({
     );
   }
   const filterCount = countConditions(filterTree);
+  const draftCount = countConditions(draftTree);
+  const draftDirty = JSON.stringify(draftTree) !== JSON.stringify(filterTree);
 
   // ── Immutable tree edit helpers ──
   const newId = () => `f_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -1680,10 +1685,10 @@ export default function Tasks({
     return rec(root);
   }
   function addCondition(groupId) {
-    setFilterTree((t) => treeAddChild(t, groupId, { id: newId(), kind: "cond", field: "status", op: "is", value: "" }));
+    setDraftTree((t) => treeAddChild(t, groupId, { id: newId(), kind: "cond", field: "status", op: "is", value: "" }));
   }
   function addNestedGroup(groupId) {
-    setFilterTree((t) => treeAddChild(t, groupId, { id: newId(), kind: "group", conj: "AND", children: [{ id: newId(), kind: "cond", field: "status", op: "is", value: "" }] }));
+    setDraftTree((t) => treeAddChild(t, groupId, { id: newId(), kind: "group", conj: "AND", children: [{ id: newId(), kind: "cond", field: "status", op: "is", value: "" }] }));
   }
 
   // ── Saved filters (persisted in localStorage) ──
@@ -1698,21 +1703,27 @@ export default function Tasks({
     try { localStorage.setItem("abc_saved_filters", JSON.stringify(next)); } catch { /* ignore */ }
   }
   function saveCurrentFilter() {
-    if (filterCount === 0) return;
+    if (draftCount === 0) return;
     const name = prompt("Name this filter set:");
     if (!name?.trim()) return;
-    const next = [...savedFilters.filter((s) => s.name !== name.trim()), { name: name.trim(), tree: filterTree }];
+    const next = [...savedFilters.filter((s) => s.name !== name.trim()), { name: name.trim(), tree: draftTree }];
     persistSavedFilters(next);
   }
   function loadSavedFilter(s) {
-    setFilterTree(s.tree);
+    setDraftTree(s.tree);
+    setFilterTree(s.tree); // apply immediately
     setShowSavedMenu(false);
   }
   function deleteSavedFilter(name) {
     persistSavedFilters(savedFilters.filter((s) => s.name !== name));
   }
   function clearFilters() {
-    setFilterTree({ id: "root", kind: "group", conj: "AND", children: [] });
+    const empty = { id: "root", kind: "group", conj: "AND", children: [] };
+    setDraftTree(empty);
+    setFilterTree(empty);
+  }
+  function applyFilters() {
+    setFilterTree(draftTree);
   }
 
   // ── Filter builder helpers ──
@@ -1813,7 +1824,7 @@ export default function Tasks({
           value={cond.field}
           onChange={(e) => {
             const nf = e.target.value;
-            setFilterTree((t) => treeUpdate(t, cond.id, { field: nf, op: filterOps(nf)[0][0], value: "" }));
+            setDraftTree((t) => treeUpdate(t, cond.id, { field: nf, op: filterOps(nf)[0][0], value: "" }));
           }}
           style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, maxWidth: 120 }}
         >
@@ -3630,7 +3641,7 @@ export default function Tasks({
             <div className="filter-panel-wrap" style={{ position: "relative" }}>
               <button
                 className="toolbar-btn"
-                onClick={() => setShowFilterPanel((v) => !v)}
+                onClick={() => setShowFilterPanel((v) => { if (!v) setDraftTree(filterTree); return !v; })}
                 style={filterCount > 0 ? { color: "#1d4ed8", fontWeight: 600, borderColor: "#bfdbfe", background: "#eff6ff" } : undefined}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-2px", marginRight: 4 }}>
@@ -3672,30 +3683,43 @@ export default function Tasks({
                       <button onClick={() => setShowFilterPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16 }}>×</button>
                     </div>
                   </div>
-                  {filterCount === 0 && (
+                  {draftCount === 0 && (
                     <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>
                       Add conditions below. Use <strong>nested filters</strong> and <strong>AND/OR</strong> to build complex rules.
                     </div>
                   )}
-                  {renderFilterGroup(filterTree, 0)}
-                  {filterCount > 0 && (
-                    <>
-                      <div style={{ marginTop: 12, padding: "8px 10px", background: "#f5f7fb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
-                          Matches tasks where
-                        </div>
-                        <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.5, wordBreak: "break-word" }}>
-                          {filterExpression(filterTree)}
-                        </div>
-                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>
-                          AND is evaluated before OR; use nested filters for other groupings.
-                        </div>
+                  {renderFilterGroup(draftTree, 0)}
+                  {draftCount > 0 && (
+                    <div style={{ marginTop: 12, padding: "8px 10px", background: "#f5f7fb", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+                        Matches tasks where
                       </div>
-                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                        <button className="btn btn-sm" style={{ fontSize: 12, color: "#ef4444", borderColor: "#fca5a5" }} onClick={clearFilters}>Clear all</button>
+                      <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.5, wordBreak: "break-word" }}>
+                        {filterExpression(draftTree)}
                       </div>
-                    </>
+                      <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>
+                        AND is evaluated before OR; use nested filters for other groupings.
+                      </div>
+                    </div>
                   )}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
+                    <button
+                      className="btn btn-sm"
+                      style={{ fontSize: 12, color: draftCount > 0 || filterCount > 0 ? "#ef4444" : "#c0c0c0", borderColor: "#fca5a5" }}
+                      onClick={clearFilters}
+                      disabled={draftCount === 0 && filterCount === 0}
+                    >
+                      Clear all
+                    </button>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      style={{ fontSize: 12, opacity: draftDirty ? 1 : 0.6 }}
+                      onClick={applyFilters}
+                      disabled={!draftDirty}
+                    >
+                      {draftDirty ? "Apply filter" : "Applied"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
