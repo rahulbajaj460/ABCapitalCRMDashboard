@@ -2863,6 +2863,31 @@ export default function Tasks({
     for (let i = 0; i < (name || "").length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
     return palette[h % palette.length];
   }
+  // A clean "add assignee" person-with-plus button (ClickUp-style) for empty
+  // username / assignee cells.
+  function assignAddButton(onClick) {
+    return (
+      <button
+        onClick={onClick}
+        title="Assign"
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 30, height: 26, borderRadius: 7,
+          border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", cursor: "pointer",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#94a3b8"; e.currentTarget.style.color = "#475569"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.color = "#64748b"; }}
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9.5" cy="8" r="3.4" />
+          <path d="M3.5 19.5c0-3.3 2.7-5.8 6-5.8 1.05 0 2.04.22 2.9.62" />
+          <line x1="18.5" y1="14.5" x2="18.5" y2="20.5" />
+          <line x1="15.5" y1="17.5" x2="21.5" y2="17.5" />
+        </svg>
+      </button>
+    );
+  }
+
   // A clickable calendar-add icon with an overlaid native date input, used
   // for empty date cells so the user can set a date inline.
   function dateAddCell(value, onSet) {
@@ -2923,18 +2948,7 @@ export default function Tasks({
         setAssignSearch("");
         setAssignMenu({ taskId: task.id, x: r.left, y: openUp ? undefined : r.bottom + 4, bottom: openUp ? window.innerHeight - r.top + 4 : undefined, current: names });
       };
-      if (names.length === 0)
-        return (
-          <button
-            onClick={openAssign}
-            title="Assign"
-            style={{ width: 26, height: 26, borderRadius: "50%", border: "1.5px dashed #cbd5e1", background: "none", color: "#94a3b8", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
-            </svg>
-          </button>
-        );
+      if (names.length === 0) return assignAddButton(openAssign);
       return (
         <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={openAssign} title="Change assignees">
           {names.map((name, i) => (
@@ -3009,24 +3023,14 @@ export default function Tasks({
         if (f.field_type === "date")
           return dateAddCell("", (v) => setTaskFieldValueInline(task.id, f.id, v));
         if (f.field_type === "username")
-          return (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const r = e.currentTarget.getBoundingClientRect();
-                const MENU_H = 320;
-                const openUp = window.innerHeight - r.bottom < MENU_H && r.top > MENU_H;
-                setAssignSearch("");
-                setAssignMenu({ taskId: task.id, fieldId: f.id, x: r.left, y: openUp ? undefined : r.bottom + 4, bottom: openUp ? window.innerHeight - r.top + 4 : undefined, current: [] });
-              }}
-              title="Assign"
-              style={{ width: 26, height: 26, borderRadius: "50%", border: "1.5px dashed #cbd5e1", background: "none", color: "#94a3b8", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
-              </svg>
-            </button>
-          );
+          return assignAddButton((e) => {
+            e.stopPropagation();
+            const r = e.currentTarget.getBoundingClientRect();
+            const MENU_H = 320;
+            const openUp = window.innerHeight - r.bottom < MENU_H && r.top > MENU_H;
+            setAssignSearch("");
+            setAssignMenu({ taskId: task.id, fieldId: f.id, x: r.left, y: openUp ? undefined : r.bottom + 4, bottom: openUp ? window.innerHeight - r.top + 4 : undefined, current: [] });
+          });
         return "—";
       }
       if (f.field_type === "dropdown")
