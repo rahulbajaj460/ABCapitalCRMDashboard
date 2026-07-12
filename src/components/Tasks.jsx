@@ -2312,7 +2312,7 @@ export default function Tasks({
   // Inline set assignees on a task (used by the empty-cell add-assignee picker).
   async function setTaskAssignees(taskId, names) {
     const task = tasks.find((t) => t.id === taskId);
-    const before = (task?.assignees?.length ? task.assignees : task?.assignee ? [task.assignee] : []).join(", ");
+    const before = task?.assignees?.length ? task.assignees : task?.assignee ? [task.assignee] : [];
     await supabase
       .from("tasks")
       .update({
@@ -2322,8 +2322,8 @@ export default function Tasks({
         updated_at: new Date().toISOString(),
       })
       .eq("id", taskId);
-    const after = names.join(", ");
-    if (before !== after) await recordHistory(taskId, { assignees: { from: before || "—", to: after || "—" } });
+    // Record as arrays so changeLabel("assignees") can diff them.
+    if (before.join(",") !== names.join(",")) await recordHistory(taskId, { assignees: { from: before, to: names } });
     fetchTasks();
   }
   // Inline set a built-in date column on a task.
@@ -3363,8 +3363,10 @@ export default function Tasks({
       return `Priority: ${change.from || "—"} → ${change.to}`;
     if (field === "title") return `Renamed: "${change.to}"`;
     if (field === "assignees") {
-      const oldA = change.from || [];
-      const newA = change.to || [];
+      // Coerce to arrays — older entries may have stored comma-joined strings.
+      const toArr = (v) => Array.isArray(v) ? v : v ? String(v).split(",").map((s) => s.trim()).filter(Boolean) : [];
+      const oldA = toArr(change.from);
+      const newA = toArr(change.to);
       const added = newA.filter((a) => !oldA.includes(a));
       const removed = oldA.filter((a) => !newA.includes(a));
       const parts = [];
