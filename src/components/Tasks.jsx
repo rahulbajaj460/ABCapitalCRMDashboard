@@ -3736,8 +3736,8 @@ export default function Tasks({
 
         <div className="content-area">
           {viewMode === "list" && (
-            <div className="task-table-scroll">
-              <div style={{ width: "max-content", minWidth: "100%" }}>
+            <div className={activeList ? undefined : "task-table-scroll"}>
+              <div style={activeList ? undefined : { width: "max-content", minWidth: "100%" }}>
                 {activeSpace && !activeFolder ? (
                   <div>
                     {(activeSpace.folders || []).map((folder) => {
@@ -4212,22 +4212,25 @@ export default function Tasks({
                             </div>
                             )}
                             {(hideHeader || isExpanded) && groupTasks.length > 0 && (
-                              <div
-                                style={{
-                                  background: "#fff",
-                                  border: "1px solid #e8e8e8",
-                                  borderRadius: 8,
-                                  marginTop: 4,
-                                }}
-                              >
-                                {renderTableHead(getFields())}
-                                {groupTasks.map((task) =>
-                                  renderTaskRow(
-                                    task,
-                                    getStatuses(),
-                                    getFields(),
-                                  ),
-                                )}
+                              <div className="task-table-scroll" style={{ marginTop: 4 }}>
+                                <div style={{ width: "max-content", minWidth: "100%" }}>
+                                  <div
+                                    style={{
+                                      background: "#fff",
+                                      border: "1px solid #e8e8e8",
+                                      borderRadius: 8,
+                                    }}
+                                  >
+                                    {renderTableHead(getFields())}
+                                    {groupTasks.map((task) =>
+                                      renderTaskRow(
+                                        task,
+                                        getStatuses(),
+                                        getFields(),
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             )}
                             {isExpanded && groupTasks.length === 0 && (
