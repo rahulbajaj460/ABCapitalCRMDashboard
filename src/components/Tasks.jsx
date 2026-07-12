@@ -2872,17 +2872,17 @@ export default function Tasks({
         title="Assign"
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 30, height: 26, borderRadius: 7,
-          border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", cursor: "pointer",
+          width: 26, height: 26, padding: 0,
+          border: "none", background: "none", color: "#94a3b8", cursor: "pointer",
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#94a3b8"; e.currentTarget.style.color = "#475569"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.color = "#64748b"; }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "#475569"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}
       >
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="9.5" cy="8" r="3.4" />
-          <path d="M3.5 19.5c0-3.3 2.7-5.8 6-5.8 1.05 0 2.04.22 2.9.62" />
-          <line x1="18.5" y1="14.5" x2="18.5" y2="20.5" />
-          <line x1="15.5" y1="17.5" x2="21.5" y2="17.5" />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9.5" cy="8" r="3.6" />
+          <path d="M3 19.5c0-3.4 2.9-6 6.5-6 1.15 0 2.24.24 3.2.68" />
+          <line x1="18.5" y1="14" x2="18.5" y2="20.5" />
+          <line x1="15.25" y1="17.25" x2="21.75" y2="17.25" />
         </svg>
       </button>
     );
