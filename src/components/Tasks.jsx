@@ -2300,8 +2300,19 @@ export default function Tasks({
     fetchTasks();
   }
 
+  async function recordHistory(taskId, changes) {
+    await supabase.from("task_history").insert({
+      task_id: taskId,
+      changed_by: profile?.full_name || "Unknown",
+      changed_at: new Date().toISOString(),
+      changes,
+    });
+  }
+
   // Inline set assignees on a task (used by the empty-cell add-assignee picker).
   async function setTaskAssignees(taskId, names) {
+    const task = tasks.find((t) => t.id === taskId);
+    const before = (task?.assignees?.length ? task.assignees : task?.assignee ? [task.assignee] : []).join(", ");
     await supabase
       .from("tasks")
       .update({
@@ -2311,10 +2322,14 @@ export default function Tasks({
         updated_at: new Date().toISOString(),
       })
       .eq("id", taskId);
+    const after = names.join(", ");
+    if (before !== after) await recordHistory(taskId, { assignees: { from: before || "—", to: after || "—" } });
     fetchTasks();
   }
   // Inline set a built-in date column on a task.
   async function setTaskDate(taskId, colKey, value) {
+    const task = tasks.find((t) => t.id === taskId);
+    const before = task?.[colKey] || "";
     await supabase
       .from("tasks")
       .update({
@@ -2323,18 +2338,27 @@ export default function Tasks({
         updated_at: new Date().toISOString(),
       })
       .eq("id", taskId);
+    if (before !== (value || "")) {
+      const label = COLUMN_LABELS?.[colKey] || colKey;
+      await recordHistory(taskId, { [label]: { from: before || "—", to: value || "—" } });
+    }
     fetchTasks();
   }
   // Inline set a custom field value on a task.
   async function setTaskFieldValueInline(taskId, fieldId, value) {
     const { data: existing } = await supabase
       .from("task_field_values")
-      .select("id")
+      .select("id, value")
       .eq("task_id", taskId)
       .eq("field_id", fieldId)
       .maybeSingle();
+    const before = existing?.value || "";
     if (existing) await supabase.from("task_field_values").update({ value }).eq("id", existing.id);
     else await supabase.from("task_field_values").insert({ task_id: taskId, field_id: fieldId, value });
+    if (before !== (value || "")) {
+      const fieldName = (activeSpace?.space_fields || []).find((f) => f.id === fieldId)?.field_name || "Field";
+      await recordHistory(taskId, { [fieldName]: { from: before || "—", to: value || "—" } });
+    }
     fetchTasks();
   }
 
