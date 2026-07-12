@@ -2863,6 +2863,31 @@ export default function Tasks({
     for (let i = 0; i < (name || "").length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
     return palette[h % palette.length];
   }
+  // Friendly empty-state block with an illustration, message and optional CTA.
+  function emptyState({ title, subtitle, cta = true, compact = false }) {
+    return (
+      <div style={{ textAlign: "center", padding: compact ? "26px 20px" : "56px 20px", color: "#94a3b8" }}>
+        <svg width={compact ? 56 : 84} height={compact ? 56 : 84} viewBox="0 0 120 120" fill="none" style={{ marginBottom: compact ? 10 : 16 }}>
+          <rect x="30" y="18" width="60" height="80" rx="8" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="2" />
+          <rect x="46" y="12" width="28" height="14" rx="5" fill="#e2e8f0" />
+          <line x1="42" y1="44" x2="78" y2="44" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
+          <line x1="42" y1="58" x2="70" y2="58" stroke="#dbe2ea" strokeWidth="3" strokeLinecap="round" />
+          <line x1="42" y1="72" x2="74" y2="72" stroke="#dbe2ea" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="90" cy="86" r="18" fill="#eff6ff" stroke="#bfdbfe" strokeWidth="2" />
+          <line x1="90" y1="79" x2="90" y2="93" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
+          <line x1="83" y1="86" x2="97" y2="86" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+        <div style={{ fontSize: compact ? 13 : 15, fontWeight: 600, color: "#64748b", marginBottom: 4 }}>{title}</div>
+        {subtitle && <div style={{ fontSize: 12, color: "#a3aab5", marginBottom: cta ? 16 : 0 }}>{subtitle}</div>}
+        {cta && (
+          <button className="btn btn-primary btn-sm" style={{ fontSize: 12 }} onClick={openNewTask}>
+            + New Task
+          </button>
+        )}
+      </div>
+    );
+  }
+
   // A clean "add assignee" person-with-plus button (ClickUp-style) for empty
   // username / assignee cells.
   function assignAddButton(onClick) {
@@ -4088,7 +4113,7 @@ export default function Tasks({
                                         {listExpanded && (
                                           <div>
                                             {listTasks.length === 0 ? (
-                                              <div style={{ fontSize: 12, color: "#ccc", padding: "10px 16px" }}>No tasks in this list</div>
+                                              emptyState({ title: "No tasks in this list", compact: true })
                                             ) : (
                                               Object.entries(listGrouped).map(([groupName, groupTasks]) => {
                                                 if (groupTasks.length === 0) return null;
@@ -4152,7 +4177,7 @@ export default function Tasks({
                             return (
                               <div style={{ padding: "8px 0" }}>
                                 {filteredFolderTasks.length === 0 ? (
-                                  <div style={{ fontSize: 13, color: "#ccc", padding: "12px 16px" }}>No tasks in this folder</div>
+                                  emptyState({ title: "No tasks in this folder", compact: true })
                                 ) : (
                                   Object.entries(grouped).map(([groupName, groupTasks]) => {
                                     if (groupTasks.length === 0) return null;
@@ -4330,7 +4355,7 @@ export default function Tasks({
                                     );
                                   })}
                                   {filteredListTasks.length === 0 && (
-                                    <div style={{ fontSize: 12, color: "#ccc", padding: "8px 20px" }}>No tasks in this list</div>
+                                    emptyState({ title: "No tasks in this list", compact: true })
                                   )}
                                 </div>
                               )}
@@ -4529,21 +4554,10 @@ export default function Tasks({
               )}
             </div>
           )}
-          {tasks.length === 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "60px 20px",
-                color: "#aaa",
-              }}
-            >
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-              <div style={{ fontSize: 14, marginBottom: 4 }}>No tasks yet</div>
-              <div style={{ fontSize: 12 }}>
-                Click "+ New Task" to create your first task
-              </div>
-            </div>
-          )}
+          {tasks.length === 0 && emptyState({
+            title: "No tasks yet",
+            subtitle: "Create your first task to get started.",
+          })}
         </div>
       </div>
 
