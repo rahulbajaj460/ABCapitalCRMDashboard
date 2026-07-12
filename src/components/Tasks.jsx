@@ -2792,58 +2792,84 @@ export default function Tasks({
     );
   }
 
+  // Deterministic avatar color from a name, and its initials (max 2 letters).
+  function avatarColor(name) {
+    const palette = ["#e11d48", "#db2777", "#9333ea", "#6d28d9", "#4f46e5", "#2563eb", "#0891b2", "#0d9488", "#059669", "#65a30d", "#ca8a04", "#ea580c"];
+    let h = 0;
+    for (let i = 0; i < (name || "").length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return palette[h % palette.length];
+  }
+  function initials(name) {
+    const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  // Due-date urgency: "overdue" | "soon" (within 15 days) | "normal".
+  function dueUrgency(task) {
+    if (!task.due_date || isDoneStatus(task.status)) return "normal";
+    const now = new Date();
+    const due = new Date(task.due_date);
+    const days = Math.ceil((due - now) / 86400000);
+    if (days < 0) return "overdue";
+    if (days <= 15) return "soon";
+    return "normal";
+  }
+
   function renderColumnCell(colKey, task, fieldList) {
-    const isOverdue =
-      task.due_date &&
-      new Date(task.due_date) < new Date() &&
-      task.status !== "Done";
+    const urgency = dueUrgency(task);
+    const isOverdue = urgency === "overdue";
+    const isSoon = urgency === "soon";
     if (colKey === "priority")
       return (
         <span className="badge" style={getPriorityStyle(task.priority)}>
           {task.priority}
         </span>
       );
-    if (colKey === "assignees")
+    if (colKey === "assignees") {
+      const names = task.assignees?.length > 0 ? task.assignees : task.assignee ? [task.assignee] : [];
+      if (names.length === 0) return <span style={{ color: "#ccc" }}>—</span>;
       return (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-          {(task.assignees?.length > 0
-            ? task.assignees
-            : task.assignee
-              ? [task.assignee]
-              : []
-          ).map((name) => (
+        <div style={{ display: "flex", alignItems: "center" }}>
+          {names.map((name, i) => (
             <span
               key={name}
+              title={name}
               style={{
-                background: "#f0f0ef",
-                borderRadius: 20,
-                padding: "1px 7px",
-                fontSize: 11,
-                fontWeight: 500,
+                width: 24, height: 24, borderRadius: "50%",
+                background: avatarColor(name), color: "#fff",
+                fontSize: 10, fontWeight: 700,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                border: "2px solid #fff", marginLeft: i === 0 ? 0 : -7,
+                flexShrink: 0, cursor: "default", letterSpacing: ".02em",
               }}
             >
-              {name}
+              {initials(name)}
             </span>
           ))}
-          {!task.assignees?.length && !task.assignee && "—"}
         </div>
       );
-    if (colKey === "due_date")
+    }
+    if (colKey === "due_date") {
+      const dueColor = isOverdue ? "#b91c1c" : isSoon ? "#b45309" : "#555";
+      const dueBg = isOverdue ? "#fef2f2" : isSoon ? "#fffbeb" : "transparent";
       return (
         <span
           style={{
             fontSize: 12,
-            color: isOverdue ? "#b91c1c" : "#555",
-            fontWeight: isOverdue ? 600 : 400,
+            color: dueColor,
+            fontWeight: isOverdue || isSoon ? 600 : 400,
+            background: dueBg,
+            borderRadius: 6,
+            padding: task.due_date && (isOverdue || isSoon) ? "2px 7px" : 0,
           }}
         >
           {task.due_date
-            ? isOverdue
-              ? `⚠️ ${task.due_date}`
-              : task.due_date
+            ? (isOverdue ? `⚠️ ${task.due_date}` : task.due_date)
             : "—"}
         </span>
       );
+    }
     if (colKey === "date_done")
       return (
         <span style={{ fontSize: 12, color: "#555" }}>
