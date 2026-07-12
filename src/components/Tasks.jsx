@@ -322,6 +322,8 @@ export default function Tasks({
   const [expandedSubtasks, setExpandedSubtasks] = useState({}); // taskId -> bool
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [statusMenu, setStatusMenu] = useState(null); // { taskId, statuses, x, y }
+  const [assignMenu, setAssignMenu] = useState(null); // { taskId, x, y, current }
+  const [assignSearch, setAssignSearch] = useState("");
   // Filter tree: a group has { id, kind:"group", conj:"AND"|"OR", children:[] }
   // children are conditions { id, kind:"cond", field, op, value } or nested groups.
   const [filterTree, setFilterTree] = useState({ id: "root", kind: "group", conj: "AND", children: [] });
@@ -2298,6 +2300,44 @@ export default function Tasks({
     fetchTasks();
   }
 
+  // Inline set assignees on a task (used by the empty-cell add-assignee picker).
+  async function setTaskAssignees(taskId, names) {
+    await supabase
+      .from("tasks")
+      .update({
+        assignees: names,
+        assignee: names[0] || "",
+        updated_by: profile?.full_name || "Unknown",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", taskId);
+    fetchTasks();
+  }
+  // Inline set a built-in date column on a task.
+  async function setTaskDate(taskId, colKey, value) {
+    await supabase
+      .from("tasks")
+      .update({
+        [colKey]: value || null,
+        updated_by: profile?.full_name || "Unknown",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", taskId);
+    fetchTasks();
+  }
+  // Inline set a custom field value on a task.
+  async function setTaskFieldValueInline(taskId, fieldId, value) {
+    const { data: existing } = await supabase
+      .from("task_field_values")
+      .select("id")
+      .eq("task_id", taskId)
+      .eq("field_id", fieldId)
+      .maybeSingle();
+    if (existing) await supabase.from("task_field_values").update({ value }).eq("id", existing.id);
+    else await supabase.from("task_field_values").insert({ task_id: taskId, field_id: fieldId, value });
+    fetchTasks();
+  }
+
   async function addCustomField() {
     if (!newField.field_name.trim() || !activeSpace) return;
     let fieldOptions = null;
@@ -2799,6 +2839,29 @@ export default function Tasks({
     for (let i = 0; i < (name || "").length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
     return palette[h % palette.length];
   }
+  // A clickable calendar-add icon with an overlaid native date input, used
+  // for empty date cells so the user can set a date inline.
+  function dateAddCell(value, onSet) {
+    return (
+      <span
+        style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, color: "#94a3b8", cursor: "pointer" }}
+        title="Set date"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="12" y1="14" x2="12" y2="18" /><line x1="10" y1="16" x2="14" y2="16" />
+        </svg>
+        <input
+          type="date"
+          value={value || ""}
+          onChange={(e) => onSet(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
+        />
+      </span>
+    );
+  }
+
   function initials(name) {
     const parts = (name || "").trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return "?";
@@ -2828,9 +2891,28 @@ export default function Tasks({
       );
     if (colKey === "assignees") {
       const names = task.assignees?.length > 0 ? task.assignees : task.assignee ? [task.assignee] : [];
-      if (names.length === 0) return <span style={{ color: "#ccc" }}>—</span>;
+      const openAssign = (e) => {
+        e.stopPropagation();
+        const r = e.currentTarget.getBoundingClientRect();
+        const MENU_H = 320;
+        const openUp = window.innerHeight - r.bottom < MENU_H && r.top > MENU_H;
+        setAssignSearch("");
+        setAssignMenu({ taskId: task.id, x: r.left, y: openUp ? undefined : r.bottom + 4, bottom: openUp ? window.innerHeight - r.top + 4 : undefined, current: names });
+      };
+      if (names.length === 0)
+        return (
+          <button
+            onClick={openAssign}
+            title="Assign"
+            style={{ width: 26, height: 26, borderRadius: "50%", border: "1.5px dashed #cbd5e1", background: "none", color: "#94a3b8", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
+            </svg>
+          </button>
+        );
       return (
-        <div style={{ display: "flex", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", cursor: "pointer" }} onClick={openAssign} title="Change assignees">
           {names.map((name, i) => (
             <span
               key={name}
@@ -2841,7 +2923,7 @@ export default function Tasks({
                 fontSize: 10, fontWeight: 700,
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
                 border: "2px solid #fff", marginLeft: i === 0 ? 0 : -7,
-                flexShrink: 0, cursor: "default", letterSpacing: ".02em",
+                flexShrink: 0, letterSpacing: ".02em",
               }}
             >
               {initials(name)}
@@ -2851,6 +2933,7 @@ export default function Tasks({
       );
     }
     if (colKey === "due_date") {
+      if (!task.due_date) return dateAddCell(task.due_date, (v) => setTaskDate(task.id, "due_date", v));
       const dueColor = isOverdue ? "#b91c1c" : isSoon ? "#b45309" : "#555";
       const dueBg = isOverdue ? "#fef2f2" : isSoon ? "#fffbeb" : "transparent";
       return (
@@ -2861,12 +2944,10 @@ export default function Tasks({
             fontWeight: isOverdue || isSoon ? 600 : 400,
             background: dueBg,
             borderRadius: 6,
-            padding: task.due_date && (isOverdue || isSoon) ? "2px 7px" : 0,
+            padding: isOverdue || isSoon ? "2px 7px" : 0,
           }}
         >
-          {task.due_date
-            ? (isOverdue ? `⚠️ ${task.due_date}` : task.due_date)
-            : "—"}
+          {isOverdue ? `⚠️ ${task.due_date}` : task.due_date}
         </span>
       );
     }
@@ -2899,7 +2980,31 @@ export default function Tasks({
             {computeFormula(f, task, getFields(), activeSpace?.space_fields)}
           </span>
         );
-      if (!fv?.value) return "—";
+      if (!fv?.value) {
+        // Inline add affordance for empty date / username custom fields
+        if (f.field_type === "date")
+          return dateAddCell("", (v) => setTaskFieldValueInline(task.id, f.id, v));
+        if (f.field_type === "username")
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                const MENU_H = 320;
+                const openUp = window.innerHeight - r.bottom < MENU_H && r.top > MENU_H;
+                setAssignSearch("");
+                setAssignMenu({ taskId: task.id, fieldId: f.id, x: r.left, y: openUp ? undefined : r.bottom + 4, bottom: openUp ? window.innerHeight - r.top + 4 : undefined, current: [] });
+              }}
+              title="Assign"
+              style={{ width: 26, height: 26, borderRadius: "50%", border: "1.5px dashed #cbd5e1", background: "none", color: "#94a3b8", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
+              </svg>
+            </button>
+          );
+        return "—";
+      }
       if (f.field_type === "dropdown")
         return (
           <span
@@ -3254,6 +3359,69 @@ export default function Tasks({
       style={{ display: "flex", flex: 1, overflow: "hidden", height: "100%" }}
     >
       {/* Description hover popup — rendered into body via portal to escape any ancestor overflow/transform */}
+      {assignMenu && createPortal(
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 99998 }} onClick={() => setAssignMenu(null)} />
+          <div
+            style={{
+              position: "fixed",
+              left: Math.min(assignMenu.x, window.innerWidth - 260),
+              ...(assignMenu.bottom != null ? { bottom: assignMenu.bottom } : { top: assignMenu.y }),
+              width: 250, maxHeight: 320, overflowY: "auto",
+              background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.14)", padding: 8, zIndex: 99999,
+            }}
+          >
+            <input
+              autoFocus
+              value={assignSearch}
+              onChange={(e) => setAssignSearch(e.target.value)}
+              placeholder="Search people…"
+              style={{ width: "100%", fontSize: 12, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, marginBottom: 6, boxSizing: "border-box" }}
+            />
+            {(() => {
+              const opts = [
+                ...members.map((m) => m.full_name),
+                ...tasks.flatMap((t) => taskAssigneeNames(t)),
+              ];
+              const uniq = [...new Set(opts.filter(Boolean))]
+                .filter((n) => n.toLowerCase().includes(assignSearch.toLowerCase()))
+                .sort((a, b) => a.localeCompare(b));
+              if (uniq.length === 0) return <div style={{ fontSize: 12, color: "#bbb", padding: "6px 8px" }}>No people found</div>;
+              return uniq.map((name) => {
+                const selected = assignMenu.current.includes(name);
+                return (
+                  <div
+                    key={name}
+                    onClick={() => {
+                      if (assignMenu.fieldId) {
+                        setTaskFieldValueInline(assignMenu.taskId, assignMenu.fieldId, name);
+                        setAssignMenu(null);
+                      } else {
+                        const next = selected
+                          ? assignMenu.current.filter((n) => n !== name)
+                          : [...assignMenu.current, name];
+                        setTaskAssignees(assignMenu.taskId, next);
+                        setAssignMenu((m) => ({ ...m, current: next }));
+                      }
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer", background: selected ? "#f0f7ff" : "transparent" }}
+                    onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = "#f5f5f4"; }}
+                    onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span style={{ width: 22, height: 22, borderRadius: "50%", background: avatarColor(name), color: "#fff", fontSize: 9, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {initials(name)}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
+                    {selected && <span style={{ color: "#1d4ed8", fontSize: 13 }}>✓</span>}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </>,
+        document.body,
+      )}
       {statusMenu && createPortal(
         <>
           <div
