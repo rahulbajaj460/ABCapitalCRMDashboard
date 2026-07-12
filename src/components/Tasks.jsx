@@ -3736,8 +3736,8 @@ export default function Tasks({
 
         <div className="content-area">
           {viewMode === "list" && (
-            <div className={activeList ? undefined : "task-table-scroll"}>
-              <div style={activeList ? undefined : { width: "max-content", minWidth: "100%" }}>
+            <div className={activeFolder ? undefined : "task-table-scroll"}>
+              <div style={activeFolder ? undefined : { width: "max-content", minWidth: "100%" }}>
                 {activeSpace && !activeFolder ? (
                   <div>
                     {(activeSpace.folders || []).map((folder) => {
@@ -4111,7 +4111,7 @@ export default function Tasks({
                                     return (
                                       <div key={groupName} style={{ marginBottom: 4, paddingLeft: 8 }}>
                                         <div
-                                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer", position: "sticky", left: 0, width: "fit-content", zIndex: 2 }}
+                                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer", position: "sticky", left: 0, top: 38, width: "fit-content", zIndex: 2, background: "#f7f8fa", borderRadius: 7 }}
                                           onClick={() => setExpandedGroups((p) => ({ ...p, [groupKey]: !groupExpanded }))}
                                         >
                                           <span style={{ fontSize: 10, color: "#aaa" }}>{groupExpanded ? "▾" : "▸"}</span>
@@ -4119,9 +4119,13 @@ export default function Tasks({
                                           <span style={{ fontSize: 12, color: "#aaa" }}>{groupTasks.length}</span>
                                         </div>
                                         {groupExpanded && (
-                                          <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, marginTop: 4 }}>
-                                            {renderTableHead(folderFieldList)}
-                                            {groupTasks.map((task) => renderTaskRow(task, folderStatusList, folderFieldList, activeFolder))}
+                                          <div className="task-table-scroll" style={{ marginTop: 4 }}>
+                                            <div style={{ width: "max-content", minWidth: "100%" }}>
+                                              <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8 }}>
+                                                {renderTableHead(folderFieldList)}
+                                                {groupTasks.map((task) => renderTaskRow(task, folderStatusList, folderFieldList, activeFolder))}
+                                              </div>
+                                            </div>
                                           </div>
                                         )}
                                       </div>
@@ -4153,9 +4157,13 @@ export default function Tasks({
                                 <span style={{ fontSize: 12, color: "#aaa" }}>{unlistedTasks.length}</span>
                               </div>
                               {ulExpanded && (
-                                <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, marginTop: 4 }}>
-                                  {renderTableHead(getFolderFields(activeFolder))}
-                                  {unlistedTasks.map((task) => renderTaskRow(task, getFolderStatuses(activeFolder), getFolderFields(activeFolder), activeFolder))}
+                                <div className="task-table-scroll" style={{ marginTop: 4 }}>
+                                  <div style={{ width: "max-content", minWidth: "100%" }}>
+                                    <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8 }}>
+                                      {renderTableHead(getFolderFields(activeFolder))}
+                                      {unlistedTasks.map((task) => renderTaskRow(task, getFolderStatuses(activeFolder), getFolderFields(activeFolder), activeFolder))}
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                             </div>
