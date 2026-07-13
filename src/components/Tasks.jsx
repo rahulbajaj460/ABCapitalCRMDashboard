@@ -1317,7 +1317,7 @@ export default function Tasks({
       ? unique
       : ["To Do", "In Progress", "In Review", "Done"];
   }
-  function applyFieldOverrides(fields, scopeSpaceId, scopeFolderId) {
+  function applyFieldOverrides(fields, scopeSpaceId, scopeFolderId, scopeListId) {
     // Start with prop fields, apply option overrides, drop locally-deleted ones
     let result = fields
       .filter((f) => !locallyDeletedFieldIds.includes(f.id))
@@ -1326,15 +1326,16 @@ export default function Tasks({
           ? { ...f, field_options: fieldOptionsOverride[f.id] }
           : f,
       );
-    // Merge in any fields added locally that the parent prop doesn't have yet
+    // Merge in any fields added locally that the parent prop doesn't have yet,
+    // scoped correctly so a field added in one list doesn't leak into siblings.
     const existingIds = new Set(result.map((f) => f.id));
-    const extras = locallyAddedFields.filter(
-      (f) =>
-        !existingIds.has(f.id) &&
-        !locallyDeletedFieldIds.includes(f.id) &&
-        f.space_id === scopeSpaceId &&
-        ((f.folder_id || null) === (scopeFolderId || null) || f.list_id != null),
-    );
+    const extras = locallyAddedFields.filter((f) => {
+      if (existingIds.has(f.id) || locallyDeletedFieldIds.includes(f.id)) return false;
+      if (f.space_id !== scopeSpaceId) return false;
+      if (scopeListId != null) return f.list_id === scopeListId; // list view: only this list's fields
+      // folder/space view: folder-scoped, or any list field within scope
+      return (f.folder_id || null) === (scopeFolderId || null) || f.list_id != null;
+    });
     if (extras.length > 0) result = [...result, ...extras];
     return result;
   }
@@ -1345,6 +1346,7 @@ export default function Tasks({
         [...listFields].sort((a, b) => a.field_order - b.field_order),
         activeSpace?.id,
         activeFolder?.id,
+        activeList.id,
       );
     }
     if (activeFolder) {
