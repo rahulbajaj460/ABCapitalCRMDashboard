@@ -2108,19 +2108,16 @@ export default function Tasks({
           .insert({ task_id: drawerTask.id, field_id: fieldId, value });
     }
 
+    // Refetch with the SAME scoping as fetchTasks (list/folder/space, no
+    // extra member filter) so other status groups aren't wiped out on save.
     let q = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
-    if (activeFolder) q = q.eq("folder_id", activeFolder.id);
+    if (activeList) q = q.eq("list_id", activeList.id);
+    else if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
-    if (profile?.role === "member") {
-      const nameFilter = profile.full_name
-        ? `,assignees.cs.{${profile.full_name}}`
-        : "";
-      q = q.or(`assignee_id.eq.${profile.id}${nameFilter}`);
-    }
     const { data: refreshed } = await q;
     if (refreshed) {
       setTasks(refreshed);
