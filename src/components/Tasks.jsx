@@ -2744,8 +2744,10 @@ export default function Tasks({
     indented,
     sticky,
     draggableCol,
+    selectAllIds,
   }) {
     const isActive = sortConfig.key === colKey;
+    const allSelected = selectAllIds && selectAllIds.length > 0 && selectAllIds.every((id) => selectedTaskIds.has(id));
     const widthKey = resizeKey || colKey;
     const isDragOver = draggableCol && dragOverColKey === colKey;
     return (
@@ -2799,6 +2801,24 @@ export default function Tasks({
             textOverflow: "ellipsis",
           }}
         >
+          {selectAllIds && (
+            <input
+              type="checkbox"
+              checked={allSelected}
+              ref={(el) => { if (el) el.indeterminate = !allSelected && selectAllIds.some((id) => selectedTaskIds.has(id)); }}
+              onClick={(e) => e.stopPropagation()}
+              onChange={() => {
+                setSelectedTaskIds((prev) => {
+                  const next = new Set(prev);
+                  if (allSelected) selectAllIds.forEach((id) => next.delete(id));
+                  else selectAllIds.forEach((id) => next.add(id));
+                  return next;
+                });
+              }}
+              title="Select all in group"
+              style={{ width: 14, height: 14, cursor: "pointer", marginRight: 4 }}
+            />
+          )}
           {label}
           {sortable && (
             <span
@@ -2833,7 +2853,7 @@ export default function Tasks({
     );
   }
 
-  function renderTableHead(fieldList, indented = false) {
+  function renderTableHead(fieldList, indented = false, groupTaskIds = null) {
     const activeCols = getActiveColumns(fieldList);
     const gridTemplate = buildGridTemplate(fieldList, indented);
     return (
@@ -2852,6 +2872,7 @@ export default function Tasks({
           sortable
           indented={indented}
           sticky
+          selectAllIds={groupTaskIds}
         />
         {activeCols.map((c) => (
           <GridHeaderCell
@@ -4233,7 +4254,7 @@ export default function Tasks({
                                                     </div>
                                                     {groupExpanded && (
                                                       <div style={{ marginBottom: 4 }}>
-                                                        {renderTableHead(folderFieldList, true)}
+                                                        {renderTableHead(folderFieldList, true, groupTasks.map((t) => t.id))}
                                                         {groupTasks.map((task) => renderTaskRow(task, folderStatusList, folderFieldList, folder))}
                                                       </div>
                                                     )}
@@ -4264,7 +4285,7 @@ export default function Tasks({
                                         </div>
                                         {ulExpanded && (
                                           <div>
-                                            {renderTableHead(folderFieldList, true)}
+                                            {renderTableHead(folderFieldList, true, unlistedTasks.map((t) => t.id))}
                                             {sortTasks(unlistedTasks).map((task) => renderTaskRow(task, folderStatusList, folderFieldList, folder))}
                                           </div>
                                         )}
@@ -4297,7 +4318,7 @@ export default function Tasks({
                                         </div>
                                         {groupExpanded && (
                                           <div style={{ marginBottom: 4 }}>
-                                            {renderTableHead(folderFieldList, true)}
+                                            {renderTableHead(folderFieldList, true, groupTasks.map((t) => t.id))}
                                             {groupTasks.map((task) => renderTaskRow(task, folderStatusList, folderFieldList, folder))}
                                           </div>
                                         )}
@@ -4351,7 +4372,7 @@ export default function Tasks({
                             </span>
                           </div>
                           <div>
-                            {renderTableHead(getFields())}
+                            {renderTableHead(getFields(), false, nft.map((t) => t.id))}
                             {nft.map((task) =>
                               renderTaskRow(task, getStatuses(), getFields()),
                             )}
@@ -4446,7 +4467,7 @@ export default function Tasks({
                                           <div className="task-table-scroll" style={{ marginTop: 4 }}>
                                             <div style={{ width: "max-content", minWidth: "100%" }}>
                                               <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8 }}>
-                                                {renderTableHead(folderFieldList)}
+                                                {renderTableHead(folderFieldList, false, groupTasks.map((t) => t.id))}
                                                 {groupTasks.map((task) => renderTaskRow(task, folderStatusList, folderFieldList, activeFolder))}
                                               </div>
                                             </div>
@@ -4484,7 +4505,7 @@ export default function Tasks({
                                 <div className="task-table-scroll" style={{ marginTop: 4 }}>
                                   <div style={{ width: "max-content", minWidth: "100%" }}>
                                     <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8 }}>
-                                      {renderTableHead(getFolderFields(activeFolder))}
+                                      {renderTableHead(getFolderFields(activeFolder), false, unlistedTasks.map((t) => t.id))}
                                       {unlistedTasks.map((task) => renderTaskRow(task, getFolderStatuses(activeFolder), getFolderFields(activeFolder), activeFolder))}
                                     </div>
                                   </div>
@@ -4553,7 +4574,7 @@ export default function Tasks({
                                       borderRadius: 8,
                                     }}
                                   >
-                                    {renderTableHead(getFields())}
+                                    {renderTableHead(getFields(), false, groupTasks.map((t) => t.id))}
                                     {groupTasks.map((task) =>
                                       renderTaskRow(
                                         task,
