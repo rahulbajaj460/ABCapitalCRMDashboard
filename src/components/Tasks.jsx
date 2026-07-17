@@ -324,6 +324,9 @@ export default function Tasks({
   const [statusMenu, setStatusMenu] = useState(null); // { taskId, statuses, x, y }
   const [assignMenu, setAssignMenu] = useState(null); // { taskId, x, y, current }
   const [assignSearch, setAssignSearch] = useState("");
+  const [selectedTaskIds, setSelectedTaskIds] = useState(() => new Set());
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkAssignSearch, setBulkAssignSearch] = useState("");
   // Filter tree: a group has { id, kind:"group", conj:"AND"|"OR", children:[] }
   // children are conditions { id, kind:"cond", field, op, value } or nested groups.
   const [filterTree, setFilterTree] = useState({ id: "root", kind: "group", conj: "AND", children: [] });
@@ -2325,6 +2328,36 @@ export default function Tasks({
     if (before.join(",") !== names.join(",")) await recordHistory(taskId, { assignees: { from: before, to: names } });
     fetchTasks();
   }
+  function toggleSelectTask(id) {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelectedTaskIds(new Set());
+    setBulkAssignOpen(false);
+  }
+  // Assign the given person to every selected task (appends if not present).
+  async function bulkAssignTo(name) {
+    const ids = [...selectedTaskIds];
+    for (const id of ids) {
+      const task = tasks.find((t) => t.id === id);
+      if (!task) continue;
+      const before = task.assignees?.length ? task.assignees : task.assignee ? [task.assignee] : [];
+      if (before.includes(name)) continue;
+      const after = [...before, name];
+      await supabase
+        .from("tasks")
+        .update({ assignees: after, assignee: after[0] || "", updated_by: profile?.full_name || "Unknown", updated_at: new Date().toISOString() })
+        .eq("id", id);
+      await recordHistory(id, { assignees: { from: before, to: after } });
+    }
+    clearSelection();
+    fetchTasks();
+  }
+
   // Inline set a built-in date column on a task.
   async function setTaskDate(taskId, colKey, value) {
     const task = tasks.find((t) => t.id === taskId);
@@ -3185,6 +3218,14 @@ export default function Tasks({
           }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, maxWidth: "100%" }}>
+            <input
+              type="checkbox"
+              checked={selectedTaskIds.has(task.id)}
+              onClick={(e) => e.stopPropagation()}
+              onChange={() => toggleSelectTask(task.id)}
+              title="Select task"
+              style={{ width: 14, height: 14, flexShrink: 0, cursor: "pointer" }}
+            />
             <span
               onClick={(e) => {
                 e.stopPropagation();
@@ -3412,6 +3453,67 @@ export default function Tasks({
     <div
       style={{ display: "flex", flex: 1, overflow: "hidden", height: "100%" }}
     >
+      {/* Bulk-action bar shown when tasks are selected */}
+      {selectedTaskIds.size > 0 && createPortal(
+        <div
+          style={{
+            position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+            zIndex: 99997, background: "#1f2937", color: "#fff", borderRadius: 12,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.25)", padding: "10px 14px",
+            display: "flex", alignItems: "center", gap: 12,
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{selectedTaskIds.size} selected</span>
+          <div style={{ width: 1, height: 20, background: "#374151" }} />
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => { setBulkAssignSearch(""); setBulkAssignOpen((v) => !v); }}
+              style={{ fontSize: 13, fontWeight: 600, background: "#374151", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+            >
+              Assign ▾
+            </button>
+            {bulkAssignOpen && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 1 }} onClick={() => setBulkAssignOpen(false)} />
+                <div style={{ position: "absolute", bottom: "120%", left: 0, zIndex: 2, width: 240, maxHeight: 300, overflowY: "auto", background: "#fff", color: "#111", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.18)", padding: 8 }}>
+                  <input
+                    autoFocus
+                    value={bulkAssignSearch}
+                    onChange={(e) => setBulkAssignSearch(e.target.value)}
+                    placeholder="Search people…"
+                    style={{ width: "100%", fontSize: 12, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, marginBottom: 6, boxSizing: "border-box" }}
+                  />
+                  {(() => {
+                    const opts = [...new Set([...members.map((m) => m.full_name), ...tasks.flatMap((t) => taskAssigneeNames(t))].filter(Boolean))]
+                      .filter((n) => n.toLowerCase().includes(bulkAssignSearch.toLowerCase()))
+                      .sort((a, b) => a.localeCompare(b));
+                    if (opts.length === 0) return <div style={{ fontSize: 12, color: "#bbb", padding: "6px 8px" }}>No people found</div>;
+                    return opts.map((name) => (
+                      <div
+                        key={name}
+                        onClick={() => bulkAssignTo(name)}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "#f5f5f4"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span style={{ width: 22, height: 22, borderRadius: "50%", background: avatarColor(name), color: "#fff", fontSize: 9, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initials(name)}</span>
+                        <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            onClick={clearSelection}
+            style={{ fontSize: 13, background: "none", color: "#cbd5e1", border: "none", cursor: "pointer" }}
+          >
+            Clear
+          </button>
+        </div>,
+        document.body,
+      )}
       {/* Description hover popup — rendered into body via portal to escape any ancestor overflow/transform */}
       {assignMenu && createPortal(
         <>
