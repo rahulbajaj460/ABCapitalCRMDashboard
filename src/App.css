@@ -486,6 +486,13 @@ textarea:focus {
 .task-grid-row:hover {
   background: #fafaf9;
 }
+/* Virtualize rows: the browser skips layout/paint for off-screen rows,
+   keeping large lists smooth. contain-intrinsic-size reserves height so
+   the scrollbar stays accurate; "auto" remembers each row's real size. */
+.task-grid-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
 .task-name-cell {
   background: #fff;
 }
