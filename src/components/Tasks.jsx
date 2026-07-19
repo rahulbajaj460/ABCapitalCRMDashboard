@@ -325,6 +325,7 @@ export default function Tasks({
   const [assignMenu, setAssignMenu] = useState(null); // { taskId, x, y, current }
   const [assignSearch, setAssignSearch] = useState("");
   const [folderListCounts, setFolderListCounts] = useState({}); // listId -> exact count
+  const [listStatusCounts, setListStatusCounts] = useState({}); // status -> exact count (active list)
   const [selectedTaskIds, setSelectedTaskIds] = useState(() => new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkAssignSearch, setBulkAssignSearch] = useState("");
@@ -749,40 +750,13 @@ export default function Tasks({
       fetchTaskMeta(merged.map((t) => t.id));
       return;
     }
-    // List view: page through all rows so lists over 1000 tasks load fully
-    // (Supabase caps each request at ~1000) and group counts are accurate.
-    if (activeList) {
-      const PAGE = 1000;
-      let from = 0;
-      let all = [];
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { data, error } = await supabase
-          .from("tasks")
-          .select("*, task_field_values(*)")
-          .is("deleted_at", null)
-          .eq("list_id", activeList.id)
-          .order("created_at", { ascending: false })
-          .range(from, from + PAGE - 1);
-        if (error || !data || data.length === 0) break;
-        all = all.concat(data);
-        if (data.length < PAGE) break;
-        from += PAGE;
-      }
-      setTasks(all);
-      if (drawerTask) {
-        const u = all.find((t) => t.id === drawerTask.id);
-        if (u) setDrawerTask(u);
-      }
-      fetchTaskMeta(all.map((t) => t.id));
-      return;
-    }
     let q = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
-    if (activeSpace) q = q.eq("space_id", activeSpace.id);
+    if (activeList) q = q.eq("list_id", activeList.id);
+    else if (activeSpace) q = q.eq("space_id", activeSpace.id);
     const { data } = await q;
     if (data) {
       setTasks(data);
@@ -792,6 +766,23 @@ export default function Tasks({
       }
       fetchTaskMeta(data.map((t) => t.id));
     }
+    // For a list, fetch exact per-status counts so group headers show true
+    // totals even when the list has more rows than a single fetch can load.
+    if (activeList) fetchListStatusCounts();
+  }
+
+  async function fetchListStatusCounts() {
+    if (!activeList) { setListStatusCounts({}); return; }
+    const statuses = getStatusesForList(activeList.id);
+    const counts = {};
+    await Promise.all(
+      statuses.map(async (s) => {
+        const { count } = await supabase.from("tasks").select("id", { count: "exact", head: true })
+          .is("deleted_at", null).eq("list_id", activeList.id).is("parent_task_id", null).eq("status", s);
+        counts[s] = count || 0;
+      }),
+    );
+    setListStatusCounts(counts);
   }
 
   async function fetchTaskMeta(taskIds) {
@@ -4621,7 +4612,7 @@ export default function Tasks({
                                 {groupName}
                               </span>
                               <span style={{ fontSize: 12, color: "#aaa" }}>
-                                {groupTasks.length}
+                                {groupBy === "status" ? (listStatusCounts[groupName] ?? groupTasks.length) : groupTasks.length}
                               </span>
                             </div>
                             )}
