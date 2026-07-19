@@ -749,13 +749,40 @@ export default function Tasks({
       fetchTaskMeta(merged.map((t) => t.id));
       return;
     }
+    // List view: page through all rows so lists over 1000 tasks load fully
+    // (Supabase caps each request at ~1000) and group counts are accurate.
+    if (activeList) {
+      const PAGE = 1000;
+      let from = 0;
+      let all = [];
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data, error } = await supabase
+          .from("tasks")
+          .select("*, task_field_values(*)")
+          .is("deleted_at", null)
+          .eq("list_id", activeList.id)
+          .order("created_at", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+      setTasks(all);
+      if (drawerTask) {
+        const u = all.find((t) => t.id === drawerTask.id);
+        if (u) setDrawerTask(u);
+      }
+      fetchTaskMeta(all.map((t) => t.id));
+      return;
+    }
     let q = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
-    if (activeList) q = q.eq("list_id", activeList.id);
-    else if (activeSpace) q = q.eq("space_id", activeSpace.id);
+    if (activeSpace) q = q.eq("space_id", activeSpace.id);
     const { data } = await q;
     if (data) {
       setTasks(data);
