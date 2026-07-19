@@ -714,13 +714,35 @@ export default function Tasks({
   }
 
   async function fetchTasks() {
+    // Folder overview can hold thousands of tasks across its lists — a single
+    // query hits Supabase's row/payload cap and returns nothing. Fetch each
+    // list separately (each under the cap) and merge so rows show for all lists.
+    if (activeFolder && !activeList) {
+      const folderListIds = spaceLists.filter((l) => l.folder_id === activeFolder.id).map((l) => l.id);
+      const perList = await Promise.all(
+        folderListIds.map((id) =>
+          supabase.from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+            .eq("list_id", id).order("created_at", { ascending: false }).limit(1000),
+        ),
+      );
+      const { data: noList } = await supabase.from("tasks").select("*, task_field_values(*)")
+        .is("deleted_at", null).eq("folder_id", activeFolder.id).is("list_id", null)
+        .order("created_at", { ascending: false }).limit(1000);
+      const merged = [...perList.flatMap((r) => r.data || []), ...(noList || [])];
+      setTasks(merged);
+      if (drawerTask) {
+        const u = merged.find((t) => t.id === drawerTask.id);
+        if (u) setDrawerTask(u);
+      }
+      fetchTaskMeta(merged.map((t) => t.id));
+      return;
+    }
     let q = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
     if (activeList) q = q.eq("list_id", activeList.id);
-    else if (activeFolder) q = q.eq("folder_id", activeFolder.id);
     else if (activeSpace) q = q.eq("space_id", activeSpace.id);
     const { data } = await q;
     if (data) {
