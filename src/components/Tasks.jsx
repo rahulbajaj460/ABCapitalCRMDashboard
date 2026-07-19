@@ -324,6 +324,7 @@ export default function Tasks({
   const [statusMenu, setStatusMenu] = useState(null); // { taskId, statuses, x, y }
   const [assignMenu, setAssignMenu] = useState(null); // { taskId, x, y, current }
   const [assignSearch, setAssignSearch] = useState("");
+  const [folderListCounts, setFolderListCounts] = useState({}); // listId -> exact count
   const [selectedTaskIds, setSelectedTaskIds] = useState(() => new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkAssignSearch, setBulkAssignSearch] = useState("");
@@ -718,17 +719,28 @@ export default function Tasks({
     // query hits Supabase's row/payload cap and returns nothing. Fetch each
     // list separately (each under the cap) and merge so rows show for all lists.
     if (activeFolder && !activeList) {
-      const folderListIds = spaceLists.filter((l) => l.folder_id === activeFolder.id).map((l) => l.id);
+      // Query the folder's lists fresh (no dependency on spaceLists timing).
+      const { data: fLists } = await supabase.from("lists").select("id")
+        .eq("folder_id", activeFolder.id).is("deleted_at", null);
+      const folderListIds = (fLists || []).map((l) => l.id);
+      const counts = {};
       const perList = await Promise.all(
-        folderListIds.map((id) =>
-          supabase.from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
-            .eq("list_id", id).order("created_at", { ascending: false }).limit(1000),
-        ),
+        folderListIds.map(async (id) => {
+          const [{ data }, { count }] = await Promise.all([
+            supabase.from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+              .eq("list_id", id).order("created_at", { ascending: false }).limit(1000),
+            supabase.from("tasks").select("id", { count: "exact", head: true })
+              .is("deleted_at", null).eq("list_id", id).is("parent_task_id", null),
+          ]);
+          counts[id] = count || 0;
+          return data || [];
+        }),
       );
       const { data: noList } = await supabase.from("tasks").select("*, task_field_values(*)")
         .is("deleted_at", null).eq("folder_id", activeFolder.id).is("list_id", null)
         .order("created_at", { ascending: false }).limit(1000);
-      const merged = [...perList.flatMap((r) => r.data || []), ...(noList || [])];
+      setFolderListCounts(counts);
+      const merged = [...perList.flat(), ...(noList || [])];
       setTasks(merged);
       if (drawerTask) {
         const u = merged.find((t) => t.id === drawerTask.id);
@@ -4466,7 +4478,7 @@ export default function Tasks({
                                   <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
                                 </svg>
                                 <span style={{ fontSize: 13, fontWeight: 600 }}>{list.name}</span>
-                                <span style={{ fontSize: 12, color: "#aaa" }}>{filteredListTasks.length}</span>
+                                <span style={{ fontSize: 12, color: "#aaa" }}>{folderListCounts[list.id] ?? filteredListTasks.length}</span>
                               </div>
                               {listExpanded && (
                                 <div>
