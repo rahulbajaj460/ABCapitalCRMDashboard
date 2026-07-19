@@ -766,16 +766,27 @@ export default function Tasks({
       fetchTaskMeta(merged.map((t) => t.id));
       return;
     }
-    // List view: load the first page; more pages load on scroll (infinite).
+    // List view: try a small first page (infinite scroll). If the bounded
+    // query fails/returns nothing (some large lists time out on
+    // ordered+limited joins), fall back to the plain fetch so rows show.
     if (activeList) {
-      const { data } = await supabase
+      let { data } = await supabase
         .from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
         .eq("list_id", activeList.id).order("created_at", { ascending: false })
         .limit(LIST_PAGE);
-      const rows = data || [];
+      let rows = data || [];
+      if (rows.length === 0) {
+        const { data: d2 } = await supabase
+          .from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+          .eq("list_id", activeList.id).order("created_at", { ascending: false });
+        rows = d2 || [];
+        setListHasMore(false);       // paging unreliable here; show what loaded
+        setListCursor(null);
+      } else {
+        setListCursor(rows[rows.length - 1].created_at);
+        setListHasMore(rows.length === LIST_PAGE);
+      }
       setTasks(rows);
-      setListCursor(rows.length ? rows[rows.length - 1].created_at : null);
-      setListHasMore(rows.length === LIST_PAGE);
       if (drawerTask) {
         const u = rows.find((t) => t.id === drawerTask.id);
         if (u) setDrawerTask(u);
