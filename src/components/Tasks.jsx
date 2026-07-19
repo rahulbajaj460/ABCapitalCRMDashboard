@@ -326,6 +326,11 @@ export default function Tasks({
   const [assignSearch, setAssignSearch] = useState("");
   const [folderListCounts, setFolderListCounts] = useState({}); // listId -> exact count
   const [listStatusCounts, setListStatusCounts] = useState({}); // status -> exact count (active list)
+  const [listCursor, setListCursor] = useState(null); // created_at of last loaded task
+  const [listHasMore, setListHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadSentinelRef = useRef(null);
+  const LIST_PAGE = 300;
   const [selectedTaskIds, setSelectedTaskIds] = useState(() => new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkAssignSearch, setBulkAssignSearch] = useState("");
@@ -696,6 +701,17 @@ export default function Tasks({
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, [showFilterPanel]);
+  // Infinite scroll: load more list rows when the bottom sentinel is visible.
+  useEffect(() => {
+    const el = loadSentinelRef.current;
+    if (!el || !activeList || !listHasMore) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMoreListTasks(); },
+      { rootMargin: "400px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [activeList, listHasMore, loadingMore, listCursor]);
   useEffect(() => {
     function h(e) {
       if (e.key === "Escape") {
@@ -750,13 +766,30 @@ export default function Tasks({
       fetchTaskMeta(merged.map((t) => t.id));
       return;
     }
+    // List view: load the first page; more pages load on scroll (infinite).
+    if (activeList) {
+      const { data } = await supabase
+        .from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+        .eq("list_id", activeList.id).order("created_at", { ascending: false })
+        .limit(LIST_PAGE);
+      const rows = data || [];
+      setTasks(rows);
+      setListCursor(rows.length ? rows[rows.length - 1].created_at : null);
+      setListHasMore(rows.length === LIST_PAGE);
+      if (drawerTask) {
+        const u = rows.find((t) => t.id === drawerTask.id);
+        if (u) setDrawerTask(u);
+      }
+      fetchTaskMeta(rows.map((t) => t.id));
+      fetchListStatusCounts();
+      return;
+    }
     let q = supabase
       .from("tasks")
       .select("*, task_field_values(*)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
-    if (activeList) q = q.eq("list_id", activeList.id);
-    else if (activeSpace) q = q.eq("space_id", activeSpace.id);
+    if (activeSpace) q = q.eq("space_id", activeSpace.id);
     const { data } = await q;
     if (data) {
       setTasks(data);
@@ -766,9 +799,27 @@ export default function Tasks({
       }
       fetchTaskMeta(data.map((t) => t.id));
     }
-    // For a list, fetch exact per-status counts so group headers show true
-    // totals even when the list has more rows than a single fetch can load.
-    if (activeList) fetchListStatusCounts();
+  }
+
+  // Load the next page of the active list (cursor by created_at) and append.
+  async function loadMoreListTasks() {
+    if (!activeList || !listHasMore || loadingMore || !listCursor) return;
+    setLoadingMore(true);
+    const { data } = await supabase
+      .from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+      .eq("list_id", activeList.id).lt("created_at", listCursor)
+      .order("created_at", { ascending: false }).limit(LIST_PAGE);
+    const rows = data || [];
+    if (rows.length) {
+      setTasks((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        return [...prev, ...rows.filter((t) => !seen.has(t.id))];
+      });
+      setListCursor(rows[rows.length - 1].created_at);
+      fetchTaskMeta(rows.map((t) => t.id));
+    }
+    setListHasMore(rows.length === LIST_PAGE);
+    setLoadingMore(false);
   }
 
   async function fetchListStatusCounts() {
@@ -4656,6 +4707,11 @@ export default function Tasks({
                   </div>
                   );
                 })()}
+                {activeList && (listHasMore || loadingMore) && (
+                  <div ref={loadSentinelRef} style={{ textAlign: "center", padding: "16px", fontSize: 12, color: "#aaa" }}>
+                    {loadingMore ? "Loading more…" : ""}
+                  </div>
+                )}
               </div>
             </div>
           )}
