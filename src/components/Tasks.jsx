@@ -368,6 +368,7 @@ export default function Tasks({
   // columnOrder defines the display sequence of ALL orderable columns (visible + hidden)
   const [columnOrder, setColumnOrder] = useState(DEFAULT_COLUMN_ORDER);
   const [viewSaved, setViewSaved] = useState(false);
+  const [viewDirty, setViewDirty] = useState(false); // unsaved column changes
   const [dragOverColKey, setDragOverColKey] = useState(null);
   const draggedColKey = useRef(null);
   const viewSaveTimer = useRef(null);
@@ -459,8 +460,10 @@ export default function Tasks({
       // the previously-viewed scope don't carry over.
       setColumnOrder(DEFAULT_COLUMN_ORDER);
       setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+      setViewDirty(false);
       return;
     }
+    setViewDirty(false);
     const saved = data.columns; // array of { key, visible, width }
     const order = saved.map((c) => c.key);
     const visible = saved.filter((c) => c.visible).map((c) => c.key);
@@ -471,26 +474,34 @@ export default function Tasks({
     setColumnWidths((prev) => ({ ...prev, ...widths }));
   }
 
-  function saveViewConfig(overrideOrder, overrideVisible, overrideWidths) {
+  // Column tweaks (reorder, toggle, resize) now only mark the view as having
+  // unsaved changes — they no longer auto-persist. The shared view for this
+  // scope changes only when someone clicks "Save view" (publishView).
+  function saveViewConfig() {
+    setViewDirty(true);
+  }
+
+  // Persist the current column layout as the shared view for this scope so
+  // every user sees it (until someone saves a different one).
+  async function publishView() {
     const scope = getCurrentScope();
     if (!scope) return;
-    if (viewSaveTimer.current) clearTimeout(viewSaveTimer.current);
-    viewSaveTimer.current = setTimeout(async () => {
-      const order = overrideOrder ?? columnOrder;
-      const visible = overrideVisible ?? visibleColumns;
-      const widths = overrideWidths ?? columnWidths;
-      const columns = order.map((key) => ({
-        key,
-        visible: visible.includes(key),
-        width: widths[key] || null,
-      }));
-      await supabase.from("task_list_views").upsert(
-        { ...scope, columns, updated_at: new Date().toISOString() },
-        { onConflict: "scope_type,scope_id" }
-      );
-      setViewSaved(true);
-      setTimeout(() => setViewSaved(false), 2000);
-    }, 400);
+    const columns = columnOrder.map((key) => ({
+      key,
+      visible: visibleColumns.includes(key),
+      width: columnWidths[key] || null,
+    }));
+    const { error } = await supabase.from("task_list_views").upsert(
+      { ...scope, columns, updated_at: new Date().toISOString() },
+      { onConflict: "scope_type,scope_id" },
+    );
+    if (error) {
+      alert("Could not save the view: " + (error.message || "permission denied"));
+      return;
+    }
+    setViewDirty(false);
+    setViewSaved(true);
+    setTimeout(() => setViewSaved(false), 2000);
   }
 
   function moveColumnOrder(key, direction) {
@@ -3965,10 +3976,30 @@ export default function Tasks({
                       <span style={{ fontSize: 12, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: ".04em" }}>
                         Columns
                       </span>
-                      {viewSaved && (
-                        <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Saved</span>
+                      {viewSaved ? (
+                        <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Saved for everyone</span>
+                      ) : (
+                        <button
+                          onClick={publishView}
+                          disabled={!viewDirty}
+                          title={viewDirty ? "Save this column layout as the shared view for all users" : "No unsaved changes"}
+                          style={{
+                            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 6,
+                            border: "1px solid " + (viewDirty ? "#1d4ed8" : "#e5e7eb"),
+                            background: viewDirty ? "#1d4ed8" : "#f3f4f6",
+                            color: viewDirty ? "#fff" : "#9ca3af",
+                            cursor: viewDirty ? "pointer" : "default",
+                          }}
+                        >
+                          Save view
+                        </button>
                       )}
                     </div>
+                    {viewDirty && (
+                      <div style={{ fontSize: 10, color: "#9ca3af", marginBottom: 8 }}>
+                        Unsaved changes — visible only to you until you Save view.
+                      </div>
+                    )}
                     {(() => {
                       const checkedKeys = fullOrder.filter((k) => visibleColumns.includes(k));
                       const uncheckedKeys = fullOrder.filter((k) => !visibleColumns.includes(k));
