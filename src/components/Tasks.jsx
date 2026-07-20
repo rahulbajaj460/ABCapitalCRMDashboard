@@ -2436,6 +2436,26 @@ export default function Tasks({
     });
   }
 
+  // Create in-app notifications for newly-assigned users (excludes the actor).
+  async function notifyAssignment(task, addedNames) {
+    const me = profile?.full_name;
+    const recipients = [...new Set(addedNames)]
+      .filter((n) => n && n !== me)
+      .map((n) => members.find((m) => m.full_name === n))
+      .filter((m) => m && m.id);
+    if (!recipients.length) return;
+    await supabase.from("notifications").insert(
+      recipients.map((m) => ({
+        user_id: m.id,
+        task_id: task.id,
+        type: "assigned",
+        title: `Assigned: ${task.title}`,
+        body: `${me || "Someone"} assigned you to this task.`,
+        link_scope: { space_id: task.space_id, folder_id: task.folder_id, list_id: task.list_id },
+      })),
+    );
+  }
+
   // Inline set assignees on a task (used by the empty-cell add-assignee picker).
   async function setTaskAssignees(taskId, names) {
     const task = tasks.find((t) => t.id === taskId);
@@ -2451,6 +2471,7 @@ export default function Tasks({
       .eq("id", taskId);
     // Record as arrays so changeLabel("assignees") can diff them.
     if (before.join(",") !== names.join(",")) await recordHistory(taskId, { assignees: { from: before, to: names } });
+    if (task) await notifyAssignment(task, names.filter((n) => !before.includes(n)));
     fetchTasks();
   }
   function toggleSelectTask(id) {
@@ -2478,6 +2499,7 @@ export default function Tasks({
         .update({ assignees: after, assignee: after[0] || "", updated_by: profile?.full_name || "Unknown", updated_at: new Date().toISOString() })
         .eq("id", id);
       await recordHistory(id, { assignees: { from: before, to: after } });
+      await notifyAssignment(task, [name]);
     }
     clearSelection();
     fetchTasks();

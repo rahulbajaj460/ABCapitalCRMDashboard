@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import Sidebar from "./components/Sidebar";
+import Notifications from "./components/Notifications";
 import Dashboard from "./components/Dashboard";
 import Tasks from "./components/Tasks";
 import Wiki from "./components/Wiki";
@@ -358,6 +359,7 @@ export default function App() {
 
   return (
     <div className="app-layout">
+      <Notifications profile={profile} />
       <Sidebar
         spaces={spaces}
         activeSpace={activeSpace}
