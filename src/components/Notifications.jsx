@@ -76,21 +76,22 @@ export default function Notifications({ profile, onOpenTask }) {
         onClick={() => setOpen((v) => !v)}
         title="Notifications"
         style={{
-          position: "relative", width: 38, height: 38, borderRadius: "50%",
-          border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer",
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          position: "relative", width: 28, height: 28, borderRadius: 7,
+          border: "none", background: open ? "#f0f0ef" : "transparent", cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0,
         }}
+        onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = "#f5f5f4"; }}
+        onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = "transparent"; }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unread > 0 && (
           <span style={{
-            position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, padding: "0 4px",
-            borderRadius: 9, background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 700,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff",
+            position: "absolute", top: -3, right: -3, minWidth: 15, height: 15, padding: "0 3px",
+            borderRadius: 8, background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700,
+            display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1.5px solid #fff",
           }}>
             {unread > 99 ? "99+" : unread}
           </span>
