@@ -137,6 +137,14 @@ export default function Notifications({ profile, onOpenTask }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginBottom: 2 }}>{n.title}</div>
                 {n.body && <div style={{ fontSize: 12, color: "#555", lineHeight: 1.4 }}>{n.body}</div>}
+                {n.link_scope?.path && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#6b7280", background: "#f3f4f6", borderRadius: 6, padding: "2px 7px", marginTop: 4, maxWidth: "100%" }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    </svg>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.link_scope.path}</span>
+                  </div>
+                )}
                 <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>{timeAgo(n.created_at)}</div>
               </div>
             </div>

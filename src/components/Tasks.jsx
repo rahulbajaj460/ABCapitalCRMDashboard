@@ -2436,6 +2436,14 @@ export default function Tasks({
     });
   }
 
+  // Human-readable "Space / Folder / List" path for a task, from its ids.
+  function taskScopePath(task) {
+    const space = spaces.find((s) => s.id === task.space_id);
+    const folder = space?.folders?.find((f) => f.id === task.folder_id);
+    const list = spaceLists.find((l) => l.id === task.list_id);
+    return [space?.name, folder?.name, list?.name].filter(Boolean).join(" / ");
+  }
+
   // Create in-app notifications for newly-assigned users (excludes the actor).
   async function notifyAssignment(task, addedNames) {
     const me = profile?.full_name;
@@ -2444,6 +2452,7 @@ export default function Tasks({
       .map((n) => members.find((m) => m.full_name === n))
       .filter((m) => m && m.id);
     if (!recipients.length) return;
+    const path = taskScopePath(task);
     await supabase.from("notifications").insert(
       recipients.map((m) => ({
         user_id: m.id,
@@ -2451,7 +2460,7 @@ export default function Tasks({
         type: "assigned",
         title: `Assigned: ${task.title}`,
         body: `${me || "Someone"} assigned you to this task.`,
-        link_scope: { space_id: task.space_id, folder_id: task.folder_id, list_id: task.list_id },
+        link_scope: { space_id: task.space_id, folder_id: task.folder_id, list_id: task.list_id, path },
       })),
     );
   }
