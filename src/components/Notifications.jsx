@@ -71,7 +71,7 @@ export default function Notifications({ profile, onOpenTask }) {
   }
 
   return (
-    <div ref={wrapRef} style={{ position: "fixed", top: 14, right: 18, zIndex: 9000 }}>
+    <div ref={wrapRef} style={{ position: "relative", display: "inline-block" }}>
       <button
         onClick={() => setOpen((v) => !v)}
         title="Notifications"
@@ -99,9 +99,9 @@ export default function Notifications({ profile, onOpenTask }) {
 
       {open && (
         <div style={{
-          position: "absolute", top: "115%", right: 0, width: 360, maxHeight: 440, overflowY: "auto",
+          position: "absolute", top: "115%", left: 0, width: 360, maxHeight: 440, overflowY: "auto",
           background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.16)", padding: 8,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.16)", padding: 8, zIndex: 9000,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 10px" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>Notifications</span>

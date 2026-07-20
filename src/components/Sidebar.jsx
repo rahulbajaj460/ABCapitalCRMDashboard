@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
+import Notifications from "./Notifications";
 
 const SPACE_COLORS = [
   "#378ADD",
@@ -1090,14 +1091,17 @@ export default function Sidebar({
     >
       {/* Header */}
       <div
-        style={{ padding: "16px 16px 12px", borderBottom: "1px solid #ebebeb" }}
+        style={{ padding: "16px 16px 12px", borderBottom: "1px solid #ebebeb", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}
       >
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a" }}>
-          AB Capital
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a" }}>
+            AB Capital
+          </div>
+          <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
+            Internal workspace
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
-          Internal workspace
-        </div>
+        <Notifications profile={profile} />
       </div>
 
       {/* Nav */}
