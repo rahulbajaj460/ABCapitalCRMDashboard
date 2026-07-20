@@ -153,26 +153,26 @@ export default function Notifications({ profile, onOpenTask }) {
                 )}
                 <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>{timeAgo(n.created_at)}</div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, alignItems: "center" }}>
                 {!n.read && (
                   <button
                     onClick={(e) => { e.stopPropagation(); markRead(n.id); }}
                     title="Mark as read"
-                    style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", color: "#6b7280", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e7eb"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #bfdbfe", background: "#eff6ff", cursor: "pointer", color: "#2563eb", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#dbeafe"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   </button>
                 )}
                 <button
                   onClick={(e) => dismiss(n.id, e)}
                   title="Dismiss"
-                  style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#9ca3af"; }}
+                  style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #fecaca", background: "#fef2f2", cursor: "pointer", color: "#dc2626", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "#fef2f2"; }}
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                 </button>
               </div>
             </div>
