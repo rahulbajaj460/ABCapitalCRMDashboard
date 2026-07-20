@@ -2207,6 +2207,14 @@ export default function Tasks({
       return;
     }
 
+    // Notify newly-added assignees (drawer assignment path)
+    {
+      const beforeA = drawerTask.assignees?.length ? drawerTask.assignees : drawerTask.assignee ? [drawerTask.assignee] : [];
+      const afterA = payload.assignees || [];
+      const added = afterA.filter((n) => !beforeA.includes(n));
+      if (added.length) await notifyAssignment(drawerTask, added);
+    }
+
     // Save history entry if anything changed
     if (Object.keys(changes).length > 0) {
       await supabase.from("task_history").insert({
