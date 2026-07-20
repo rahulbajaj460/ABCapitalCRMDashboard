@@ -66,6 +66,12 @@ export default function Notifications({ profile, onOpenTask }) {
     await supabase.from("notifications").update({ read: true }).in("id", ids);
   }
 
+  async function dismiss(id, e) {
+    e?.stopPropagation();
+    setItems((prev) => prev.filter((n) => n.id !== id));
+    await supabase.from("notifications").delete().eq("id", id);
+  }
+
   function clickItem(n) {
     if (!n.read) markRead(n.id);
     if (n.task_id && onOpenTask) onOpenTask(n);
@@ -146,6 +152,28 @@ export default function Notifications({ profile, onOpenTask }) {
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>{timeAgo(n.created_at)}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                {!n.read && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); markRead(n.id); }}
+                    title="Mark as read"
+                    style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", color: "#6b7280", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#e5e7eb"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  </button>
+                )}
+                <button
+                  onClick={(e) => dismiss(n.id, e)}
+                  title="Dismiss"
+                  style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#fee2e2"; e.currentTarget.style.color = "#dc2626"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#9ca3af"; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                </button>
               </div>
             </div>
           ))}
