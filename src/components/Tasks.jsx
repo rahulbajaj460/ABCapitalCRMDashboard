@@ -372,6 +372,7 @@ export default function Tasks({
   const [dragOverColKey, setDragOverColKey] = useState(null);
   const draggedColKey = useRef(null);
   const viewSaveTimer = useRef(null);
+  const fetchToken = useRef(0); // guards against stale fetchTasks overwriting newer ones
 
   // Column widths in px — shared across every group's table so columns
   // always line up, and resizable by dragging the handle on each header.
@@ -743,6 +744,7 @@ export default function Tasks({
   }
 
   async function fetchTasks() {
+    const token = ++fetchToken.current;
     // Folder overview can hold thousands of tasks across its lists — a single
     // query hits Supabase's row/payload cap and returns nothing. Fetch each
     // list separately (each under the cap) and merge so rows show for all lists.
@@ -767,6 +769,7 @@ export default function Tasks({
       const { data: noList } = await supabase.from("tasks").select("*, task_field_values(*)")
         .is("deleted_at", null).eq("folder_id", activeFolder.id).is("list_id", null)
         .order("created_at", { ascending: false }).limit(1000);
+      if (fetchToken.current !== token) return; // a newer fetch superseded this
       setFolderListCounts(counts);
       const merged = [...perList.flat(), ...(noList || [])];
       setTasks(merged);
@@ -797,6 +800,7 @@ export default function Tasks({
         setListCursor(rows[rows.length - 1].created_at);
         setListHasMore(rows.length === LIST_PAGE);
       }
+      if (fetchToken.current !== token) return; // a newer fetch superseded this
       setTasks(rows);
       if (drawerTask) {
         const u = rows.find((t) => t.id === drawerTask.id);
@@ -813,6 +817,7 @@ export default function Tasks({
       .order("created_at", { ascending: false });
     if (activeSpace) q = q.eq("space_id", activeSpace.id);
     const { data } = await q;
+    if (fetchToken.current !== token) return; // a newer fetch superseded this
     if (data) {
       setTasks(data);
       if (drawerTask) {
