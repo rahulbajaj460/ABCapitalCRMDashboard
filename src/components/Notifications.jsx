@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 
 function timeAgo(ts) {
@@ -16,9 +17,18 @@ function timeAgo(ts) {
 export default function Notifications({ profile, onOpenTask }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
+  const [pos, setPos] = useState({ left: 0, top: 0 });
+  const bellRef = useRef(null);
 
   const unread = items.filter((n) => !n.read).length;
+
+  function toggleOpen() {
+    if (!open && bellRef.current) {
+      const r = bellRef.current.getBoundingClientRect();
+      setPos({ left: Math.min(r.left, window.innerWidth - 372), top: r.bottom + 6 });
+    }
+    setOpen((v) => !v);
+  }
 
   async function fetchNotifications() {
     if (!profile?.id) return;
@@ -45,14 +55,6 @@ export default function Notifications({ profile, onOpenTask }) {
     return () => supabase.removeChannel(channel);
   }, [profile?.id]);
 
-  useEffect(() => {
-    function h(e) {
-      if (open && wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [open]);
-
   async function markRead(id) {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     await supabase.from("notifications").update({ read: true }).eq("id", id);
@@ -71,9 +73,10 @@ export default function Notifications({ profile, onOpenTask }) {
   }
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", display: "inline-block" }}>
+    <div style={{ position: "relative", display: "inline-block" }}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={bellRef}
+        onClick={toggleOpen}
         title="Notifications"
         style={{
           position: "relative", width: 28, height: 28, borderRadius: 7,
@@ -98,11 +101,13 @@ export default function Notifications({ profile, onOpenTask }) {
         )}
       </button>
 
-      {open && (
+      {open && createPortal(
+        <div>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9998 }} onClick={() => setOpen(false)} />
         <div style={{
-          position: "absolute", top: "115%", left: 0, width: 360, maxHeight: 440, overflowY: "auto",
+          position: "fixed", left: pos.left, top: pos.top, width: 360, maxHeight: 440, overflowY: "auto",
           background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.16)", padding: 8, zIndex: 9000,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.16)", padding: 8, zIndex: 9999,
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 10px" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>Notifications</span>
@@ -137,6 +142,8 @@ export default function Notifications({ profile, onOpenTask }) {
             </div>
           ))}
         </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
