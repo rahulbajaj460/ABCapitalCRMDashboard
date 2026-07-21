@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
+import Automations from "./Automations";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -664,6 +665,7 @@ export default function Tasks({
   const [taskFieldValues, setTaskFieldValues] = useState({});
   const [newStatus, setNewStatus] = useState({ name: "", color: "#378ADD" });
   const [showImport, setShowImport] = useState(false);
+  const [showAutomations, setShowAutomations] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [modalSpaceStatuses, setModalSpaceStatuses] = useState([]);
   const [statusActionMsg, setStatusActionMsg] = useState("");
@@ -3928,6 +3930,9 @@ export default function Tasks({
                 </button>
               </>
             )}
+            <button className="btn btn-sm" onClick={() => setShowAutomations(true)}>
+              ⚡ Automations
+            </button>
             <button className="btn btn-sm" onClick={() => setShowImport(true)}>
               ⬆ Import CSV
             </button>
@@ -7153,6 +7158,13 @@ export default function Tasks({
       )}
 
       {/* EXPORT CSV MODAL */}
+      <Automations
+        open={showAutomations}
+        onClose={() => setShowAutomations(false)}
+        spaces={spaces}
+        members={members}
+        profile={profile}
+      />
       {showExportModal && (
         <div
           className="modal-overlay"
