@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 
-// Trigger / action / condition vocabularies. The Phase 3 engine reads these.
 const TRIGGERS = [
   { value: "assigned", label: "Task is assigned" },
   { value: "status_changed", label: "Status changes" },
+  { value: "field_changed", label: "Field changes" },
   { value: "comment_mention", label: "Comment or @mention" },
   { value: "date_based", label: "Date approaching / passed" },
   { value: "task_created", label: "Task is created" },
@@ -29,99 +29,72 @@ const uid = () => `a_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 const blankAutomation = () => ({
   name: "",
   enabled: true,
-  scope_type: "space",
-  scope_id: "",
+  space_id: "", folder_id: "", list_id: "",
   trigger: { type: "assigned", params: {} },
   conditions: [],
   actions: [{ id: uid(), type: "notify", params: { recipients: ["assignee"], channels: ["in_app"] } }],
 });
 
+const sel = { fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff" };
+
 export default function Automations({ open, onClose, spaces, members, profile }) {
   const [rows, setRows] = useState([]);
-  const [editing, setEditing] = useState(null); // automation being edited (or new)
-  const [lists, setLists] = useState([]);       // lists in the selected space
-  const [scopeFields, setScopeFields] = useState([]);   // fields for chosen list
-  const [scopeStatuses, setScopeStatuses] = useState([]); // statuses for chosen list
+  const [editing, setEditing] = useState(null);
+  const [allLists, setAllLists] = useState([]);          // {id,name,folder_id,space_id}
+  const [spaceFields, setSpaceFields] = useState([]);    // all fields in the chosen space
+  const [spaceStatuses, setSpaceStatuses] = useState([]); // all statuses in the chosen space
 
-  useEffect(() => { if (open) fetchAutomations(); }, [open]);
+  const memberNames = members.map((m) => m.full_name).filter(Boolean);
+  const foldersOf = (spaceId) => (spaces.find((s) => s.id === spaceId)?.folders || []);
+  const spaceName = (id) => spaces.find((s) => s.id === id)?.name || "";
+  const folderById = (id) => spaces.flatMap((s) => (s.folders || [])).find((f) => f.id === id);
+
+  useEffect(() => {
+    if (!open) return;
+    fetchAutomations();
+    supabase.from("lists").select("id, name, folder_id, space_id").is("deleted_at", null).order("name")
+      .then(({ data }) => setAllLists(data || []));
+  }, [open]);
 
   async function fetchAutomations() {
     const { data } = await supabase.from("automations").select("*").order("created_at", { ascending: false });
     setRows(data || []);
   }
 
-  // When editing an automation, load lists/fields/statuses for its scope.
+  // Load all fields/statuses for the chosen space; we filter by scope client-side.
   useEffect(() => {
-    if (!editing) return;
-    if (editing.scope_type === "list") {
-      // Load all lists (across spaces) so the picker is populated for new rules.
-      supabase.from("lists").select("id, name, folder_id, space_id").is("deleted_at", null).order("name")
-        .then(({ data }) => setLists(data || []));
-    } else {
-      const spaceId = editing.scope_type === "space" ? editing.scope_id : spaceOfScope(editing);
-      if (spaceId) {
-        supabase.from("lists").select("id, name, folder_id, space_id").eq("space_id", spaceId).is("deleted_at", null)
-          .then(({ data }) => setLists(data || []));
-      } else setLists([]);
-    }
-    const listId = editing.scope_type === "list" ? editing.scope_id : null;
-    if (listId) {
-      supabase.from("space_fields").select("id, field_name, field_type").eq("list_id", listId)
-        .then(({ data }) => setScopeFields(data || []));
-      supabase.from("space_statuses").select("name").eq("list_id", listId).order("status_order")
-        .then(({ data }) => setScopeStatuses((data || []).map((s) => s.name)));
-    } else {
-      setScopeFields([]);
-      setScopeStatuses(["To Do", "In Progress", "Done"]);
-    }
-  }, [editing?.scope_type, editing?.scope_id]);
+    if (!editing?.space_id) { setSpaceFields([]); setSpaceStatuses([]); return; }
+    supabase.from("space_fields").select("id, field_name, field_type, field_options, folder_id, list_id")
+      .eq("space_id", editing.space_id).order("field_order")
+      .then(({ data }) => setSpaceFields(data || []));
+    supabase.from("space_statuses").select("name, folder_id, list_id, status_order")
+      .eq("space_id", editing.space_id).order("status_order")
+      .then(({ data }) => setSpaceStatuses(data || []));
+  }, [editing?.space_id]);
 
-  function spaceOfScope(a) {
-    if (a.scope_type === "space") return a.scope_id;
-    if (a.scope_type === "folder") return spaces.find((s) => (s.folders || []).some((f) => f.id === a.scope_id))?.id;
-    // list: find via lists list
-    return null;
+  // Fields/statuses applicable to the current scope (list > folder > space).
+  const folderListIds = allLists.filter((l) => l.folder_id === editing?.folder_id).map((l) => l.id);
+  function dedupByName(arr, key) {
+    const seen = new Set(); const out = [];
+    for (const x of arr) { const k = x[key]; if (!seen.has(k)) { seen.add(k); out.push(x); } }
+    return out;
   }
+  const scopeFields = !editing ? [] : editing.list_id
+    ? spaceFields.filter((f) => f.list_id === editing.list_id)
+    : editing.folder_id
+      ? dedupByName(spaceFields.filter((f) => f.folder_id === editing.folder_id || (f.list_id && folderListIds.includes(f.list_id))), "field_name")
+      : dedupByName(spaceFields, "field_name");
+  const scopeStatusNames = (() => {
+    if (!editing?.space_id) return ["To Do", "In Progress", "Done"];
+    let list = editing.list_id
+      ? spaceStatuses.filter((s) => s.list_id === editing.list_id)
+      : editing.folder_id
+        ? spaceStatuses.filter((s) => s.folder_id === editing.folder_id || (s.list_id && folderListIds.includes(s.list_id)))
+        : spaceStatuses;
+    const names = [...new Set(list.map((s) => s.name))];
+    return names.length ? names : ["To Do", "In Progress", "Done"];
+  })();
 
-  async function saveAutomation() {
-    if (!editing.name.trim() || !editing.scope_id) {
-      alert("Give the automation a name and pick a scope.");
-      return;
-    }
-    const payload = {
-      name: editing.name.trim(),
-      enabled: editing.enabled,
-      scope_type: editing.scope_type,
-      scope_id: editing.scope_id,
-      trigger: editing.trigger,
-      conditions: editing.conditions,
-      actions: editing.actions,
-      created_by: profile?.full_name || null,
-      updated_at: new Date().toISOString(),
-    };
-    let error;
-    if (editing.id) {
-      ({ error } = await supabase.from("automations").update(payload).eq("id", editing.id));
-    } else {
-      ({ error } = await supabase.from("automations").insert(payload));
-    }
-    if (error) { alert("Could not save: " + error.message); return; }
-    setEditing(null);
-    fetchAutomations();
-  }
-
-  async function toggleEnabled(a) {
-    await supabase.from("automations").update({ enabled: !a.enabled }).eq("id", a.id);
-    fetchAutomations();
-  }
-  async function removeAutomation(a) {
-    if (!confirm(`Delete automation "${a.name}"?`)) return;
-    await supabase.from("automations").delete().eq("id", a.id);
-    fetchAutomations();
-  }
-
-  // ── Builder field helpers ──
-  const folders = spaces.flatMap((s) => (s.folders || []).map((f) => ({ ...f, spaceName: s.name })));
   const conditionFields = [
     { value: "status", label: "Status" },
     { value: "priority", label: "Priority" },
@@ -134,19 +107,81 @@ export default function Automations({ open, onClose, spaces, members, profile })
     ...scopeFields.filter((f) => f.field_type === "date").map((f) => ({ value: `field_${f.id}`, label: f.field_name })),
   ];
 
+  function fieldType(field) {
+    if (field === "due_date") return "date";
+    if (["status", "priority", "assignee"].includes(field)) return field;
+    return scopeFields.find((f) => `field_${f.id}` === field)?.field_type || "text";
+  }
+  function valueOptions(field) {
+    if (field === "status") return scopeStatusNames;
+    if (field === "priority") return ["High", "Medium", "Low"];
+    if (field === "assignee") return memberNames;
+    const f = scopeFields.find((x) => `field_${x.id}` === field);
+    if (f?.field_type === "dropdown" && f.field_options?.length) return f.field_options;
+    return null;
+  }
+  function ValueInput({ field, value, onChange, flex = true }) {
+    const opts = valueOptions(field);
+    const style = { ...sel, ...(flex ? { flex: 1, minWidth: 0 } : {}) };
+    if (opts) {
+      return (
+        <select value={value || ""} onChange={(e) => onChange(e.target.value)} style={style}>
+          <option value="">Select…</option>
+          {opts.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      );
+    }
+    const t = fieldType(field);
+    const inputType = t === "date" ? "date" : t === "number" ? "number" : "text";
+    return <input type={inputType} value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder="Value…" style={style} />;
+  }
+
+  // Resolve a saved automation's scope to a readable path.
+  function scopePath(a) {
+    if (a.scope_type === "space") return spaceName(a.scope_id);
+    if (a.scope_type === "folder") { const f = folderById(a.scope_id); return [f && spaceName(f.space_id), f?.name].filter(Boolean).join(" / "); }
+    const l = allLists.find((x) => x.id === a.scope_id);
+    return l ? [spaceName(l.space_id), folderById(l.folder_id)?.name, l.name].filter(Boolean).join(" / ") : "";
+  }
+  // Map a saved automation's scope back to space/folder/list selections for editing.
+  function scopeToSel(a) {
+    if (a.scope_type === "space") return { space_id: a.scope_id, folder_id: "", list_id: "" };
+    if (a.scope_type === "folder") { const f = folderById(a.scope_id); return { space_id: f?.space_id || "", folder_id: a.scope_id, list_id: "" }; }
+    const l = allLists.find((x) => x.id === a.scope_id);
+    return { space_id: l?.space_id || "", folder_id: l?.folder_id || "", list_id: a.scope_id };
+  }
+
+  async function saveAutomation() {
+    if (!editing.name.trim() || !editing.space_id) { alert("Give the automation a name and pick at least a Space."); return; }
+    const scope_type = editing.list_id ? "list" : editing.folder_id ? "folder" : "space";
+    const scope_id = editing.list_id || editing.folder_id || editing.space_id;
+    const payload = {
+      name: editing.name.trim(), enabled: editing.enabled,
+      scope_type, scope_id,
+      trigger: editing.trigger, conditions: editing.conditions, actions: editing.actions,
+      created_by: profile?.full_name || null, updated_at: new Date().toISOString(),
+    };
+    const q = editing.id
+      ? supabase.from("automations").update(payload).eq("id", editing.id)
+      : supabase.from("automations").insert(payload);
+    const { error } = await q;
+    if (error) { alert("Could not save: " + error.message); return; }
+    setEditing(null);
+    fetchAutomations();
+  }
+  async function toggleEnabled(a) { await supabase.from("automations").update({ enabled: !a.enabled }).eq("id", a.id); fetchAutomations(); }
+  async function removeAutomation(a) { if (!confirm(`Delete automation "${a.name}"?`)) return; await supabase.from("automations").delete().eq("id", a.id); fetchAutomations(); }
+
   function upd(patch) { setEditing((e) => ({ ...e, ...patch })); }
   function updTrigger(patch) { setEditing((e) => ({ ...e, trigger: { ...e.trigger, params: { ...e.trigger.params, ...patch } } })); }
   function addCondition() { setEditing((e) => ({ ...e, conditions: [...e.conditions, { id: uid(), field: "status", op: "is", value: "" }] })); }
   function updCondition(id, patch) { setEditing((e) => ({ ...e, conditions: e.conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)) })); }
   function rmCondition(id) { setEditing((e) => ({ ...e, conditions: e.conditions.filter((c) => c.id !== id) })); }
   function addAction() { setEditing((e) => ({ ...e, actions: [...e.actions, { id: uid(), type: "notify", params: { recipients: ["assignee"], channels: ["in_app"] } }] })); }
-  function updAction(id, params) { setEditing((e) => ({ ...e, actions: e.actions.map((a) => (a.id === id ? { ...a, ...params } : a)) })); }
+  function updAction(id, patch) { setEditing((e) => ({ ...e, actions: e.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)) })); }
   function rmAction(id) { setEditing((e) => ({ ...e, actions: e.actions.filter((a) => a.id !== id) })); }
 
   if (!open) return null;
-
-  const sel = { fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff" };
-  const memberNames = members.map((m) => m.full_name).filter(Boolean);
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -172,14 +207,18 @@ export default function Automations({ open, onClose, spaces, members, profile })
                   <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
                     When {TRIGGERS.find((t) => t.value === a.trigger?.type)?.label || a.trigger?.type}
                     {a.conditions?.length ? ` · ${a.conditions.length} condition(s)` : ""}
-                    {` · ${a.actions?.length || 0} action(s)`} · {a.scope_type}
+                    {` · ${a.actions?.length || 0} action(s)`}
+                  </div>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#6b7280", background: "#f3f4f6", borderRadius: 6, padding: "2px 8px", marginTop: 5 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                    {scopePath(a) || a.scope_type}
                   </div>
                 </div>
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
                   <input type="checkbox" checked={a.enabled} onChange={() => toggleEnabled(a)} />
                   {a.enabled ? "On" : "Off"}
                 </label>
-                <button className="btn btn-sm" onClick={() => setEditing({ ...a, conditions: a.conditions || [], actions: a.actions || [] })}>Edit</button>
+                <button className="btn btn-sm" onClick={() => setEditing({ ...a, ...scopeToSel(a), conditions: a.conditions || [], actions: a.actions || [] })}>Edit</button>
                 <button className="btn btn-sm btn-danger" onClick={() => removeAutomation(a)}>🗑</button>
               </div>
             ))}
@@ -188,28 +227,37 @@ export default function Automations({ open, onClose, spaces, members, profile })
           <>
             <div className="modal-title">{editing.id ? "Edit automation" : "New automation"}</div>
 
-            {/* Name + enabled */}
             <div className="form-group">
               <label className="form-label">Name</label>
               <input value={editing.name} onChange={(e) => upd({ name: e.target.value })} placeholder="e.g. Notify manager on Done" />
             </div>
 
-            {/* Scope */}
+            {/* Cascading scope: Space -> Folder -> List */}
             <div className="form-group">
               <label className="form-label">Applies to</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <select value={editing.scope_type} onChange={(e) => upd({ scope_type: e.target.value, scope_id: "" })} style={sel}>
-                  <option value="space">Space</option>
-                  <option value="folder">Folder</option>
-                  <option value="list">List</option>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <select value={editing.space_id} onChange={(e) => upd({ space_id: e.target.value, folder_id: "", list_id: "" })} style={sel}>
+                  <option value="">Select space…</option>
+                  {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
-                <select value={editing.scope_id} onChange={(e) => upd({ scope_id: e.target.value })} style={{ ...sel, flex: 1, minWidth: 180 }}>
-                  <option value="">Select {editing.scope_type}…</option>
-                  {editing.scope_type === "space" && spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  {editing.scope_type === "folder" && folders.map((f) => <option key={f.id} value={f.id}>{f.spaceName} / {f.name}</option>)}
-                  {editing.scope_type === "list" && lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
+                {editing.space_id && (
+                  <select value={editing.folder_id} onChange={(e) => upd({ folder_id: e.target.value, list_id: "" })} style={sel}>
+                    <option value="">↳ Whole space (no folder)</option>
+                    {foldersOf(editing.space_id).map((f) => <option key={f.id} value={f.id}>↳ {f.name}</option>)}
+                  </select>
+                )}
+                {editing.folder_id && (
+                  <select value={editing.list_id} onChange={(e) => upd({ list_id: e.target.value })} style={sel}>
+                    <option value="">↳↳ Whole folder (no list)</option>
+                    {allLists.filter((l) => l.folder_id === editing.folder_id).map((l) => <option key={l.id} value={l.id}>↳↳ {l.name}</option>)}
+                  </select>
+                )}
               </div>
+              {editing.space_id && (
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>
+                  Applies to: {[spaceName(editing.space_id), folderById(editing.folder_id)?.name, allLists.find((l) => l.id === editing.list_id)?.name].filter(Boolean).join(" / ")}
+                </div>
+              )}
             </div>
 
             {/* Trigger */}
@@ -224,8 +272,21 @@ export default function Automations({ open, onClose, spaces, members, profile })
                     <span style={{ fontSize: 12, color: "#6b7280" }}>to</span>
                     <select value={editing.trigger.params.to || ""} onChange={(e) => updTrigger({ to: e.target.value })} style={sel}>
                       <option value="">any status</option>
-                      {scopeStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {scopeStatusNames.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
+                  </>
+                )}
+                {editing.trigger.type === "field_changed" && (
+                  <>
+                    <select value={editing.trigger.params.field || ""} onChange={(e) => updTrigger({ field: e.target.value, to: "" })} style={sel}>
+                      <option value="">Select field…</option>
+                      {conditionFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>to</span>
+                    {editing.trigger.params.field
+                      ? <ValueInput field={editing.trigger.params.field} value={editing.trigger.params.to} onChange={(v) => updTrigger({ to: v })} flex={false} />
+                      : null}
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>(blank = any change)</span>
                   </>
                 )}
                 {editing.trigger.type === "date_based" && (
@@ -256,14 +317,7 @@ export default function Automations({ open, onClose, spaces, members, profile })
                     {OPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                   {c.op !== "is_set" && c.op !== "is_empty" && (
-                    valueOptionsFor(c.field) ? (
-                      <select value={c.value} onChange={(e) => updCondition(c.id, { value: e.target.value })} style={{ ...sel, flex: 1 }}>
-                        <option value="">Select…</option>
-                        {valueOptionsFor(c.field).map((o) => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                    ) : (
-                      <input value={c.value} onChange={(e) => updCondition(c.id, { value: e.target.value })} placeholder="Value…" style={{ ...sel, flex: 1 }} />
-                    )
+                    <ValueInput field={c.field} value={c.value} onChange={(v) => updCondition(c.id, { value: v })} />
                   )}
                   <button className="btn btn-sm btn-danger" onClick={() => rmCondition(c.id)}>🗑</button>
                 </div>
@@ -277,7 +331,7 @@ export default function Automations({ open, onClose, spaces, members, profile })
               {editing.actions.map((a) => (
                 <div key={a.id} style={{ border: "1px solid #e8e8e8", borderRadius: 8, padding: 10, marginBottom: 8 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                    <select value={a.type} onChange={(e) => updAction(a.id, { type: e.target.value, params: defaultActionParams(e.target.value) })} style={sel}>
+                    <select value={a.type} onChange={(e) => updAction(a.id, { type: e.target.value, params: e.target.value === "notify" ? { recipients: ["assignee"], channels: ["in_app"] } : {} })} style={sel}>
                       {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                     <div style={{ flex: 1 }} />
@@ -305,18 +359,17 @@ export default function Automations({ open, onClose, spaces, members, profile })
                       </div>
                       <div>
                         <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Channels</div>
-                        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-                          {["in_app", "email"].map((ch) => {
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {[["in_app", "In-app"], ["email", "Email"]].map(([ch, label]) => {
                             const on = (a.params.channels || []).includes(ch);
                             return (
-                              <label key={ch} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-                                <input type="checkbox" checked={on} style={{ flexShrink: 0 }} onChange={() => {
-                                  const list = a.params.channels || [];
-                                  const next = on ? list.filter((x) => x !== ch) : [...list, ch];
-                                  updAction(a.id, { params: { ...a.params, channels: next } });
-                                }} />
-                                {ch === "in_app" ? "In-app" : "Email"}
-                              </label>
+                              <button key={ch} onClick={() => {
+                                const list = a.params.channels || [];
+                                const next = on ? list.filter((x) => x !== ch) : [...list, ch];
+                                updAction(a.id, { params: { ...a.params, channels: next } });
+                              }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 20, cursor: "pointer", border: "1px solid " + (on ? "#1d4ed8" : "#d1d5db"), background: on ? "#eff6ff" : "#fff", color: on ? "#1d4ed8" : "#374151", fontWeight: on ? 600 : 400 }}>
+                                {label}
+                              </button>
                             );
                           })}
                         </div>
@@ -326,7 +379,7 @@ export default function Automations({ open, onClose, spaces, members, profile })
                   {a.type === "change_status" && (
                     <select value={a.params.to || ""} onChange={(e) => updAction(a.id, { params: { to: e.target.value } })} style={sel}>
                       <option value="">Select status…</option>
-                      {scopeStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {scopeStatusNames.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   )}
                   {a.type === "assign" && (
@@ -337,11 +390,11 @@ export default function Automations({ open, onClose, spaces, members, profile })
                   )}
                   {a.type === "set_field" && (
                     <div style={{ display: "flex", gap: 8 }}>
-                      <select value={a.params.field || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, field: e.target.value } })} style={sel}>
+                      <select value={a.params.field || ""} onChange={(e) => updAction(a.id, { params: { field: e.target.value, value: "" } })} style={sel}>
                         <option value="">Select field…</option>
-                        {scopeFields.map((f) => <option key={f.id} value={`field_${f.id}`}>{f.field_name}</option>)}
+                        {conditionFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                       </select>
-                      <input value={a.params.value || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, value: e.target.value } })} placeholder="Value…" style={{ ...sel, flex: 1 }} />
+                      {a.params.field && <ValueInput field={a.params.field} value={a.params.value} onChange={(v) => updAction(a.id, { params: { ...a.params, value: v } })} />}
                     </div>
                   )}
                 </div>
@@ -363,17 +416,4 @@ export default function Automations({ open, onClose, spaces, members, profile })
       </div>
     </div>
   );
-
-  function valueOptionsFor(field) {
-    if (field === "status") return scopeStatuses;
-    if (field === "priority") return ["High", "Medium", "Low"];
-    if (field === "assignee") return memberNames;
-    const f = scopeFields.find((x) => `field_${x.id}` === field);
-    if (f?.field_type === "dropdown" && f.field_options?.length) return f.field_options;
-    return null;
-  }
-  function defaultActionParams(type) {
-    if (type === "notify") return { recipients: ["assignee"], channels: ["in_app"] };
-    return {};
-  }
 }
