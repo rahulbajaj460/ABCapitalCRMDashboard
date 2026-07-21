@@ -303,20 +303,23 @@ export default function Automations({ open, onClose, spaces, members, profile })
                           })}
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 12 }}>
-                        {["in_app", "email"].map((ch) => {
-                          const on = (a.params.channels || []).includes(ch);
-                          return (
-                            <label key={ch} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
-                              <input type="checkbox" checked={on} onChange={() => {
-                                const list = a.params.channels || [];
-                                const next = on ? list.filter((x) => x !== ch) : [...list, ch];
-                                updAction(a.id, { params: { ...a.params, channels: next } });
-                              }} />
-                              {ch === "in_app" ? "In-app" : "Email"}
-                            </label>
-                          );
-                        })}
+                      <div>
+                        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Channels</div>
+                        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                          {["in_app", "email"].map((ch) => {
+                            const on = (a.params.channels || []).includes(ch);
+                            return (
+                              <label key={ch} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                                <input type="checkbox" checked={on} style={{ flexShrink: 0 }} onChange={() => {
+                                  const list = a.params.channels || [];
+                                  const next = on ? list.filter((x) => x !== ch) : [...list, ch];
+                                  updAction(a.id, { params: { ...a.params, channels: next } });
+                                }} />
+                                {ch === "in_app" ? "In-app" : "Email"}
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   )}
