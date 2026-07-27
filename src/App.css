@@ -499,6 +499,30 @@ textarea:focus {
 .task-grid-row:hover .task-name-cell {
   background: #fafaf9;
 }
+/* Newly-arrived task: brief highlight that fades out. Animations sit above
+   inline styles in the cascade, so this wins over the row's inline bg. */
+.task-row-new { animation: abcapNewRow 8s ease-out; }
+@keyframes abcapNewRow {
+  0%, 12% { background: #fff3bf; }
+  100% { background: transparent; }
+}
+.task-row-new .task-name-cell { animation: abcapNewCell 8s ease-out; }
+@keyframes abcapNewCell {
+  0%, 12% { background: #fff3bf; }
+  100% { background: #fff; }
+}
+.task-new-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+}
 .task-row-actions {
   display: flex;
   gap: 4px;

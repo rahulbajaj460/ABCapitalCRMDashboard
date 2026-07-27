@@ -312,6 +312,7 @@ export default function Tasks({
   onRefreshSpaces,
 }) {
   const [tasks, setTasks] = useState([]);
+  const [newTaskIds, setNewTaskIds] = useState(() => new Set()); // recently-arrived tasks, for the "new" highlight
   const [taskMeta, setTaskMeta] = useState({}); // { [taskId]: { attachmentCount, checklistChecked, checklistTotal } }
   const [descPopup, setDescPopup] = useState(null); // { taskId, x, y }
   const [viewMode, setViewMode] = useState("list");
@@ -683,6 +684,48 @@ export default function Tasks({
     fetchTasks();
     fetchViewConfig();
   }, [activeSpace, activeFolder, activeList]);
+  // Live-insert newly-created tasks (e.g. Google Sheet leads) at the top of
+  // the current view without a manual refresh, and flag them for a brief
+  // "new" highlight. Scoped to the active list/folder/space.
+  useEffect(() => {
+    const scope = activeList
+      ? { col: "list_id", id: activeList.id }
+      : activeFolder
+        ? { col: "folder_id", id: activeFolder.id }
+        : activeSpace
+          ? { col: "space_id", id: activeSpace.id }
+          : null;
+    if (!scope) return;
+    const channel = supabase
+      .channel(`tasks-live-${scope.col}-${scope.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "tasks", filter: `${scope.col}=eq.${scope.id}` },
+        async (payload) => {
+          const row = payload.new;
+          if (row.deleted_at || row.parent_task_id) return; // skip trashed rows and subtasks
+          // Pull the full row (with custom field values) so columns render.
+          const { data: full } = await supabase
+            .from("tasks")
+            .select("*, task_field_values(*)")
+            .eq("id", row.id)
+            .single();
+          const t = full || row;
+          setTasks((prev) => (prev.some((x) => x.id === t.id) ? prev : [t, ...prev]));
+          setNewTaskIds((prev) => new Set(prev).add(t.id));
+          setTimeout(
+            () => setNewTaskIds((prev) => {
+              const n = new Set(prev);
+              n.delete(t.id);
+              return n;
+            }),
+            8000,
+          );
+        },
+      )
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [activeSpace?.id, activeFolder?.id, activeList?.id]);
   useEffect(() => {
     fetchMembers();
   }, []);
@@ -3369,6 +3412,8 @@ export default function Tasks({
     const gridTemplate = buildGridTemplate(fieldList, !!folderCtx);
     const kids = childrenByParent[task.id] || [];
     const hasKids = kids.length > 0;
+    const isNew = newTaskIds.has(task.id);
+    const rowBg = isActive ? "#f0f7ff" : isNew ? "#fffbe6" : undefined;
     const subExpanded = expandedSubtasks[task.id];
     const prog = hasKids ? subtaskProgress(task.id) : null;
     const cellStyle = {
@@ -3387,11 +3432,11 @@ export default function Tasks({
           gridTemplateColumns: gridTemplate,
           width: "max-content",
           minWidth: "100%",
-          background: isActive ? "#f0f7ff" : undefined,
+          background: rowBg,
           cursor: "pointer",
         }}
         onClick={() => openDrawer(task)}
-        className="task-grid-row"
+        className={"task-grid-row" + (isNew ? " task-row-new" : "")}
       >
         <div
           className="task-name-cell"
@@ -3404,7 +3449,7 @@ export default function Tasks({
             position: "sticky",
             left: 0,
             zIndex: 1,
-            background: isActive ? "#f0f7ff" : undefined,
+            background: rowBg,
             borderRight: "1px solid #f0f0f0",
             boxShadow: "2px 0 4px -2px rgba(0,0,0,0.06)",
           }}
@@ -3469,6 +3514,7 @@ export default function Tasks({
             >
               {task.title}
             </span>
+            {isNew && <span className="task-new-badge">NEW</span>}
             {hasKids && (
               <span
                 style={{
