@@ -32,31 +32,39 @@ Deno.serve(async (req) => {
 
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Resolve the space — active rows only, newest wins if duplicated.
-    const { data: space } = await db.from("spaces").select("id")
-      .eq("name", spaceName).is("deleted_at", null)
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    // Resolve the space — active rows only. NOTE: no ORDER BY created_at here;
+    // folders (and possibly other tables) have no created_at column, and an
+    // errored lookup must NEVER be mistaken for "not found" — otherwise every
+    // request would auto-create a new folder/list. So we check `error`
+    // explicitly and only auto-create on a genuinely empty result.
+    const { data: space, error: spaceErr } = await db.from("spaces").select("id")
+      .eq("name", spaceName).is("deleted_at", null).limit(1).maybeSingle();
+    if (spaceErr) return json({ error: "Space lookup failed: " + spaceErr.message }, 500);
     if (!space) return json({ error: "Space not found" }, 404);
 
-    // Resolve the folder (active only); auto-create if missing.
-    let { data: folder } = await db.from("folders").select("id")
+    // Resolve the folder (active only); auto-create only if the lookup
+    // succeeded and returned nothing.
+    let { data: folder, error: folderErr } = await db.from("folders").select("id")
       .eq("name", folderName).eq("space_id", space.id).is("deleted_at", null)
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      .limit(1).maybeSingle();
+    if (folderErr) return json({ error: "Folder lookup failed: " + folderErr.message }, 500);
     if (!folder) {
       const { data: created, error: fErr } = await db.from("folders")
         .insert({ name: folderName, space_id: space.id }).select("id").single();
-      if (fErr || !created) return json({ error: "Folder not found and could not be created: " + (fErr?.message || "") }, 500);
+      if (fErr || !created) return json({ error: "Folder could not be created: " + (fErr?.message || "") }, 500);
       folder = created;
     }
 
-    // Resolve the list (active only); auto-create if missing.
-    let { data: list } = await db.from("lists").select("id")
+    // Resolve the list (active only); auto-create only if the lookup succeeded
+    // and returned nothing.
+    let { data: list, error: listErr } = await db.from("lists").select("id")
       .eq("name", listName).eq("folder_id", folder.id).is("deleted_at", null)
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      .limit(1).maybeSingle();
+    if (listErr) return json({ error: "List lookup failed: " + listErr.message }, 500);
     if (!list) {
       const { data: created, error: lErr } = await db.from("lists")
         .insert({ name: listName, folder_id: folder.id, space_id: space.id }).select("id").single();
-      if (lErr || !created) return json({ error: "List not found and could not be created: " + (lErr?.message || "") }, 500);
+      if (lErr || !created) return json({ error: "List could not be created: " + (lErr?.message || "") }, 500);
       list = created;
     }
 
