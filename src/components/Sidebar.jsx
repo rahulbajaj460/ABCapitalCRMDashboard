@@ -150,6 +150,9 @@ export default function Sidebar({
   // ── Lists (within folders) ──
   const [lists, setLists] = useState([]); // [{id, folder_id, space_id, name}]
   const [listTaskCounts, setListTaskCounts] = useState({}); // list.id → count (direct query)
+  // Drag-and-drop reordering of spaces / folders / lists.
+  const [dragItem, setDragItem] = useState(null);   // { type, id, parentId }
+  const [dragOverId, setDragOverId] = useState(null);
   const [expandedFolders, setExpandedFolders] = useState({});
   const [newListFolderId, setNewListFolderId] = useState(null); // folder id showing inline create
   const [newListName, setNewListName] = useState("");
@@ -180,7 +183,13 @@ export default function Sidebar({
 
   async function fetchLists() {
     const { data } = await supabase.from("lists").select("*").is("deleted_at", null).order("created_at");
-    const fetchedLists = data || [];
+    // Order by sort_order client-side (falls back to created_at) so a missing
+    // sort_order column can never break loading.
+    const fetchedLists = (data || []).sort(
+      (a, b) =>
+        (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) ||
+        new Date(a.created_at) - new Date(b.created_at),
+    );
     setLists(fetchedLists);
 
     // Count tasks per list using exact counts — avoids row-limit issues with bulk task fetches
@@ -204,6 +213,58 @@ export default function Sidebar({
 
   function toggleFolder(folderId) {
     setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }));
+  }
+
+  // ── Drag-and-drop reordering ──
+  // Only items of the same type and the same parent may be reordered
+  // (spaces among spaces, folders within their space, lists within their folder).
+  function onItemDragStart(e, type, id, parentId) {
+    e.stopPropagation();
+    setDragItem({ type, id, parentId });
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function onItemDragOver(e, type, id, parentId) {
+    if (!dragItem || dragItem.type !== type || dragItem.parentId !== parentId || dragItem.id === id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverId !== id) setDragOverId(id);
+  }
+  function onItemDragEnd() { setDragItem(null); setDragOverId(null); }
+
+  async function onItemDrop(e, type, targetId, parentId, siblings) {
+    e.preventDefault();
+    e.stopPropagation();
+    const d = dragItem;
+    setDragItem(null);
+    setDragOverId(null);
+    if (!d || d.type !== type || d.parentId !== parentId || d.id === targetId) return;
+
+    const arr = [...siblings];
+    const from = arr.findIndex((x) => x.id === d.id);
+    const origTo = arr.findIndex((x) => x.id === targetId);
+    if (from < 0 || origTo < 0) return;
+    const [moved] = arr.splice(from, 1);
+    let insertAt = arr.findIndex((x) => x.id === targetId);
+    if (from < origTo) insertAt += 1; // dragging downward drops after the target
+    arr.splice(insertAt, 0, moved);
+
+    const table = type === "space" ? "spaces" : type === "folder" ? "folders" : "lists";
+    if (type === "list") {
+      // Optimistic update for the locally-owned lists state.
+      setLists((prev) => {
+        const others = prev.filter((l) => l.folder_id !== parentId);
+        return [...others, ...arr.map((x, i) => ({ ...x, sort_order: i }))];
+      });
+    }
+    await Promise.all(arr.map((x, i) => supabase.from(table).update({ sort_order: i }).eq("id", x.id)));
+    if (type === "list") fetchLists();
+    else onSpaceCreated(); // spaces/folders are owned by the parent — refetch
+  }
+  // Highlight style for the row a dragged item is hovering over.
+  function dropStyle(type, id) {
+    return dragItem && dragItem.type === type && dragOverId === id
+      ? { boxShadow: "inset 0 2px 0 0 #378ADD" }
+      : null;
   }
 
   async function createList(folderId, spaceId) {
@@ -1151,11 +1212,16 @@ export default function Sidebar({
                 {/* Space row */}
                 <div
                   className={`space-item ${isActive ? "active" : ""}`}
+                  draggable
+                  onDragStart={(e) => onItemDragStart(e, "space", space.id, null)}
+                  onDragOver={(e) => onItemDragOver(e, "space", space.id, null)}
+                  onDrop={(e) => onItemDrop(e, "space", space.id, null, spaces)}
+                  onDragEnd={onItemDragEnd}
                   onClick={() => {
                     onSpaceSelect(space);
                     toggleSpace(space.id);
                   }}
-                  style={{ position: "relative" }}
+                  style={{ position: "relative", ...dropStyle("space", space.id) }}
                 >
                   {/* Space icon / arrow — arrow replaces icon on hover */}
                   <span
@@ -1216,8 +1282,13 @@ export default function Sidebar({
                         {/* Folder row */}
                         <div
                           className={`folder-item ${activeFolder?.id === folder.id ? "active" : ""}`}
+                          draggable
+                          onDragStart={(e) => onItemDragStart(e, "folder", folder.id, space.id)}
+                          onDragOver={(e) => onItemDragOver(e, "folder", folder.id, space.id)}
+                          onDrop={(e) => onItemDrop(e, "folder", folder.id, space.id, space.folders || [])}
+                          onDragEnd={onItemDragEnd}
                           onClick={() => onFolderSelect(space, folder)}
-                          style={{ position: "relative" }}
+                          style={{ position: "relative", ...dropStyle("folder", folder.id) }}
                         >
                           {/* Folder icon / arrow toggle — arrow replaces icon on hover */}
                           <span
@@ -1282,8 +1353,13 @@ export default function Sidebar({
                               <div
                                 key={list.id}
                                 className={`folder-item ${activeList?.id === list.id ? "active" : ""}`}
+                                draggable
+                                onDragStart={(e) => onItemDragStart(e, "list", list.id, folder.id)}
+                                onDragOver={(e) => onItemDragOver(e, "list", list.id, folder.id)}
+                                onDrop={(e) => onItemDrop(e, "list", list.id, folder.id, lists.filter((l) => l.folder_id === folder.id))}
+                                onDragEnd={onItemDragEnd}
                                 onClick={() => onListSelect(space, folder, list)}
-                                style={{ paddingLeft: 32, position: "relative" }}
+                                style={{ paddingLeft: 32, position: "relative", ...dropStyle("list", list.id) }}
                               >
                                 {/* List icon */}
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>

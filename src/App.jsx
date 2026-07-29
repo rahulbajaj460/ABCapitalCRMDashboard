@@ -114,10 +114,17 @@ export default function App() {
       // Also filter out any soft-deleted folders that came through the
       // nested select (belt-and-braces in case the FK filter above doesn't
       // apply server-side depending on your Postgres/PostgREST version).
-      const cleaned = data.map((space) => ({
-        ...space,
-        folders: (space.folders || []).filter((f) => !f.deleted_at),
-      }));
+      // Order by sort_order client-side (falls back to created_at) so a
+      // missing sort_order column can never break loading.
+      const byOrder = (a, b) =>
+        (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity) ||
+        new Date(a.created_at) - new Date(b.created_at);
+      const cleaned = data
+        .map((space) => ({
+          ...space,
+          folders: (space.folders || []).filter((f) => !f.deleted_at).sort(byOrder),
+        }))
+        .sort(byOrder);
       setSpaces(cleaned);
       if (activeSpace) {
         const updated = cleaned.find((s) => s.id === activeSpace.id);
