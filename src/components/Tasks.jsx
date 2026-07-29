@@ -2905,10 +2905,34 @@ export default function Tasks({
         .select("*")
         .eq("list_id", activeList.id)
         .order("status_order");
-      setModalSpaceStatuses(data || []);
-      setListStatuses(data || []);
+      if (data && data.length > 0) {
+        setModalSpaceStatuses(data);
+        setListStatuses(data);
+        refreshAllListStatuses();
+        return data;
+      }
+      // List has no statuses of its own — show the inherited set (folder-scoped
+      // for this list's folder, else space-scoped) so it can be viewed and
+      // reordered. Reordering/editing here adjusts that inherited (parent) scope.
+      setListStatuses([]);
+      let inherited = [];
+      if (activeList.folder_id) {
+        const { data: fd } = await supabase
+          .from("space_statuses").select("*")
+          .eq("folder_id", activeList.folder_id).is("list_id", null)
+          .order("status_order");
+        inherited = fd || [];
+      }
+      if (inherited.length === 0) {
+        const { data: sd } = await supabase
+          .from("space_statuses").select("*")
+          .eq("space_id", activeSpace.id).is("folder_id", null).is("list_id", null)
+          .order("status_order");
+        inherited = sd || [];
+      }
+      setModalSpaceStatuses(inherited);
       refreshAllListStatuses();
-      return data || [];
+      return inherited;
     }
     if (activeFolder) {
       // Include both folder-scoped and list-scoped statuses for lists in this folder
