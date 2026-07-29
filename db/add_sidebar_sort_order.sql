@@ -16,8 +16,9 @@ update spaces s set sort_order = sub.rn
   from (select id, row_number() over (order by created_at) rn from spaces) sub
  where s.id = sub.id and s.sort_order is null;
 
+-- folders has no created_at column — seed by name (alphabetical) instead.
 update folders f set sort_order = sub.rn
-  from (select id, row_number() over (partition by space_id order by created_at) rn from folders) sub
+  from (select id, row_number() over (partition by space_id order by name) rn from folders) sub
  where f.id = sub.id and f.sort_order is null;
 
 update lists l set sort_order = sub.rn
