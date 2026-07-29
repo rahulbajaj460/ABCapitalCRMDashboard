@@ -2853,6 +2853,29 @@ export default function Tasks({
     setStatusLoading(false);
   }
 
+  // Move a status up/down in the manage-statuses modal and persist the new
+  // order (renumbers status_order 1..n), so status groups in the list view
+  // reflect it — e.g. put "Expiring Soon" at the top, "Done" at the bottom.
+  async function moveStatus(statusId, dir) {
+    if (statusLoading) return;
+    const arr = [...modalSpaceStatuses];
+    const i = arr.findIndex((s) => s.id === statusId);
+    const j = dir === "up" ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setStatusLoading(true);
+    setStatusActionMsg("");
+    setModalSpaceStatuses(arr.map((s, idx) => ({ ...s, status_order: idx + 1 }))); // optimistic
+    await Promise.all(
+      arr.map((s, idx) => supabase.from("space_statuses").update({ status_order: idx + 1 }).eq("id", s.id)),
+    );
+    await fetchModalStatuses();
+    await refreshActiveListScoped();
+    await onRefreshSpaces();
+    fetchTasks();
+    setStatusLoading(false);
+  }
+
   async function refreshAllListStatuses() {
     if (!activeSpace) return;
     const { data } = await supabase.from("space_statuses").select("*")
@@ -8033,7 +8056,7 @@ export default function Tasks({
               </div>
             ) : (
               <div style={{ marginBottom: 16 }}>
-                {modalSpaceStatuses.map((s) => (
+                {modalSpaceStatuses.map((s, idx) => (
                   <div
                     key={s.id}
                     style={{
@@ -8069,6 +8092,24 @@ export default function Tasks({
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
+                            <button
+                              title="Move up"
+                              onClick={() => moveStatus(s.id, "up")}
+                              disabled={statusLoading || idx === 0}
+                              style={{ border: "none", background: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? "#d1d5db" : "#6b7280", fontSize: 9, lineHeight: "10px", padding: 0 }}
+                            >
+                              ▲
+                            </button>
+                            <button
+                              title="Move down"
+                              onClick={() => moveStatus(s.id, "down")}
+                              disabled={statusLoading || idx === modalSpaceStatuses.length - 1}
+                              style={{ border: "none", background: "none", cursor: idx === modalSpaceStatuses.length - 1 ? "default" : "pointer", color: idx === modalSpaceStatuses.length - 1 ? "#d1d5db" : "#6b7280", fontSize: 9, lineHeight: "10px", padding: 0 }}
+                            >
+                              ▼
+                            </button>
+                          </div>
                           <span style={{ width: 12, height: 12, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
                           <span style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</span>
                         </div>
