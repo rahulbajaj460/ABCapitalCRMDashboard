@@ -2796,12 +2796,16 @@ export default function Tasks({
     setStatusActionMsg("");
     const remaining = modalSpaceStatuses.filter((s) => s.id !== statusId);
     const fallback = remaining.length > 0 ? remaining[0].name : null;
-    if (fallback)
-      await supabase
-        .from("tasks")
-        .update({ status: fallback })
-        .eq("space_id", activeSpace.id)
-        .eq("status", statusName);
+    if (fallback) {
+      // Reassign ONLY the tasks in the same scope as the status being deleted
+      // (this list / this folder), never the whole space — otherwise deleting
+      // a status in one list would rewrite tasks in sibling lists.
+      let reassign = supabase.from("tasks").update({ status: fallback }).eq("status", statusName);
+      if (activeList) reassign = reassign.eq("list_id", activeList.id);
+      else if (activeFolder) reassign = reassign.eq("folder_id", activeFolder.id);
+      else reassign = reassign.eq("space_id", activeSpace.id);
+      await reassign;
+    }
     const { error } = await supabase
       .from("space_statuses")
       .delete()
