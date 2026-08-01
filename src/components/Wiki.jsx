@@ -455,6 +455,11 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
   const [trashedArticles, setTrashedArticles] = useState([]);
   const [trashedCategories, setTrashedCategories] = useState([]);
   const [trashLoading, setTrashLoading] = useState(false);
+  // ── Article PDF attachments ──
+  const [attachments, setAttachments] = useState([]);
+  const [attLoading, setAttLoading] = useState(false);
+  const [attUploading, setAttUploading] = useState(false);
+  const attFileRef = useRef(null);
 
   const [newArticle, setNewArticle] = useState({
     title: "",
@@ -482,6 +487,12 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
     setEditingArticle(null);
     setShowArticleModal(true);
   }, [newDocFolderId]);
+
+  // Load PDF attachments whenever the open article changes.
+  useEffect(() => {
+    if (activeArticle?.id) fetchArticleAttachments(activeArticle.id);
+    else setAttachments([]);
+  }, [activeArticle?.id]);
 
   // Transform raw URL links to favicon pills
   useEffect(() => {
@@ -570,6 +581,79 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
     setTrashedArticles(artsRes.data || []);
     setTrashedCategories(catsRes.data || []);
     setTrashLoading(false);
+  }
+
+  // ── Attachment helpers (mirror task attachments; PDF only) ──
+  async function fetchArticleAttachments(articleId) {
+    setAttLoading(true);
+    const { data } = await supabase
+      .from("wiki_attachments")
+      .select("*")
+      .eq("article_id", articleId)
+      .order("uploaded_at", { ascending: false });
+    setAttachments(data || []);
+    setAttLoading(false);
+  }
+
+  async function uploadArticleAttachment(file) {
+    if (!activeArticle || !file) return;
+    if (file.type !== "application/pdf") {
+      alert("Only PDF files can be attached to a wiki page.");
+      return;
+    }
+    setAttUploading(true);
+    const path = `${activeArticle.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { error: upErr } = await supabase.storage
+      .from("wiki-attachments")
+      .upload(path, file, { upsert: false });
+    if (upErr) {
+      alert(`Upload failed: ${upErr.message}\n\nMake sure the "wiki-attachments" storage bucket exists with an authenticated-upload policy.`);
+      setAttUploading(false);
+      return;
+    }
+    const { error: insErr } = await supabase.from("wiki_attachments").insert({
+      article_id: activeArticle.id,
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type,
+      storage_path: path,
+      uploaded_by: profile?.full_name || "Unknown",
+    });
+    if (insErr) {
+      alert(`Database error: ${insErr.message}\n\nMake sure the wiki_attachments table exists with RLS policies.`);
+      await supabase.storage.from("wiki-attachments").remove([path]);
+      setAttUploading(false);
+      return;
+    }
+    await fetchArticleAttachments(activeArticle.id);
+    setAttUploading(false);
+  }
+
+  async function downloadArticleAttachment(a) {
+    const { data, error } = await supabase.storage.from("wiki-attachments").download(a.storage_path);
+    if (error || !data) return;
+    const url = URL.createObjectURL(data);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = a.file_name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function deleteArticleAttachment(a) {
+    if (!confirm(`Delete "${a.file_name}"?`)) return;
+    await supabase.storage.from("wiki-attachments").remove([a.storage_path]);
+    await supabase.from("wiki_attachments").delete().eq("id", a.id);
+    await fetchArticleAttachments(activeArticle.id);
+  }
+
+  function fmtSize(b) {
+    if (!b) return "";
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   async function restoreArticle(id) {
@@ -1356,6 +1440,48 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   onMouseOver={handleContentMouseOver}
                   onMouseOut={handleContentMouseOut}
                 />
+
+                {/* PDF attachments */}
+                <div style={{ marginTop: 28, borderTop: "1px solid #ececec", paddingTop: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+                      📎 Attachments{attachments.length ? ` (${attachments.length})` : ""}
+                    </div>
+                    <button className="btn btn-sm" onClick={() => attFileRef.current?.click()} disabled={attUploading}>
+                      {attUploading ? "Uploading…" : "+ Attach PDF"}
+                    </button>
+                    <input
+                      ref={attFileRef}
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadArticleAttachment(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                  {attLoading ? (
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>Loading…</div>
+                  ) : attachments.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "#9ca3af" }}>No attachments yet. Attach a PDF to this page.</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {attachments.map((a) => (
+                        <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid #ececec", borderRadius: 8 }}>
+                          <span style={{ fontSize: 16, flexShrink: 0 }}>📄</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.file_name}</div>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmtSize(a.file_size)}{a.uploaded_by ? ` · ${a.uploaded_by}` : ""}</div>
+                          </div>
+                          <button className="btn btn-sm" onClick={() => downloadArticleAttachment(a)}>Download</button>
+                          <button className="btn btn-sm btn-danger" onClick={() => deleteArticleAttachment(a)}>🗑</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
