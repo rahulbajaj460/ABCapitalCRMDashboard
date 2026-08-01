@@ -35,6 +35,9 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
+          # The runner ships pg_dump 16 on the default PATH; put v17 first so
+          # it matches the (v17) Supabase server.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Install rclone
         run: curl -fsSL https://rclone.org/install.sh | sudo bash
