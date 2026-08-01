@@ -627,6 +627,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
       setAttUploading(false);
       return;
     }
+    await logAttachmentEvent(activeArticle.id, "attachment_added", file.name);
     await fetchArticleAttachments(activeArticle.id);
     setAttUploading(false);
   }
@@ -648,6 +649,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
     if (!confirm(`Delete "${a.file_name}"?`)) return;
     await supabase.storage.from("wiki-attachments").remove([a.storage_path]);
     await supabase.from("wiki_attachments").delete().eq("id", a.id);
+    await logAttachmentEvent(a.article_id, "attachment_deleted", a.file_name);
     await fetchArticleAttachments(activeArticle.id);
   }
 
@@ -656,6 +658,18 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
     if (b < 1024) return `${b} B`;
     if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  // Record an attachment add/delete in the article's history for audit.
+  async function logAttachmentEvent(articleId, action, fileName) {
+    await supabase.from("wiki_history").insert({
+      article_id: articleId,
+      changed_by: profile?.full_name || "Unknown",
+      changed_at: new Date().toISOString(),
+      title: fileName,
+      content: null,
+      action, // "attachment_added" | "attachment_deleted"
+    });
   }
 
   // Upload PDFs that were staged in the New/Edit page modal, once the article
@@ -678,6 +692,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
         storage_path: path,
         uploaded_by: profile?.full_name || "Unknown",
       });
+      await logAttachmentEvent(articleId, "attachment_added", file.name);
     }
   }
 
@@ -775,7 +790,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
       .select("*")
       .eq("article_id", articleId)
       .order("changed_at", { ascending: false })
-      .limit(30);
+      .limit(60);
     setArticleHistory(data || []);
     setHistoryLoading(false);
   }
@@ -1686,8 +1701,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       🕐 Version history
                     </div>
                     <div style={{ fontSize: 12, color: "#888" }}>
-                      {activeArticle.title} · {articleHistory.length} saved
-                      version{articleHistory.length !== 1 ? "s" : ""}
+                      {activeArticle.title} · {articleHistory.filter((h) => !h.action).length} saved
+                      version{articleHistory.filter((h) => !h.action).length !== 1 ? "s" : ""}
                     </div>
                   </div>
                   <button
@@ -1762,7 +1777,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       marginLeft: "auto",
                     }}
                   >
-                    v{articleHistory.length + 1}
+                    v{articleHistory.filter((h) => !h.action).length + 1}
                   </span>
                 </div>
 
@@ -1803,13 +1818,36 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                     </div>
                   ) : (
                     articleHistory.map((entry, idx) => {
+                      // Attachment add/delete events render as a simple audit line
+                      // (no diff, no restore).
+                      if (entry.action) {
+                        const isAdd = entry.action === "attachment_added";
+                        return (
+                          <div
+                            key={entry.id}
+                            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 12.5, color: "#6b7280", borderBottom: "1px solid #f0f0f0" }}
+                          >
+                            <span style={{ fontSize: 15 }}>{isAdd ? "📎" : "🗑"}</span>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <strong style={{ color: "#374151" }}>{entry.changed_by || "Someone"}</strong>{" "}
+                              {isAdd ? "attached" : "deleted"}{" "}
+                              <span style={{ color: "#111", fontWeight: 500 }}>{entry.title}</span>
+                            </span>
+                            <span style={{ color: "#9ca3af", flexShrink: 0 }}>{timeAgo(entry.changed_at)}</span>
+                          </div>
+                        );
+                      }
+                      // Content versions: diff against the previous *version*
+                      // (skipping any interleaved attachment events).
+                      const versionsOnly = articleHistory.filter((h) => !h.action);
+                      const vIdx = versionsOnly.findIndex((v) => v.id === entry.id);
                       const nextEntry =
-                        idx === 0
+                        vIdx === 0
                           ? {
                               title: activeArticle.title,
                               content: activeArticle.content,
                             }
-                          : articleHistory[idx - 1];
+                          : versionsOnly[vIdx - 1];
                       const oldText = stripHtml(entry.content);
                       const newText = stripHtml(nextEntry.content);
                       const { linesAdded, linesRemoved, wordDelta } =
@@ -1817,7 +1855,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       const { removed: removedLines, added: addedLines } =
                         buildDiff(oldText, newText);
                       const titleChanged = entry.title !== nextEntry.title;
-                      const versionNum = articleHistory.length - idx;
+                      const versionNum = versionsOnly.length - vIdx;
                       const hasChanges =
                         linesAdded > 0 || linesRemoved > 0 || titleChanged;
 
