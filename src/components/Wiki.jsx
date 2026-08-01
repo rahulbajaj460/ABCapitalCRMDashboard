@@ -460,6 +460,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
   const [attLoading, setAttLoading] = useState(false);
   const [attUploading, setAttUploading] = useState(false);
   const attFileRef = useRef(null);
+  const [pendingFiles, setPendingFiles] = useState([]); // PDFs staged in the New/Edit page modal
+  const modalAttRef = useRef(null);
 
   const [newArticle, setNewArticle] = useState({
     title: "",
@@ -656,6 +658,29 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
     return `${(b / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  // Upload PDFs that were staged in the New/Edit page modal, once the article
+  // exists (and thus has an id to attach them to).
+  async function uploadPendingAttachments(articleId, files) {
+    for (const file of files) {
+      const path = `${articleId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: upErr } = await supabase.storage
+        .from("wiki-attachments")
+        .upload(path, file, { upsert: false });
+      if (upErr) {
+        alert(`Upload failed for ${file.name}: ${upErr.message}`);
+        continue;
+      }
+      await supabase.from("wiki_attachments").insert({
+        article_id: articleId,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        storage_path: path,
+        uploaded_by: profile?.full_name || "Unknown",
+      });
+    }
+  }
+
   async function restoreArticle(id) {
     await supabase
       .from("wiki_articles")
@@ -706,6 +731,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
       updated_at: now,
       updated_by: profile?.full_name || "Unknown",
     };
+    let savedId = null;
     if (editingArticle) {
       // Save current version to history before overwriting
       await supabase.from("wiki_history").insert({
@@ -722,6 +748,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
         .select()
         .single();
       if (data) setActiveArticle(data);
+      savedId = editingArticle.id;
     } else {
       const { data } = await supabase
         .from("wiki_articles")
@@ -729,7 +756,14 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
         .select()
         .single();
       if (data) setActiveArticle(data);
+      savedId = data?.id || null;
     }
+    // Upload any PDFs staged in the modal now that the article has an id.
+    if (savedId && pendingFiles.length) {
+      await uploadPendingAttachments(savedId, pendingFiles);
+      fetchArticleAttachments(savedId);
+    }
+    setPendingFiles([]);
     closeArticleModal();
     fetchAll();
   }
@@ -849,6 +883,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
     setShowArticleModal(false);
     setEditingArticle(null);
     setNewArticle({ title: "", content: "", category_id: "", folder_id: null });
+    setPendingFiles([]);
     onDocCreated?.();
   }
   function openNewCat(parentId = "") {
@@ -2230,6 +2265,54 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   setNewArticle((prev) => ({ ...prev, content }))
                 }
               />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label className="form-label" style={{ marginBottom: 6 }}>
+                Attachments (PDF)
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <button type="button" className="btn btn-sm" onClick={() => modalAttRef.current?.click()}>
+                  + Attach PDF
+                </button>
+                <input
+                  ref={modalAttRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const all = Array.from(e.target.files || []);
+                    const pdfs = all.filter((f) => f.type === "application/pdf");
+                    if (pdfs.length !== all.length) alert("Only PDF files can be attached.");
+                    if (pdfs.length) setPendingFiles((prev) => [...prev, ...pdfs]);
+                    e.target.value = "";
+                  }}
+                />
+                {pendingFiles.length === 0 && (
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                    {editingArticle ? "Attached PDFs are managed on the page. Add more here." : "No PDFs attached yet."}
+                  </span>
+                )}
+              </div>
+              {pendingFiles.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                  {pendingFiles.map((f, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, background: "#f5f5f4", borderRadius: 6, padding: "5px 8px" }}>
+                      <span>📄</span>
+                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                      <span style={{ color: "#9ca3af" }}>{fmtSize(f.size)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPendingFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                        style={{ border: "none", background: "none", cursor: "pointer", color: "#dc2626", fontSize: 14 }}
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="modal-actions" style={{ marginTop: 0 }}>
               <button className="btn" onClick={closeArticleModal}>
