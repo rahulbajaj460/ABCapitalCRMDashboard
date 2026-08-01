@@ -1,0 +1,86 @@
+name: Daily backup
+
+# Backs up the Supabase database (pg_dump of the public schema, gzipped +
+# gpg-encrypted) and the Supabase Storage files to OneDrive, once a day.
+# Also runnable on demand via the "Run workflow" button.
+#
+# Requires these repository secrets (see docs/backup-and-restore.md):
+#   SUPABASE_DB_URL     - Session-pooler Postgres connection string (with password)
+#   BACKUP_PASSPHRASE   - passphrase used to gpg-encrypt the DB dump
+#   RCLONE_CONF_BASE64  - base64 of an rclone.conf with two remotes:
+#                           [onedrive]           -> your OneDrive
+#                           [supabase-storage]   -> Supabase Storage (S3-compatible)
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 02:00 UTC daily
+  workflow_dispatch: {}    # manual trigger
+
+concurrency:
+  group: daily-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      ONEDRIVE_DIR: "AB Capital Backups"
+      DB_RETENTION_DAYS: 30
+      STORAGE_ARCHIVE_RETENTION_DAYS: 90
+    steps:
+      - name: Install PostgreSQL client 17
+        run: |
+          set -eo pipefail
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Install rclone
+        run: curl -fsSL https://rclone.org/install.sh | sudo bash
+
+      - name: Write rclone config
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.RCLONE_CONF_BASE64 }}" | base64 -d > ~/.config/rclone/rclone.conf
+
+      - name: Dump and encrypt database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -eo pipefail
+          STAMP=$(date -u +%Y-%m-%d_%H%M)
+          mkdir -p out
+          pg_dump "$SUPABASE_DB_URL" \
+            --schema=public --no-owner --no-privileges \
+            | gzip -9 \
+            | gpg --batch --yes --symmetric --cipher-algo AES256 \
+                  --passphrase "$BACKUP_PASSPHRASE" \
+                  -o "out/db-$STAMP.sql.gz.gpg"
+          ls -lh out/
+          # Fail if the encrypted dump is suspiciously small (empty dump).
+          test "$(stat -c%s "out/db-$STAMP.sql.gz.gpg")" -gt 1000
+
+      - name: Upload database dump to OneDrive
+        run: rclone copy out/ "onedrive:${ONEDRIVE_DIR}/db/" --no-traverse
+
+      - name: Back up Storage files to OneDrive
+        continue-on-error: true   # storage backup must not block the DB backup
+        run: |
+          set -eo pipefail
+          STAMP=$(date -u +%Y-%m-%d)
+          # Mirror current files to /storage/current; move any changed/deleted
+          # files into a dated archive so deletions stay recoverable.
+          rclone sync supabase-storage: "onedrive:${ONEDRIVE_DIR}/storage/current" \
+            --backup-dir "onedrive:${ONEDRIVE_DIR}/storage/archive/$STAMP" \
+            --fast-list
+
+      - name: Prune old backups
+        continue-on-error: true
+        run: |
+          rclone delete "onedrive:${ONEDRIVE_DIR}/db"               --min-age ${DB_RETENTION_DAYS}d          || true
+          rclone delete "onedrive:${ONEDRIVE_DIR}/storage/archive"  --min-age ${STORAGE_ARCHIVE_RETENTION_DAYS}d --rmdirs || true
+
+      - name: Summary
+        run: echo "Backup finished at $(date -u). DB dump uploaded to onedrive:${ONEDRIVE_DIR}/db/"
