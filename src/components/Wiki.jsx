@@ -1052,48 +1052,44 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 🗑
               </button>
             )}
-            {profile?.role === "admin" && (
-              <button
-                onClick={() => openNewCat()}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: "5px 10px",
-                  borderRadius: 7,
-                  border: "1px solid #e0e0e0",
-                  background: "#fff",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  color: "#555",
-                  fontWeight: 500,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                + Category
-              </button>
-            )}
-            {profile?.role === "admin" && (
-              <button
-                onClick={() => openNewArticle()}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: "5px 10px",
-                  borderRadius: 7,
-                  border: "none",
-                  background: "#1d4ed8",
-                  color: "#fff",
-                  fontSize: 11,
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                + Page
-              </button>
-            )}
+            <button
+              onClick={() => openNewCat()}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "5px 10px",
+                borderRadius: 7,
+                border: "1px solid #e0e0e0",
+                background: "#fff",
+                fontSize: 11,
+                cursor: "pointer",
+                color: "#555",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+              }}
+            >
+              + Category
+            </button>
+            <button
+              onClick={() => openNewArticle()}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "5px 10px",
+                borderRadius: 7,
+                border: "none",
+                background: "#1d4ed8",
+                color: "#fff",
+                fontSize: 11,
+                cursor: "pointer",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              + Page
+            </button>
           </div>
         </div>
 
@@ -2521,44 +2517,38 @@ function CategoryNode({
           </span>
         )}
 
-        {/* Actions */}
+        {/* Actions — create/edit available to all members; delete admin-only */}
         <div className="wiki-cat-actions">
-          {profile?.role === "admin" && (
-            <button
-              className="wiki-cat-action-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNewArticle(cat.id);
-              }}
-              title="Add page"
-            >
-              + Page
-            </button>
-          )}
-          {profile?.role === "admin" && (
-            <button
-              className="wiki-cat-action-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onNewSubCat(cat.id);
-              }}
-              title="Add subcategory"
-            >
-              + Sub
-            </button>
-          )}
-          {profile?.role === "admin" && (
-            <button
-              className="wiki-cat-action-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditCat(cat);
-              }}
-              title="Rename"
-            >
-              ✏️
-            </button>
-          )}
+          <button
+            className="wiki-cat-action-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewArticle(cat.id);
+            }}
+            title="Add page"
+          >
+            + Page
+          </button>
+          <button
+            className="wiki-cat-action-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onNewSubCat(cat.id);
+            }}
+            title="Add subcategory"
+          >
+            + Sub
+          </button>
+          <button
+            className="wiki-cat-action-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditCat(cat);
+            }}
+            title="Rename"
+          >
+            ✏️
+          </button>
           {profile?.role === "admin" && (
             <button
               className="wiki-cat-action-btn danger"
