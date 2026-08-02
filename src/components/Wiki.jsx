@@ -647,10 +647,28 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
 
   async function deleteArticleAttachment(a) {
     if (!confirm(`Delete "${a.file_name}"?`)) return;
-    await supabase.storage.from("wiki-attachments").remove([a.storage_path]);
-    await supabase.from("wiki_attachments").delete().eq("id", a.id);
+    // Remove the file from storage first; surface any error instead of
+    // silently continuing (a swallowed failure previously left "deleted"
+    // files orphaned in the bucket).
+    const { error: objErr } = await supabase.storage
+      .from("wiki-attachments")
+      .remove([a.storage_path]);
+    if (objErr) {
+      alert(`Could not delete the file from storage: ${objErr.message}`);
+      return;
+    }
+    // Then remove the record; check the error so a blocked delete is visible.
+    const { error: rowErr } = await supabase
+      .from("wiki_attachments")
+      .delete()
+      .eq("id", a.id);
+    if (rowErr) {
+      alert(`The file was removed but its record could not be deleted: ${rowErr.message}`);
+      return;
+    }
     await logAttachmentEvent(a.article_id, "attachment_deleted", a.file_name);
-    await fetchArticleAttachments(activeArticle.id);
+    if (activeArticle?.id) await fetchArticleAttachments(activeArticle.id);
+    else setAttachments((prev) => prev.filter((x) => x.id !== a.id));
   }
 
   function fmtSize(b) {
@@ -721,6 +739,18 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
       )
     )
       return;
+    // Remove attachment files from storage first — the wiki_attachments rows
+    // cascade-delete with the article, but the storage objects would otherwise
+    // be left orphaned in the bucket (and keep showing up in backups).
+    const { data: atts } = await supabase
+      .from("wiki_attachments")
+      .select("storage_path")
+      .eq("article_id", id);
+    if (atts?.length) {
+      await supabase.storage
+        .from("wiki-attachments")
+        .remove(atts.map((x) => x.storage_path));
+    }
     await supabase.from("wiki_history").delete().eq("article_id", id);
     await supabase.from("wiki_articles").delete().eq("id", id);
     fetchTrash();
