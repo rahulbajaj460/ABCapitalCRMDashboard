@@ -203,23 +203,25 @@ export default function Automations({ open, onClose, spaces, members, profile })
             {rows.map((a) => (
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid #e8e8e8", borderRadius: 10, marginBottom: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{a.name}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
                   <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
                     When {TRIGGERS.find((t) => t.value === a.trigger?.type)?.label || a.trigger?.type}
                     {a.conditions?.length ? ` · ${a.conditions.length} condition(s)` : ""}
                     {` · ${a.actions?.length || 0} action(s)`}
                   </div>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#6b7280", background: "#f3f4f6", borderRadius: 6, padding: "2px 8px", marginTop: 5 }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-                    {scopePath(a) || a.scope_type}
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#6b7280", background: "#f3f4f6", borderRadius: 6, padding: "2px 8px", marginTop: 5, maxWidth: "100%" }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scopePath(a) || a.scope_type}</span>
                   </div>
                 </div>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
-                  <input type="checkbox" checked={a.enabled} onChange={() => toggleEnabled(a)} />
-                  {a.enabled ? "On" : "Off"}
-                </label>
-                <button className="btn btn-sm" onClick={() => setEditing({ ...a, ...scopeToSel(a), conditions: a.conditions || [], actions: a.actions || [] })}>Edit</button>
-                <button className="btn btn-sm btn-danger" onClick={() => removeAutomation(a)}>🗑</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
+                    <input type="checkbox" checked={a.enabled} onChange={() => toggleEnabled(a)} />
+                    {a.enabled ? "On" : "Off"}
+                  </label>
+                  <button className="btn btn-sm" onClick={() => setEditing({ ...a, ...scopeToSel(a), conditions: a.conditions || [], actions: a.actions || [] })}>Edit</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => removeAutomation(a)}>🗑</button>
+                </div>
               </div>
             ))}
           </>
