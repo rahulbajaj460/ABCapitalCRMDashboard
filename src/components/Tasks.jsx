@@ -310,6 +310,8 @@ export default function Tasks({
   activeList,
   profile,
   onRefreshSpaces,
+  openTaskId,
+  onTaskOpened,
 }) {
   const [tasks, setTasks] = useState([]);
   const [newTaskIds, setNewTaskIds] = useState(() => new Set()); // recently-arrived tasks, for the "new" highlight
@@ -726,6 +728,21 @@ export default function Tasks({
       .subscribe();
     return () => supabase.removeChannel(channel);
   }, [activeSpace?.id, activeFolder?.id, activeList?.id]);
+  // Open a task's drawer when requested (e.g. from a notification click).
+  useEffect(() => {
+    if (!openTaskId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("tasks")
+        .select("*, task_field_values(*)")
+        .eq("id", openTaskId)
+        .single();
+      if (!cancelled && data) openDrawer(data);
+      onTaskOpened?.();
+    })();
+    return () => { cancelled = true; };
+  }, [openTaskId]);
   useEffect(() => {
     fetchMembers();
   }, []);

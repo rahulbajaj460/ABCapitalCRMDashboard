@@ -130,6 +130,7 @@ export default function Sidebar({
   onSpaceCreated,
   profile,
   onLogout,
+  onOpenTask,
   taskCounts = {},
   onRefreshTaskCounts,
   accessRules = {},
@@ -1162,7 +1163,7 @@ export default function Sidebar({
             Internal workspace
           </div>
         </div>
-        <Notifications profile={profile} />
+        <Notifications profile={profile} onOpenTask={onOpenTask} />
       </div>
 
       {/* Nav */}

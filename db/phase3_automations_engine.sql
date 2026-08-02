@@ -253,6 +253,32 @@ begin
   end loop;
 end $$;
 
+-- Human-readable notification body describing what happened, per trigger.
+create or replace function _abcap_notify_body(a automations, t tasks)
+returns text language plpgsql stable security definer set search_path=public as $$
+declare tt text := a.trigger->>'type'; fld text; lbl text;
+begin
+  if tt = 'status_changed' then
+    return 'Status changed to "' || coalesce(nullif(a.trigger->'params'->>'to',''), t.status) || '"';
+  elsif tt = 'field_changed' then
+    fld := a.trigger->'params'->>'field';
+    if    fld = 'status'   then lbl := 'Status';
+    elsif fld = 'priority' then lbl := 'Priority';
+    elsif fld = 'assignee' then lbl := 'Assignee';
+    elsif fld = 'due_date' then lbl := 'Due date';
+    elsif fld like 'field\_%' then
+      begin select field_name into lbl from space_fields where id = substring(fld from 7)::uuid limit 1;
+      exception when others then lbl := null; end;
+    end if;
+    return coalesce(lbl, 'A field') || ' was updated';
+  elsif tt = 'assigned'        then return 'Task assigned';
+  elsif tt = 'comment_mention' then return 'New comment';
+  elsif tt = 'date_based'      then return 'Date reminder';
+  elsif tt = 'task_created'    then return 'New task created';
+  else return 'Automation triggered';
+  end if;
+end $$;
+
 create or replace function _abcap_trigger_label(ttype text)
 returns text language sql immutable as $$
   select case ttype
@@ -313,8 +339,8 @@ begin
         if chans ? 'in_app' then
           insert into notifications(user_id, task_id, type, title, body, link_scope)
           values (recip, t.id, 'automation',
-                  coalesce(nullif(a.name,''), 'Automation'),
-                  'Triggered because ' || _abcap_trigger_label(a.trigger->>'type') || '.',
+                  coalesce(nullif(t.title,''), 'Task'),
+                  _abcap_notify_body(a, t),
                   jsonb_build_object('space_id', t.space_id, 'folder_id', t.folder_id,
                                      'list_id', t.list_id, 'path', path));
         end if;

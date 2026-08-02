@@ -21,6 +21,7 @@ export default function App() {
   const [activeFolder, setActiveFolder] = useState(null);
   const [activeList, setActiveList] = useState(null);
   const [openArticleId, setOpenArticleId] = useState(null);
+  const [openTaskId, setOpenTaskId] = useState(null);
   const [activeWhiteboard, setActiveWhiteboard] = useState(null);
   const [newDocFolderId, setNewDocFolderId] = useState(null);
   const [newDocSpaceId, setNewDocSpaceId] = useState(null);
@@ -294,6 +295,24 @@ export default function App() {
     localStorage.setItem("abc_folder_id", folder.id);
   }
 
+  // Open a task from a notification: navigate to its space/folder/list, then
+  // open its drawer in Tasks.
+  async function handleOpenTaskFromNotification(n) {
+    const scope = n?.link_scope || {};
+    const space = spaces.find((s) => s.id === scope.space_id) || null;
+    const folder = space?.folders?.find((f) => f.id === scope.folder_id) || null;
+    if (space) setActiveSpace(space);
+    setActiveFolder(folder);
+    if (scope.list_id) {
+      const { data: list } = await supabase.from("lists").select("*").eq("id", scope.list_id).single();
+      setActiveList(list || { id: scope.list_id, folder_id: scope.folder_id, space_id: scope.space_id });
+    } else {
+      setActiveList(null);
+    }
+    setView("tasks");
+    if (n?.task_id) setOpenTaskId(n.task_id);
+  }
+
   function handleNavigate(v) {
     if (typeof v === "string" && v.startsWith("wiki:")) {
       const articleId = v.slice(5);
@@ -383,6 +402,7 @@ export default function App() {
         accessRules={accessRules}
         onSpaceCreated={fetchSpaces}
         onLogout={handleLogout}
+        onOpenTask={handleOpenTaskFromNotification}
         width={sidebarWidth}
       />
       {/* Resize handle */}
@@ -417,6 +437,8 @@ export default function App() {
             activeList={activeList}
             profile={profile}
             onRefreshSpaces={fetchSpaces}
+            openTaskId={openTaskId}
+            onTaskOpened={() => setOpenTaskId(null)}
           />
         )}
         {view === "wiki" && (
