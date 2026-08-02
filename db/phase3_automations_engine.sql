@@ -330,11 +330,12 @@ begin
 
     if atype = 'notify' then
       chans := coalesce(act->'params'->'channels', '["in_app"]'::jsonb);
+      -- Notify every configured recipient, including the person who made the
+      -- change: automations are deliberate alerts (e.g. "notify the assignee
+      -- when this expires"), so the assignee still needs it even if they were
+      -- the actor.
       for recip in
-        select rr.id from _abcap_recipients2(act->'params'->'recipients', t) rr
-        group by rr.id
-        having bool_or(not rr.is_preset)          -- explicitly named → always notify
-            or rr.id is distinct from actor_id     -- preset recipient who isn't the actor
+        select distinct rr.id from _abcap_recipients2(act->'params'->'recipients', t) rr
       loop
         if chans ? 'in_app' then
           insert into notifications(user_id, task_id, type, title, body, link_scope)
