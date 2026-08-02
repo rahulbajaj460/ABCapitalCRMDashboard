@@ -24,9 +24,7 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     env:
-      # rclone "crypt" remote — encrypts file contents AND names before upload,
-      # so the OneDrive backup folder is unreadable without the crypt password.
-      CRYPT_REMOTE: "secure-backup"
+      ONEDRIVE_DIR: "AB Capital Backups"
       DB_RETENTION_DAYS: 30
       STORAGE_ARCHIVE_RETENTION_DAYS: 90
     steps:
@@ -67,8 +65,8 @@ jobs:
           # Fail if the encrypted dump is suspiciously small (empty dump).
           test "$(stat -c%s "out/db-$STAMP.sql.gz.gpg")" -gt 1000
 
-      - name: Upload database dump to OneDrive (encrypted)
-        run: rclone copy out/ "${CRYPT_REMOTE}:db/" --no-traverse
+      - name: Upload database dump to OneDrive
+        run: rclone copy out/ "onedrive:${ONEDRIVE_DIR}/db/" --no-traverse
 
       - name: Back up Storage files to OneDrive
         continue-on-error: true   # storage backup must not block the DB backup
@@ -77,15 +75,15 @@ jobs:
           STAMP=$(date -u +%Y-%m-%d)
           # Mirror current files to /storage/current; move any changed/deleted
           # files into a dated archive so deletions stay recoverable.
-          rclone sync supabase-storage: "${CRYPT_REMOTE}:storage/current" \
-            --backup-dir "${CRYPT_REMOTE}:storage/archive/$STAMP" \
+          rclone sync supabase-storage: "onedrive:${ONEDRIVE_DIR}/storage/current" \
+            --backup-dir "onedrive:${ONEDRIVE_DIR}/storage/archive/$STAMP" \
             --fast-list
 
       - name: Prune old backups
         continue-on-error: true
         run: |
-          rclone delete "${CRYPT_REMOTE}:db"               --min-age ${DB_RETENTION_DAYS}d          || true
-          rclone delete "${CRYPT_REMOTE}:storage/archive"  --min-age ${STORAGE_ARCHIVE_RETENTION_DAYS}d --rmdirs || true
+          rclone delete "onedrive:${ONEDRIVE_DIR}/db"               --min-age ${DB_RETENTION_DAYS}d          || true
+          rclone delete "onedrive:${ONEDRIVE_DIR}/storage/archive"  --min-age ${STORAGE_ARCHIVE_RETENTION_DAYS}d --rmdirs || true
 
       - name: Summary
-        run: echo "Backup finished at $(date -u). Encrypted DB dump uploaded via ${CRYPT_REMOTE}:db/"
+        run: echo "Backup finished at $(date -u). DB dump uploaded to onedrive:${ONEDRIVE_DIR}/db/"
