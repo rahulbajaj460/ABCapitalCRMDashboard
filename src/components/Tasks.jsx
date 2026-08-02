@@ -1622,30 +1622,37 @@ export default function Tasks({
   function getSelectedSpaceStatuses() {
     const space = spaces.find((s) => s.id === newTask.space_id);
     if (!space) return ["To Do", "In Progress", "In Review", "Done"];
-    if (newTask.folder_id) {
-      const fs = (space.space_statuses || [])
-        .filter((s) => s.folder_id === newTask.folder_id)
-        .sort((a, b) => a.status_order - b.status_order);
-      if (fs.length > 0) return fs.map((s) => s.name);
-    }
-    const seen = new Set();
-    const unique = [];
-    (space.space_statuses || [])
-      .filter(
-        (s) =>
-          s.folder_id &&
-          (space.folders || []).map((f) => f.id).includes(s.folder_id),
-      )
-      .sort((a, b) => a.status_order - b.status_order)
-      .forEach((s) => {
-        if (!seen.has(s.name)) {
-          seen.add(s.name);
-          unique.push(s.name);
-        }
+    const byOrder = (a, b) => a.status_order - b.status_order;
+    const dedup = (rows) => {
+      const seen = new Set();
+      const out = [];
+      rows.forEach((s) => {
+        if (!seen.has(s.name)) { seen.add(s.name); out.push(s.name); }
       });
-    return unique.length > 0
-      ? unique
-      : ["To Do", "In Progress", "In Review", "Done"];
+      return out;
+    };
+    const all = space.space_statuses || [];
+    // 1. Prefer the active list's own statuses (the task is created in it),
+    //    as long as the modal's folder still matches that list's folder.
+    if (activeList && (!newTask.folder_id || activeList.folder_id === newTask.folder_id)) {
+      const ls = all.filter((s) => s.list_id === activeList.id).sort(byOrder);
+      if (ls.length > 0) return ls.map((s) => s.name);
+    }
+    // 2. Folder-scoped statuses only (exclude list-scoped copies), deduped —
+    //    this is what prevented the "status appears multiple times" bug once
+    //    each list got its own copy of the folder statuses.
+    if (newTask.folder_id) {
+      const folderOwn = dedup(all.filter((s) => s.folder_id === newTask.folder_id && !s.list_id).sort(byOrder));
+      if (folderOwn.length > 0) return folderOwn;
+      const merged = dedup(all.filter((s) => s.folder_id === newTask.folder_id).sort(byOrder));
+      if (merged.length > 0) return merged;
+    }
+    // 3. Space level: folder-scoped statuses across the space, deduped.
+    const folderIds = (space.folders || []).map((f) => f.id);
+    const spaceLevel = dedup(
+      all.filter((s) => s.folder_id && folderIds.includes(s.folder_id) && !s.list_id).sort(byOrder),
+    );
+    return spaceLevel.length > 0 ? spaceLevel : ["To Do", "In Progress", "In Review", "Done"];
   }
   function getSelectedSpaceFields() {
     const space = spaces.find((s) => s.id === newTask.space_id);
