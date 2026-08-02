@@ -4,28 +4,18 @@ Automated **daily backups** of the CRM to OneDrive, via GitHub Actions
 (`.github/workflows/daily-backup.yml`). Each run:
 
 1. `pg_dump`s the whole `public` schema (all app data), gzips it, and
-   **encrypts** it with `BACKUP_PASSPHRASE` (gpg AES-256).
-2. Mirrors **Supabase Storage** files, moving any changed/deleted files into a
-   dated `storage/archive/<date>/` so deletions stay recoverable.
-3. Uploads everything through an **rclone `crypt` remote (`secure-backup`)**, so
-   file **contents and names are encrypted** before they reach OneDrive. The
-   backup folder (`onedrive:AB Capital Secure Backups`) is unreadable gibberish
-   without the crypt password.
-4. Prunes DB dumps older than 30 days and file archives older than 90 days.
-
-**Two secrets protect the data — keep both in a password manager:**
-- **Crypt password** — set when creating the `secure-backup` remote; unlocks the
-  whole OneDrive folder.
-- **`BACKUP_PASSPHRASE`** — decrypts the database dump inside.
+   **encrypts** it with `BACKUP_PASSPHRASE` (gpg AES-256) →
+   `onedrive:AB Capital Backups/db/db-<date>.sql.gz.gpg`.
+2. Mirrors **Supabase Storage** files to `onedrive:AB Capital Backups/storage/current`,
+   moving any changed/deleted files into `storage/archive/<date>/` so deletions
+   stay recoverable.
+3. Prunes DB dumps older than 30 days and file archives older than 90 days.
 
 > Code is already backed up by GitHub. This protects the **data**, which on the
 > Supabase Free tier has **no** automatic backups.
 >
-> ⚠️ Encryption protects **confidentiality**, not deletion. Anyone with access to
-> the OneDrive account (or the backup job, which prunes by design) can still
-> delete files — deleted items are recoverable from the OneDrive Recycle Bin
-> (~93 days). For delete-proof (WORM) storage, use object-lock storage such as
-> Backblaze B2 or S3 Object Lock instead.
+> The DB dump is gpg-encrypted with `BACKUP_PASSPHRASE` (keep it in a password
+> manager — it's needed to restore). The Storage files are uploaded as-is.
 
 ---
 
@@ -71,28 +61,6 @@ force_path_style = true
 
 Test it: `rclone lsd supabase-storage:` should list your storage buckets.
 
-### 3b. Add the encrypted `crypt` remote (the "lock")
-
-This wraps OneDrive so everything is encrypted (contents + names) before upload.
-
-```bash
-rclone config
-# n) New remote
-# name> secure-backup
-# Storage> crypt
-# remote> onedrive:AB Capital Secure Backups
-# filename_encryption> (Enter for default: standard)
-# directory_name_encryption> (Enter for default: true)
-# Password> y  -> type your own CRYPT PASSWORD (twice)   <-- save this!
-# Password2 (salt)> g -> generate random, then y to accept
-# Edit advanced config> n ; Keep this remote> y ; q
-```
-
-The workflow uploads via `secure-backup:` (see `CRYPT_REMOTE` in the workflow),
-so the OneDrive `AB Capital Secure Backups` folder holds only encrypted blobs.
-**Save the crypt password** in a password manager — it's required to read or
-restore any backup.
-
 ### 4. Get the database connection string
 
 Supabase: **Project Settings → Database → Connection string → "Session pooler"**
@@ -127,8 +95,7 @@ base64 -i "$(rclone config file | tail -1)" | pbcopy   # macOS: now paste into t
 ### 6. Test it
 
 Repo → **Actions → Daily backup → Run workflow**. Watch it go green, then
-confirm an `AB Capital Secure Backups/` folder appears in OneDrive with
-**encrypted (gibberish) file and folder names**.
+confirm the files landed under `AB Capital Backups/` in OneDrive.
 
 ---
 
@@ -136,10 +103,7 @@ confirm an `AB Capital Secure Backups/` folder appears in OneDrive with
 
 ### Restore the database
 
-Download the dump for the day you want, then decrypt + load it. Use the
-`secure-backup:` remote — rclone transparently **decrypts** the crypt layer as
-it downloads (so you never see the gibberish names). You must have the
-`secure-backup` remote configured locally (see setup 3b) with the crypt password.
+Download the dump for the day you want, then decrypt + load it.
 
 > **Restore into a fresh/scratch Supabase project first** if you only need to
 > recover *some* accidentally-deleted rows — that way you can copy back just
@@ -147,9 +111,8 @@ it downloads (so you never see the gibberish names). You must have the
 > only if the whole dataset is lost.
 
 ```bash
-# 1. List available dumps (decrypted names), then download the one you want
-rclone ls "secure-backup:db"
-rclone copy "secure-backup:db/db-2026-07-31_0200.sql.gz.gpg" .
+# 1. Download the chosen dump from OneDrive
+rclone copy "onedrive:AB Capital Backups/db/db-2026-07-31_0200.sql.gz.gpg" .
 
 # 2. Decrypt the gpg layer + decompress
 gpg --batch --decrypt --passphrase "<BACKUP_PASSPHRASE>" \
@@ -171,10 +134,10 @@ Current mirror lives at `storage/current`; deleted/changed versions are under
 
 ```bash
 # Recover a file that was deleted on 2026-07-30 (found in that day's archive)
-rclone copy "secure-backup:storage/archive/2026-07-30/<bucket>/<path>" ./recovered/
+rclone copy "onedrive:AB Capital Backups/storage/archive/2026-07-30/<bucket>/<path>" ./recovered/
 
 # Or restore an entire bucket's current mirror back into Supabase Storage
-rclone copy "secure-backup:storage/current/<bucket>" "supabase-storage:<bucket>"
+rclone copy "onedrive:AB Capital Backups/storage/current/<bucket>" "supabase-storage:<bucket>"
 ```
 
 ---
