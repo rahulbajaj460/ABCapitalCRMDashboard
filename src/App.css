@@ -19,7 +19,7 @@ button {
   font-family: inherit;
 }
 
-input:not([type="checkbox"]):not([type="radio"]),
+input,
 select,
 textarea {
   width: 100%;
@@ -34,7 +34,18 @@ textarea {
     border-color 0.15s,
     box-shadow 0.15s;
 }
-input:not([type="checkbox"]):not([type="radio"]):focus,
+/* Checkboxes/radios must not inherit the full-width text-field styling above.
+   Kept as a separate rule (not :not() on the selector above) so it doesn't
+   raise that rule's specificity over component overrides like .toolbar-search input. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  padding: 0;
+  border: revert;
+  border-radius: 0;
+  background: revert;
+}
+input:focus,
 select:focus,
 textarea:focus {
   border-color: #1d4ed8;
