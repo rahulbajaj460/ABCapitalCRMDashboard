@@ -7285,6 +7285,9 @@ export default function Tasks({
         spaces={spaces}
         members={members}
         profile={profile}
+        activeSpace={activeSpace}
+        activeFolder={activeFolder}
+        activeList={activeList}
       />
       {showExportModal && (
         <div

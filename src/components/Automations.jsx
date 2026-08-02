@@ -37,7 +37,7 @@ const blankAutomation = () => ({
 
 const sel = { fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff" };
 
-export default function Automations({ open, onClose, spaces, members, profile }) {
+export default function Automations({ open, onClose, spaces, members, profile, activeSpace, activeFolder, activeList }) {
   const [rows, setRows] = useState([]);
   const [editing, setEditing] = useState(null);
   const [allLists, setAllLists] = useState([]);          // {id,name,folder_id,space_id}
@@ -181,6 +181,27 @@ export default function Automations({ open, onClose, spaces, members, profile })
   function updAction(id, patch) { setEditing((e) => ({ ...e, actions: e.actions.map((a) => (a.id === id ? { ...a, ...patch } : a)) })); }
   function rmAction(id) { setEditing((e) => ({ ...e, actions: e.actions.filter((a) => a.id !== id) })); }
 
+  // Which automations apply to the current view: a rule is visible at its own
+  // scope and everything inside it. List → only that list; folder → that folder
+  // and its lists; space → that space, its folders, and their lists.
+  function inScope(a) {
+    if (activeList) {
+      const l = allLists.find((x) => x.id === activeList.id) || activeList;
+      return (a.scope_type === "list" && a.scope_id === activeList.id)
+        || (a.scope_type === "folder" && a.scope_id === l.folder_id)
+        || (a.scope_type === "space" && a.scope_id === l.space_id);
+    }
+    if (activeFolder) {
+      return (a.scope_type === "folder" && a.scope_id === activeFolder.id)
+        || (a.scope_type === "space" && a.scope_id === (activeFolder.space_id || activeSpace?.id));
+    }
+    if (activeSpace) {
+      return a.scope_type === "space" && a.scope_id === activeSpace.id;
+    }
+    return true;
+  }
+  const visibleRows = rows.filter(inScope);
+
   if (!open) return null;
 
   return (
@@ -195,12 +216,12 @@ export default function Automations({ open, onClose, spaces, members, profile })
                 <button className="btn btn-sm" onClick={onClose}>Close</button>
               </div>
             </div>
-            {rows.length === 0 && (
+            {visibleRows.length === 0 && (
               <div style={{ fontSize: 13, color: "#9ca3af", padding: "28px 12px", textAlign: "center" }}>
-                No automations yet. Create one to notify people or update tasks automatically.
+                No automations apply here yet. Create one to notify people or update tasks automatically.
               </div>
             )}
-            {rows.map((a) => (
+            {visibleRows.map((a) => (
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", border: "1px solid #e8e8e8", borderRadius: 10, marginBottom: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
