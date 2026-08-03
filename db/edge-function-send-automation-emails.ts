@@ -9,7 +9,9 @@
 // Secrets (Edge Functions → Manage secrets):
 //   RESEND_API_KEY   - from resend.com
 //   FROM_EMAIL       - e.g. "AB Capital <notifications@send.abcapital.ae>"
-//   WEBHOOK_SECRET    - shared secret the cron sends in the x-webhook-secret header
+//   EMAIL_WEBHOOK_SECRET - secret the cron sends in the x-webhook-secret header
+//                          (distinct from the lead-ingest function's WEBHOOK_SECRET,
+//                           since Edge Function secrets are shared project-wide)
 //   (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -28,7 +30,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     // Only the scheduled caller (with the shared secret) may drain the queue.
-    if (req.headers.get("x-webhook-secret") !== Deno.env.get("WEBHOOK_SECRET")) {
+    if (req.headers.get("x-webhook-secret") !== Deno.env.get("EMAIL_WEBHOOK_SECRET")) {
       return json({ error: "Unauthorized" }, 401);
     }
     const resendKey = Deno.env.get("RESEND_API_KEY");

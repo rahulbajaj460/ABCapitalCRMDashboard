@@ -6,7 +6,8 @@
 -- Function is deployed and its secrets are set.
 --
 -- Replace REPLACE_WITH_WEBHOOK_SECRET below with the same value you set as
--- the function's WEBHOOK_SECRET secret. Idempotent (re-run to update).
+-- the function's EMAIL_WEBHOOK_SECRET secret (a distinct name from the
+-- lead-ingest function's WEBHOOK_SECRET). Idempotent (re-run to update).
 -- =====================================================================
 
 create extension if not exists pg_net;   -- outbound HTTP from Postgres
