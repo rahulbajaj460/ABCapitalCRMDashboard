@@ -24,7 +24,7 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     env:
-      ONEDRIVE_DIR: "AB Capital Backups"
+      ONEDRIVE_DIR: "AB Capital One Drive/Employee Folders/RAHUL BAJAJ/AB Capital Backups"
       DB_RETENTION_DAYS: 30
       STORAGE_ARCHIVE_RETENTION_DAYS: 90
     steps:
