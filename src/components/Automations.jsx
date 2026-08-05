@@ -397,6 +397,16 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                           })}
                         </div>
                       </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Message (optional)</div>
+                        <textarea
+                          value={a.params.message || ""}
+                          onChange={(e) => updAction(a.id, { params: { ...a.params, message: e.target.value } })}
+                          placeholder="Leave blank for an automatic message. You can use: {task}, {status}, {priority}, {due_date}, {list}"
+                          rows={2}
+                          style={{ width: "100%", fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                        />
+                      </div>
                     </div>
                   )}
                   {a.type === "change_status" && (

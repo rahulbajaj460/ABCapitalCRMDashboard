@@ -279,6 +279,20 @@ begin
   end if;
 end $$;
 
+-- Substitute {task}/{status}/{priority}/{due_date}/{list} tokens in a custom
+-- automation message.
+create or replace function _abcap_render_tokens(msg text, t tasks)
+returns text language plpgsql stable security definer set search_path=public as $$
+declare out text := msg;
+begin
+  out := replace(out, '{task}',     coalesce(t.title, ''));
+  out := replace(out, '{status}',   coalesce(t.status, ''));
+  out := replace(out, '{priority}', coalesce(t.priority, ''));
+  out := replace(out, '{due_date}', coalesce(t.due_date::text, ''));
+  out := replace(out, '{list}',     coalesce((select name from lists where id = t.list_id), ''));
+  return out;
+end $$;
+
 create or replace function _abcap_trigger_label(ttype text)
 returns text language sql immutable as $$
   select case ttype
@@ -318,7 +332,7 @@ end $$;
 create or replace function _abcap_run(a automations, t tasks, actor text, event text)
 returns void language plpgsql security definer set search_path=public as $$
 declare
-  act jsonb; atype text; chans jsonb; recip uuid; actor_id uuid;
+  act jsonb; atype text; chans jsonb; recip uuid; actor_id uuid; body_text text;
   path text := _abcap_scope_path(t.space_id, t.folder_id, t.list_id);
 begin
   if actor is not null then
@@ -330,6 +344,10 @@ begin
 
     if atype = 'notify' then
       chans := coalesce(act->'params'->'channels', '["in_app"]'::jsonb);
+      -- Custom message if provided (with token substitution), else the
+      -- auto-generated description.
+      body_text := _abcap_render_tokens(
+        coalesce(nullif(act->'params'->>'message',''), _abcap_notify_body(a, t)), t);
       -- Notify every configured recipient, including the person who made the
       -- change: automations are deliberate alerts (e.g. "notify the assignee
       -- when this expires"), so the assignee still needs it even if they were
@@ -341,16 +359,15 @@ begin
           insert into notifications(user_id, task_id, type, title, body, link_scope)
           values (recip, t.id, 'automation',
                   coalesce(nullif(t.title,''), 'Task'),
-                  _abcap_notify_body(a, t),
+                  body_text,
                   jsonb_build_object('space_id', t.space_id, 'folder_id', t.folder_id,
                                      'list_id', t.list_id, 'path', path));
         end if;
         if chans ? 'email' then
           insert into automation_email_queue(user_id, task_id, automation_id, subject, body)
           values (recip, t.id, a.id,
-                  coalesce(nullif(a.name,''), 'Automation') || ': ' || coalesce(t.title, 'task'),
-                  'Automation "' || coalesce(a.name,'') || '" ran on task "' || coalesce(t.title,'') ||
-                  '" (' || coalesce(path,'') || ').');
+                  coalesce(nullif(t.title,''), 'AB Capital') || ' — ' || coalesce(nullif(a.name,''), 'Automation'),
+                  body_text || E'\n\n(' || coalesce(path,'') || ')');
         end if;
       end loop;
 
