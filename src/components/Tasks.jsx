@@ -20,8 +20,8 @@ function TBBtn({ onClick, active, title, children }) {
         padding: "3px 7px",
         borderRadius: 5,
         border: "none",
-        background: active ? "#dbeafe" : "transparent",
-        color: active ? "#1d4ed8" : "#555",
+        background: active ? "#cdeeee" : "transparent",
+        color: active ? "#0d7d82" : "#555",
         cursor: "pointer",
         fontSize: 12,
         fontWeight: active ? 600 : 400,
@@ -81,7 +81,7 @@ function TaskDescEditor({ value, onChange }) {
 
   return (
     <div style={{ border: "1.5px solid #e0e0e0", borderRadius: 8, overflow: "hidden" }}
-      onFocus={(e) => e.currentTarget.style.borderColor = "#1d4ed8"}
+      onFocus={(e) => e.currentTarget.style.borderColor = "#0d7d82"}
       onBlur={(e) => e.currentTarget.style.borderColor = "#e0e0e0"}
     >
       {/* Toolbar */}
@@ -2089,7 +2089,7 @@ export default function Tasks({
           ),
         )}
         <div style={{ display: "flex", gap: 14, marginTop: group.children.length ? 2 : 0 }}>
-          <button onClick={() => addCondition(group.id)} style={{ background: "none", border: "none", color: "#1d4ed8", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add filter</button>
+          <button onClick={() => addCondition(group.id)} style={{ background: "none", border: "none", color: "#0d7d82", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add filter</button>
           {depth < 2 && (
             <button onClick={() => addNestedGroup(group.id)} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer", padding: 0 }}>Add nested filter</button>
           )}
@@ -3065,13 +3065,13 @@ export default function Tasks({
           paddingLeft: indented ? 32 : 14,
           fontSize: 11,
           fontWeight: 700,
-          color: isActive ? "#1d4ed8" : "#999",
+          color: isActive ? "#0d7d82" : "#999",
           textTransform: "uppercase",
           letterSpacing: "0.05em",
-          borderBottom: isDragOver ? "2px solid #3b82f6" : "1px solid #ebebeb",
-          borderLeft: isDragOver ? "2px solid #3b82f6" : undefined,
+          borderBottom: isDragOver ? "2px solid #12a3a0" : "1px solid #ebebeb",
+          borderLeft: isDragOver ? "2px solid #12a3a0" : undefined,
           borderRight: sticky ? "1px solid #ebebeb" : undefined,
-          background: isDragOver ? "#eff6ff" : "#fafaf9",
+          background: isDragOver ? "#e8f6f6" : "#fafaf9",
           boxShadow: sticky ? "2px 0 4px -2px rgba(0,0,0,0.08)" : undefined,
           cursor: draggableCol ? "grab" : sortable ? "pointer" : "default",
           userSelect: "none",
@@ -3113,7 +3113,7 @@ export default function Tasks({
             <span
               style={{
                 fontSize: 10,
-                color: isActive ? "#1d4ed8" : "#ccc",
+                color: isActive ? "#0d7d82" : "#ccc",
                 opacity: isActive ? 1 : 0.6,
                 flexShrink: 0,
               }}
@@ -3135,7 +3135,7 @@ export default function Tasks({
             cursor: "col-resize",
             zIndex: 2,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#bfdbfe")}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#b3e3e1")}
           onMouseLeave={(e) => (e.currentTarget.style.background = "")}
         />
       </div>
@@ -3200,7 +3200,7 @@ export default function Tasks({
 
   // Deterministic avatar color from a name, and its initials (max 2 letters).
   function avatarColor(name) {
-    const palette = ["#e11d48", "#db2777", "#9333ea", "#6d28d9", "#4f46e5", "#2563eb", "#0891b2", "#0d9488", "#059669", "#65a30d", "#ca8a04", "#ea580c"];
+    const palette = ["#e11d48", "#db2777", "#9333ea", "#6d28d9", "#4f46e5", "#0d7d82", "#0891b2", "#0d9488", "#059669", "#65a30d", "#ca8a04", "#ea580c"];
     let h = 0;
     for (let i = 0; i < (name || "").length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
     return palette[h % palette.length];
@@ -3215,9 +3215,9 @@ export default function Tasks({
           <line x1="42" y1="44" x2="78" y2="44" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
           <line x1="42" y1="58" x2="70" y2="58" stroke="#dbe2ea" strokeWidth="3" strokeLinecap="round" />
           <line x1="42" y1="72" x2="74" y2="72" stroke="#dbe2ea" strokeWidth="3" strokeLinecap="round" />
-          <circle cx="90" cy="86" r="18" fill="#eff6ff" stroke="#bfdbfe" strokeWidth="2" />
-          <line x1="90" y1="79" x2="90" y2="93" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
-          <line x1="83" y1="86" x2="97" y2="86" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="90" cy="86" r="18" fill="#e8f6f6" stroke="#b3e3e1" strokeWidth="2" />
+          <line x1="90" y1="79" x2="90" y2="93" stroke="#12a3a0" strokeWidth="3" strokeLinecap="round" />
+          <line x1="83" y1="86" x2="97" y2="86" stroke="#12a3a0" strokeWidth="3" strokeLinecap="round" />
         </svg>
         <div style={{ fontSize: compact ? 13 : 15, fontWeight: 600, color: "#64748b", marginBottom: 4 }}>{title}</div>
         {subtitle && <div style={{ fontSize: 12, color: "#a3aab5", marginBottom: cta ? 16 : 0 }}>{subtitle}</div>}
@@ -3419,10 +3419,10 @@ export default function Tasks({
           <span
             style={{
               background: members.some((m) => m.full_name === fv.value)
-                ? "#eff6ff"
+                ? "#e8f6f6"
                 : "#f0f0ef",
               color: members.some((m) => m.full_name === fv.value)
-                ? "#1d4ed8"
+                ? "#0d7d82"
                 : "#555",
               borderRadius: 20,
               padding: "1px 8px",
@@ -3488,7 +3488,7 @@ export default function Tasks({
     const kids = childrenByParent[task.id] || [];
     const hasKids = kids.length > 0;
     const isNew = newTaskIds.has(task.id);
-    const rowBg = isActive ? "#f0f7ff" : isNew ? "#fffbe6" : undefined;
+    const rowBg = isActive ? "#eaf6f6" : isNew ? "#fffbe6" : undefined;
     const subExpanded = expandedSubtasks[task.id];
     const prog = hasKids ? subtaskProgress(task.id) : null;
     const cellStyle = {
@@ -3622,7 +3622,7 @@ export default function Tasks({
             )}
             {task.description && (
               <span
-                style={{ display: "flex", alignItems: "center", color: descPopup?.taskId === task.id ? "#1d4ed8" : "#bbb", flexShrink: 0, cursor: "pointer" }}
+                style={{ display: "flex", alignItems: "center", color: descPopup?.taskId === task.id ? "#0d7d82" : "#bbb", flexShrink: 0, cursor: "pointer" }}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (descPopup?.taskId === task.id) { setDescPopup(null); return; }
@@ -3874,7 +3874,7 @@ export default function Tasks({
                         setAssignMenu((m) => ({ ...m, current: next }));
                       }
                     }}
-                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer", background: selected ? "#f0f7ff" : "transparent" }}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer", background: selected ? "#eaf6f6" : "transparent" }}
                     onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = "#f5f5f4"; }}
                     onMouseLeave={(e) => { if (!selected) e.currentTarget.style.background = "transparent"; }}
                   >
@@ -3882,7 +3882,7 @@ export default function Tasks({
                       {initials(name)}
                     </span>
                     <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
-                    {selected && <span style={{ color: "#1d4ed8", fontSize: 13 }}>✓</span>}
+                    {selected && <span style={{ color: "#0d7d82", fontSize: 13 }}>✓</span>}
                   </div>
                 );
               });
@@ -3925,14 +3925,14 @@ export default function Tasks({
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "7px 8px", borderRadius: 6, cursor: "pointer",
-                    background: cur ? "#f0f7ff" : "transparent",
+                    background: cur ? "#eaf6f6" : "transparent",
                   }}
                   onMouseEnter={(e) => { if (!cur) e.currentTarget.style.background = "#f5f5f4"; }}
                   onMouseLeave={(e) => { if (!cur) e.currentTarget.style.background = "transparent"; }}
                 >
                   {statusGlyph(s, c)}
                   <span style={{ flex: 1, fontSize: 13, fontWeight: cur ? 600 : 400, color: "#333" }}>{s}</span>
-                  {cur && <span style={{ color: "#1d4ed8", fontSize: 13 }}>✓</span>}
+                  {cur && <span style={{ color: "#0d7d82", fontSize: 13 }}>✓</span>}
                 </div>
               );
             })}
@@ -4155,8 +4155,8 @@ export default function Tasks({
                           title={viewDirty ? "Save this column layout as the shared view for all users" : "No unsaved changes"}
                           style={{
                             fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 6,
-                            border: "1px solid " + (viewDirty ? "#1d4ed8" : "#e5e7eb"),
-                            background: viewDirty ? "#1d4ed8" : "#f3f4f6",
+                            border: "1px solid " + (viewDirty ? "#0d7d82" : "#e5e7eb"),
+                            background: viewDirty ? "#0d7d82" : "#f3f4f6",
                             color: viewDirty ? "#fff" : "#9ca3af",
                             cursor: viewDirty ? "pointer" : "default",
                           }}
@@ -4299,7 +4299,7 @@ export default function Tasks({
               <button
                 className="toolbar-btn"
                 onClick={() => setShowFilterPanel((v) => { if (!v) setDraftTree(filterTree); return !v; })}
-                style={filterCount > 0 ? { color: "#1d4ed8", fontWeight: 600, borderColor: "#bfdbfe", background: "#eff6ff" } : undefined}
+                style={filterCount > 0 ? { color: "#0d7d82", fontWeight: 600, borderColor: "#b3e3e1", background: "#e8f6f6" } : undefined}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-2px", marginRight: 4 }}>
                   <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
@@ -4322,7 +4322,7 @@ export default function Tasks({
                       </button>
                       {showSavedMenu && (
                         <div style={{ position: "absolute", top: "110%", right: 0, zIndex: 70, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", padding: 6, minWidth: 200 }}>
-                          <button onClick={saveCurrentFilter} disabled={filterCount === 0} style={{ display: "block", width: "100%", textAlign: "left", fontSize: 12, padding: "6px 8px", border: "none", background: "none", cursor: filterCount === 0 ? "default" : "pointer", color: filterCount === 0 ? "#c0c0c0" : "#1d4ed8", fontWeight: 600 }}>
+                          <button onClick={saveCurrentFilter} disabled={filterCount === 0} style={{ display: "block", width: "100%", textAlign: "left", fontSize: 12, padding: "6px 8px", border: "none", background: "none", cursor: filterCount === 0 ? "default" : "pointer", color: filterCount === 0 ? "#c0c0c0" : "#0d7d82", fontWeight: 600 }}>
                             + Save current filter
                           </button>
                           {savedFilters.length > 0 && <div style={{ borderTop: "1px solid #f0f0ef", margin: "4px 0" }} />}
@@ -4385,7 +4385,7 @@ export default function Tasks({
                 className="toolbar-btn"
                 onClick={() => setSortConfig({ key: null, direction: "asc" })}
                 title="Clear column sort"
-                style={{ color: "#1d4ed8", fontWeight: 600 }}
+                style={{ color: "#0d7d82", fontWeight: 600 }}
               >
                 ✕ Sort: {sortConfig.key.replace("field_", "")} (
                 {sortConfig.direction === "asc" ? "▲" : "▼"})
@@ -5080,7 +5080,7 @@ export default function Tasks({
                 padding: "5px 14px",
                 borderRadius: 7,
                 border: "none",
-                background: drawerSaved ? "#16a34a" : "#1d4ed8",
+                background: drawerSaved ? "#16a34a" : "#0d7d82",
                 color: "#fff",
                 fontSize: 12,
                 fontWeight: 600,
@@ -5161,10 +5161,10 @@ export default function Tasks({
                   padding: "9px 0",
                   fontSize: 12,
                   fontWeight: drawerTab === tab.key ? 600 : 400,
-                  color: drawerTab === tab.key ? "#1d4ed8" : "#888",
+                  color: drawerTab === tab.key ? "#0d7d82" : "#888",
                   background: "none",
                   border: "none",
-                  borderBottom: `2px solid ${drawerTab === tab.key ? "#1d4ed8" : "transparent"}`,
+                  borderBottom: `2px solid ${drawerTab === tab.key ? "#0d7d82" : "transparent"}`,
                   cursor: "pointer",
                   transition: "all 0.12s",
                 }}
@@ -5309,8 +5309,8 @@ export default function Tasks({
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: 4,
-                                background: "#eff6ff",
-                                color: "#1d4ed8",
+                                background: "#e8f6f6",
+                                color: "#0d7d82",
                                 borderRadius: 20,
                                 padding: "3px 10px",
                                 fontSize: 12,
@@ -5583,7 +5583,7 @@ export default function Tasks({
                                   outline: "none",
                                 }}
                                 onFocus={(e) =>
-                                  (e.target.style.borderColor = "#1d4ed8")
+                                  (e.target.style.borderColor = "#0d7d82")
                                 }
                                 onBlur={(e) =>
                                   (e.target.style.borderColor = "#e0e0e0")
@@ -5654,7 +5654,7 @@ export default function Tasks({
                                 outline: "none",
                               }}
                               onFocus={(e) =>
-                                (e.target.style.borderColor = "#1d4ed8")
+                                (e.target.style.borderColor = "#0d7d82")
                               }
                               onBlur={(e) =>
                                 (e.target.style.borderColor = "#e0e0e0")
@@ -5811,7 +5811,7 @@ export default function Tasks({
                               {assignees.length > 0 ? (
                                 <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
                                   {assignees.map((a) => (
-                                    <span key={a} style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "1px 8px" }}>
+                                    <span key={a} style={{ fontSize: 10, background: "#e8f6f6", color: "#0d7d82", borderRadius: 20, padding: "1px 8px" }}>
                                       {a}
                                     </span>
                                   ))}
@@ -5917,7 +5917,7 @@ export default function Tasks({
                               borderRadius: "50%",
                               background: entry.changes?.created
                                 ? "#22c55e"
-                                : "#1d4ed8",
+                                : "#0d7d82",
                               border: "2px solid #fff",
                               boxShadow: "0 0 0 2px #e8e8e8",
                               flexShrink: 0,
@@ -5939,7 +5939,7 @@ export default function Tasks({
                                 width: 24,
                                 height: 24,
                                 borderRadius: "50%",
-                                background: "#1d4ed8",
+                                background: "#0d7d82",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -5998,7 +5998,7 @@ export default function Tasks({
                                       color:
                                         field === "created"
                                           ? "#22c55e"
-                                          : "#1d4ed8",
+                                          : "#0d7d82",
                                       fontWeight: 700,
                                       fontSize: 11,
                                       flexShrink: 0,
@@ -6038,8 +6038,8 @@ export default function Tasks({
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
-                    e.currentTarget.style.borderColor = "#1d4ed8";
-                    e.currentTarget.style.background = "#eff6ff";
+                    e.currentTarget.style.borderColor = "#0d7d82";
+                    e.currentTarget.style.background = "#e8f6f6";
                   }}
                   onDragLeave={(e) => {
                     e.currentTarget.style.borderColor = "#e0e0e0";
@@ -6075,7 +6075,7 @@ export default function Tasks({
                     }}
                   />
                   {uploadingFile ? (
-                    <div style={{ fontSize: 13, color: "#1d4ed8" }}>
+                    <div style={{ fontSize: 13, color: "#0d7d82" }}>
                       Uploading...
                     </div>
                   ) : (
@@ -6172,13 +6172,13 @@ export default function Tasks({
                           onClick={() => downloadAttachment(att)}
                           title="Download"
                           style={{
-                            background: "#eff6ff",
+                            background: "#e8f6f6",
                             border: "none",
                             borderRadius: 6,
                             padding: "5px 8px",
                             cursor: "pointer",
                             fontSize: 14,
-                            color: "#1d4ed8",
+                            color: "#0d7d82",
                             flexShrink: 0,
                           }}
                         >
@@ -6299,7 +6299,7 @@ export default function Tasks({
                     return (
                       <div key={c.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                         {/* Avatar */}
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#1d4ed8", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#0d7d82", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                           {initials}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -6317,7 +6317,7 @@ export default function Tasks({
                                 autoFocus
                               />
                               <div style={{ display: "flex", gap: 6 }}>
-                                <button onClick={() => saveEditComment(c.id)} style={{ fontSize: 12, padding: "4px 12px", background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}>Save</button>
+                                <button onClick={() => saveEditComment(c.id)} style={{ fontSize: 12, padding: "4px 12px", background: "#0d7d82", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}>Save</button>
                                 <button onClick={() => { setEditingCommentId(null); setEditingCommentText(""); }} style={{ fontSize: 12, padding: "4px 12px", background: "#f0f0ef", color: "#555", border: "none", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
                               </div>
                             </div>
@@ -6340,7 +6340,7 @@ export default function Tasks({
 
                 {/* Comment input */}
                 <div style={{ padding: "12px 20px", borderTop: "1px solid #ebebeb", display: "flex", gap: 10, alignItems: "flex-end" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#1d4ed8", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#0d7d82", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                     {(profile?.full_name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
                   </div>
                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -6355,7 +6355,7 @@ export default function Tasks({
                     <button
                       onClick={submitComment}
                       disabled={!commentText.trim() || commentSubmitting}
-                      style={{ alignSelf: "flex-end", fontSize: 12, padding: "5px 14px", background: commentText.trim() ? "#1d4ed8" : "#e5e7eb", color: commentText.trim() ? "#fff" : "#aaa", border: "none", borderRadius: 6, cursor: commentText.trim() ? "pointer" : "default", transition: "background 0.15s" }}
+                      style={{ alignSelf: "flex-end", fontSize: 12, padding: "5px 14px", background: commentText.trim() ? "#0d7d82" : "#e5e7eb", color: commentText.trim() ? "#fff" : "#aaa", border: "none", borderRadius: 6, cursor: commentText.trim() ? "pointer" : "default", transition: "background 0.15s" }}
                     >
                       {commentSubmitting ? "Sending…" : "Send"}
                     </button>
@@ -6426,7 +6426,7 @@ export default function Tasks({
                                   flex: 1,
                                   fontSize: 13,
                                   fontWeight: 600,
-                                  border: "1px solid #1d4ed8",
+                                  border: "1px solid #0d7d82",
                                   borderRadius: 6,
                                   padding: "3px 8px",
                                   outline: "none",
@@ -6619,7 +6619,7 @@ export default function Tasks({
                                   height: "100%",
                                   width: `${pct}%`,
                                   background:
-                                    pct === 100 ? "#16a34a" : "#1d4ed8",
+                                    pct === 100 ? "#16a34a" : "#0d7d82",
                                   borderRadius: 4,
                                   transition: "width 0.3s",
                                 }}
@@ -6650,7 +6650,7 @@ export default function Tasks({
                                 style={{
                                   marginTop: 0,
                                   cursor: "pointer",
-                                  accentColor: "#1d4ed8",
+                                  accentColor: "#0d7d82",
                                   flexShrink: 0,
                                   width: "auto",
                                 }}
@@ -6668,7 +6668,7 @@ export default function Tasks({
                                   style={{
                                     flex: 1,
                                     fontSize: 13,
-                                    border: "1px solid #1d4ed8",
+                                    border: "1px solid #0d7d82",
                                     borderRadius: 5,
                                     padding: "2px 6px",
                                     outline: "none",
@@ -6811,7 +6811,7 @@ export default function Tasks({
                                 outline: "none",
                               }}
                               onFocus={(e) =>
-                                (e.target.style.borderColor = "#1d4ed8")
+                                (e.target.style.borderColor = "#0d7d82")
                               }
                               onBlur={(e) =>
                                 (e.target.style.borderColor = "#e0e0e0")
@@ -6826,7 +6826,7 @@ export default function Tasks({
                                 padding: "6px 12px",
                                 borderRadius: 7,
                                 border: "none",
-                                background: "#1d4ed8",
+                                background: "#0d7d82",
                                 color: "#fff",
                                 fontSize: 12,
                                 cursor: "pointer",
@@ -6859,7 +6859,7 @@ export default function Tasks({
                             flex: 1,
                             fontSize: 12,
                             padding: "6px 10px",
-                            border: "1px solid #1d4ed8",
+                            border: "1px solid #0d7d82",
                             borderRadius: 7,
                             outline: "none",
                           }}
@@ -6870,7 +6870,7 @@ export default function Tasks({
                             padding: "6px 12px",
                             borderRadius: 7,
                             border: "none",
-                            background: "#1d4ed8",
+                            background: "#0d7d82",
                             color: "#fff",
                             fontSize: 12,
                             cursor: "pointer",
@@ -7056,8 +7056,8 @@ export default function Tasks({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: 4,
-                          background: "#eff6ff",
-                          color: "#1d4ed8",
+                          background: "#e8f6f6",
+                          color: "#0d7d82",
                           borderRadius: 20,
                           padding: "2px 8px",
                           fontSize: 12,
@@ -7448,8 +7448,8 @@ export default function Tasks({
                                   key={o}
                                   style={{
                                     fontSize: 10,
-                                    background: "#eff6ff",
-                                    color: "#1d4ed8",
+                                    background: "#e8f6f6",
+                                    color: "#0d7d82",
                                     borderRadius: 20,
                                     padding: "1px 7px",
                                   }}
@@ -7563,8 +7563,8 @@ export default function Tasks({
                                   key={i}
                                   style={{
                                     fontSize: 11,
-                                    background: "#eff6ff",
-                                    color: "#1d4ed8",
+                                    background: "#e8f6f6",
+                                    color: "#0d7d82",
                                     borderRadius: 20,
                                     padding: "2px 9px",
                                     fontWeight: 500,
@@ -7710,8 +7710,8 @@ export default function Tasks({
                             key={i}
                             style={{
                               fontSize: 11,
-                              background: "#eff6ff",
-                              color: "#1d4ed8",
+                              background: "#e8f6f6",
+                              color: "#0d7d82",
                               borderRadius: 20,
                               padding: "2px 9px",
                               fontWeight: 500,
@@ -7777,8 +7777,8 @@ export default function Tasks({
                             padding: "10px 14px",
                             borderRadius: 8,
                             cursor: "pointer",
-                            border: `1.5px solid ${isSelected ? "#1d4ed8" : "#e0e0e0"}`,
-                            background: isSelected ? "#eff6ff" : "#fff",
+                            border: `1.5px solid ${isSelected ? "#0d7d82" : "#e0e0e0"}`,
+                            background: isSelected ? "#e8f6f6" : "#fff",
                             transition: "all 0.12s",
                           }}
                         >
@@ -7795,8 +7795,8 @@ export default function Tasks({
                                 height: 16,
                                 borderRadius: "50%",
                                 flexShrink: 0,
-                                border: `2px solid ${isSelected ? "#1d4ed8" : "#ccc"}`,
-                                background: isSelected ? "#1d4ed8" : "#fff",
+                                border: `2px solid ${isSelected ? "#0d7d82" : "#ccc"}`,
+                                background: isSelected ? "#0d7d82" : "#fff",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",

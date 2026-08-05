@@ -416,7 +416,7 @@ export default function App() {
           transition: "background 0.15s",
           zIndex: 10,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "#bfdbfe")}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#b3e3e1")}
         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         title="Drag to resize sidebar"
       />

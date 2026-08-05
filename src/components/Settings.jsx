@@ -212,8 +212,8 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
               onClick={() => setActiveTab(tab.key)}
               style={{
                 padding: "9px 20px", fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 400,
-                color: activeTab === tab.key ? "#2563eb" : "#6b7280",
-                background: "none", border: "none", borderBottom: activeTab === tab.key ? "2px solid #2563eb" : "2px solid transparent",
+                color: activeTab === tab.key ? "#0d7d82" : "#6b7280",
+                background: "none", border: "none", borderBottom: activeTab === tab.key ? "2px solid #0d7d82" : "2px solid transparent",
                 cursor: "pointer", marginBottom: -1, transition: "all 0.15s",
               }}
             >
@@ -245,7 +245,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                 <div style={{ fontSize: 16, fontWeight: 600, color: "#111827" }}>Team members</div>
                 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 2 }}>{members.length} member{members.length !== 1 ? "s" : ""}</div>
               </div>
-              <button onClick={() => setShowInvite(true)} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, boxShadow: "0 1px 3px rgba(37,99,235,0.3)" }}>
+              <button onClick={() => setShowInvite(true)} style={{ background: "#0d7d82", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, boxShadow: "0 1px 3px rgba(37,99,235,0.3)" }}>
                 <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                 Add Member
               </button>
@@ -265,7 +265,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                 <tbody>
                   {members.map((member, idx) => (
                     <tr key={member.id} style={{ background: idx % 2 === 0 ? "#fff" : "#fafafa" }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "#f0f7ff"}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#eaf6f6"}
                       onMouseLeave={(e) => e.currentTarget.style.background = idx % 2 === 0 ? "#fff" : "#fafafa"}>
                       <td style={tdStyle("member")}>
                         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
@@ -281,7 +281,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                       <td style={tdStyle("email")}><span style={{ color: "#6b7280" }}>{member.email}</span></td>
                       <td style={tdStyle("role")}>
                         {member.id === currentUser.id ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "#eff6ff", color: "#1d4ed8", fontWeight: 600, border: "1px solid #bfdbfe" }}>⚙️ admin</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "#e8f6f6", color: "#0d7d82", fontWeight: 600, border: "1px solid #b3e3e1" }}>⚙️ admin</span>
                         ) : (
                           <select value={member.role} onChange={(e) => updateRole(member.id, e.target.value)} style={{ fontSize: 12, padding: "5px 10px", borderRadius: 7, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", cursor: "pointer", fontWeight: 500, outline: "none" }}>
                             <option value="member">Member</option>
@@ -313,7 +313,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
         {activeTab === "permissions" && (
           <>
             {/* Info banner */}
-            <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#1e40af" }}>
+            <div style={{ background: "#e8f6f6", border: "1px solid #b3e3e1", borderRadius: 10, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#0a636a" }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>🔒 Space & Folder Access Control</div>
               <div style={{ lineHeight: 1.6 }}>
                 By default, all users can see all spaces and folders. Add restrictions below to limit specific items to selected users only.
@@ -393,11 +393,11 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                 <button
                   key={space.id}
                   onClick={() => openManage("space", space.id, space.name)}
-                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: restrictedSpaceIds.includes(space.id) ? "#eff6ff" : "#fff", cursor: "pointer", fontSize: 13, color: restrictedSpaceIds.includes(space.id) ? "#1d4ed8" : "#374151", fontWeight: restrictedSpaceIds.includes(space.id) ? 600 : 400 }}
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: restrictedSpaceIds.includes(space.id) ? "#e8f6f6" : "#fff", cursor: "pointer", fontSize: 13, color: restrictedSpaceIds.includes(space.id) ? "#0d7d82" : "#374151", fontWeight: restrictedSpaceIds.includes(space.id) ? 600 : 400 }}
                 >
                   <span style={{ width: 20, height: 20, borderRadius: 5, background: space.color || "#378ADD", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0 }}>{space.icon || "🏢"}</span>
                   {space.name}
-                  {restrictedSpaceIds.includes(space.id) && <span style={{ fontSize: 10, background: "#1d4ed8", color: "#fff", borderRadius: 20, padding: "1px 6px" }}>restricted</span>}
+                  {restrictedSpaceIds.includes(space.id) && <span style={{ fontSize: 10, background: "#0d7d82", color: "#fff", borderRadius: 20, padding: "1px 6px" }}>restricted</span>}
                 </button>
               ))}
             </div>
@@ -479,7 +479,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
               {/* Select all / deselect all */}
               <div style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: "1px solid #f3f4f6", marginBottom: 4 }}>
                 <button onClick={() => setSelectedUsers(new Set(members.filter((m) => m.role !== "admin").map((m) => m.id)))}
-                  style={{ fontSize: 12, color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 500 }}>Select all non-admins</button>
+                  style={{ fontSize: 12, color: "#0d7d82", background: "none", border: "none", cursor: "pointer", padding: 0, fontWeight: 500 }}>Select all non-admins</button>
                 <span style={{ color: "#e5e7eb" }}>|</span>
                 <button onClick={() => setSelectedUsers(new Set())}
                   style={{ fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Clear all</button>
@@ -491,7 +491,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                 return (
                   <label key={member.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: isAdmin ? "default" : "pointer", borderBottom: "1px solid #f9fafb" }}>
                     <input type="checkbox" checked={isChecked} disabled={isAdmin} onChange={() => !isAdmin && toggleUser(member.id)}
-                      style={{ width: 16, height: 16, cursor: isAdmin ? "default" : "pointer", accentColor: "#2563eb" }} />
+                      style={{ width: 16, height: 16, cursor: isAdmin ? "default" : "pointer", accentColor: "#0d7d82" }} />
                     <div style={{ width: 34, height: 34, borderRadius: "50%", background: member.avatar_color || getAvatarColor(member.full_name), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                       {getInitials(member.full_name)}
                     </div>
@@ -499,7 +499,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                       <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{member.full_name || "—"}</div>
                       <div style={{ fontSize: 11, color: "#9ca3af" }}>{member.email}</div>
                     </div>
-                    {isAdmin && <span style={{ fontSize: 11, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "2px 8px", fontWeight: 600, flexShrink: 0 }}>admin — always access</span>}
+                    {isAdmin && <span style={{ fontSize: 11, background: "#e8f6f6", color: "#0d7d82", borderRadius: 20, padding: "2px 8px", fontWeight: 600, flexShrink: 0 }}>admin — always access</span>}
                   </label>
                 );
               })}
@@ -507,7 +507,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
 
             <div style={{ padding: "16px 24px", borderTop: "1px solid #f3f4f6", display: "flex", gap: 10 }}>
               <button onClick={() => setManageModal(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 13, cursor: "pointer", fontWeight: 500, color: "#374151" }}>Cancel</button>
-              <button onClick={saveRule} disabled={savingRule} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "#2563eb", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={saveRule} disabled={savingRule} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: "#0d7d82", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 {savingRule ? "Saving..." : selectedUsers.size === 0 ? "Remove restriction (open to all)" : `Save — ${selectedUsers.size} user${selectedUsers.size !== 1 ? "s" : ""}`}
               </button>
             </div>
@@ -535,7 +535,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 6 }}>{label} *</label>
                   <input type={type} placeholder={placeholder} value={invite[key]} onChange={(e) => setInvite({ ...invite, [key]: e.target.value })} required minLength={key === "password" ? 6 : undefined}
                     style={{ width: "100%", border: "1.5px solid #e5e7eb", borderRadius: 8, padding: "9px 12px", fontSize: 13, boxSizing: "border-box", outline: "none" }}
-                    onFocus={(e) => e.target.style.borderColor = "#2563eb"} onBlur={(e) => e.target.style.borderColor = "#e5e7eb"} />
+                    onFocus={(e) => e.target.style.borderColor = "#0d7d82"} onBlur={(e) => e.target.style.borderColor = "#e5e7eb"} />
                 </div>
               ))}
               <div>
@@ -547,7 +547,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                 <button type="button" onClick={() => setShowInvite(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 13, cursor: "pointer", color: "#374151", fontWeight: 500 }}>Cancel</button>
-                <button type="submit" disabled={inviting || !adminConfigured} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: adminConfigured ? "#2563eb" : "#93c5fd", color: "#fff", fontSize: 13, fontWeight: 600, cursor: adminConfigured ? "pointer" : "not-allowed" }}>
+                <button type="submit" disabled={inviting || !adminConfigured} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: adminConfigured ? "#0d7d82" : "#93c5fd", color: "#fff", fontSize: 13, fontWeight: 600, cursor: adminConfigured ? "pointer" : "not-allowed" }}>
                   {inviting ? "Adding..." : "Add Member"}
                 </button>
               </div>

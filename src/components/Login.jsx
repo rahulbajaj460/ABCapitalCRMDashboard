@@ -120,7 +120,7 @@ export default function Login({ onLogin }) {
           style={{
             width: "100%",
             padding: "10px",
-            background: loading ? "#93c5fd" : "#1d4ed8",
+            background: loading ? "#93c5fd" : "#0d7d82",
             color: "#fff",
             border: "none",
             borderRadius: 6,

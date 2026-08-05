@@ -682,7 +682,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                   currentStepNum > i + 1
                     ? "#16a34a"
                     : currentStepNum === i + 1
-                      ? "#1d4ed8"
+                      ? "#0d7d82"
                       : "#e8e8e8",
                 color: currentStepNum >= i + 1 ? "#fff" : "#aaa",
                 display: "flex",
@@ -698,7 +698,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
             <span
               style={{
                 fontSize: 12,
-                color: currentStepNum === i + 1 ? "#1d4ed8" : "#888",
+                color: currentStepNum === i + 1 ? "#0d7d82" : "#888",
                 fontWeight: currentStepNum === i + 1 ? 500 : 400,
               }}
             >
@@ -991,8 +991,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                               <span
                                 style={{
                                   fontSize: 11,
-                                  background: "#dbeafe",
-                                  color: "#1d4ed8",
+                                  background: "#cdeeee",
+                                  color: "#0d7d82",
                                   borderRadius: 20,
                                   padding: "2px 8px",
                                 }}
@@ -1068,8 +1068,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                                     key={v}
                                     style={{
                                       fontSize: 11,
-                                      background: "#eff6ff",
-                                      color: "#1d4ed8",
+                                      background: "#e8f6f6",
+                                      color: "#0d7d82",
                                       borderRadius: 20,
                                       padding: "2px 9px",
                                       fontWeight: 500,
@@ -1132,8 +1132,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                                     padding: "9px 12px",
                                     borderRadius: 8,
                                     cursor: "pointer",
-                                    border: `1.5px solid ${isSelected ? "#1d4ed8" : "#e0e0e0"}`,
-                                    background: isSelected ? "#eff6ff" : "#fff",
+                                    border: `1.5px solid ${isSelected ? "#0d7d82" : "#e0e0e0"}`,
+                                    background: isSelected ? "#e8f6f6" : "#fff",
                                   }}
                                 >
                                   <div
@@ -1143,9 +1143,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                                       borderRadius: "50%",
                                       flexShrink: 0,
                                       marginTop: 1,
-                                      border: `2px solid ${isSelected ? "#1d4ed8" : "#ccc"}`,
+                                      border: `2px solid ${isSelected ? "#0d7d82" : "#ccc"}`,
                                       background: isSelected
-                                        ? "#1d4ed8"
+                                        ? "#0d7d82"
                                         : "#fff",
                                       display: "flex",
                                       alignItems: "center",
@@ -1381,9 +1381,9 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                               onClick={() => setEmptyStatusActions((prev) => ({ ...prev, [status.id]: "keep" }))}
                               style={{
                                 padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer",
-                                border: action === "keep" ? "1.5px solid #1d4ed8" : "1px solid #d1d5db",
-                                background: action === "keep" ? "#eff6ff" : "#fff",
-                                color: action === "keep" ? "#1d4ed8" : "#374151",
+                                border: action === "keep" ? "1.5px solid #0d7d82" : "1px solid #d1d5db",
+                                background: action === "keep" ? "#e8f6f6" : "#fff",
+                                color: action === "keep" ? "#0d7d82" : "#374151",
                                 fontWeight: action === "keep" ? 600 : 400,
                               }}
                             >Keep</button>
@@ -1433,7 +1433,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
               )}
               {Object.values(newStatusActions).filter((v) => v.action === "map")
                 .length > 0 && (
-                <span style={{ color: "#1d4ed8", marginRight: 12 }}>
+                <span style={{ color: "#0d7d82", marginRight: 12 }}>
                   🔄{" "}
                   {
                     Object.values(newStatusActions).filter(
@@ -1478,13 +1478,13 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
           <div style={{ maxWidth: 900 }}>
             <div
               style={{
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
+                background: "#e8f6f6",
+                border: "1px solid #b3e3e1",
                 borderRadius: 8,
                 padding: "12px 16px",
                 marginBottom: 16,
                 fontSize: 13,
-                color: "#1e40af",
+                color: "#0a636a",
               }}
             >
               <strong>{rows.length} tasks</strong> will be imported into{" "}
@@ -1607,7 +1607,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                     style={{
                       width: `${progress}%`,
                       height: "100%",
-                      background: "#1d4ed8",
+                      background: "#0d7d82",
                       transition: "width 0.3s",
                       borderRadius: 20,
                     }}
