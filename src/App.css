@@ -1470,3 +1470,25 @@ body {
 
 /* Headings pick up the deep brand ink */
 .page-title, .sidebar-logo { color: var(--ink); letter-spacing: -0.01em; }
+
+/* ─── Micro-interactions ─── */
+/* Modal entrance: overlay fades, panel pops up softly. */
+@keyframes abcapOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes abcapModalIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+.modal-overlay { animation: abcapOverlayIn 0.15s ease; }
+.modal { animation: abcapModalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Primary button: gentle press feedback. */
+.btn-primary { transition: transform 0.1s ease, background 0.13s ease, box-shadow 0.13s ease; }
+.btn-primary:active { transform: scale(0.975); }
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay, .modal, .metric-card, .dash-space-tile, .kanban-card, .task-row-new {
+    animation: none !important;
+    transition: none !important;
+  }
+}
