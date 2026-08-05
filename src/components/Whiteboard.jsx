@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 
-const COLORS = ["#1a1a1a", "#ef4444", "#f59e0b", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#ffffff"];
+const COLORS = ["#1a1a1a", "#ef4444", "#f59e0b", "#22c55e", "#12a3a0", "#8b5cf6", "#ec4899", "#ffffff"];
 const WIDTHS = [2, 4, 8, 16];
 const TOOLS = ["select", "pen", "rect", "circle", "line", "text", "eraser"];
 const HANDLE_SIZE = 8;
@@ -218,13 +218,13 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
     const b = getBounds(el);
     if (!b) return;
     ctx.save();
-    ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#12a3a0"; ctx.lineWidth = 1.5;
     ctx.setLineDash([5, 3]);
     ctx.strokeRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4);
     ctx.setLineDash([]);
     const handles = getHandles({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 });
     Object.values(handles).forEach((h) => {
-      ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.5;
+      ctx.fillStyle = "#fff"; ctx.strokeStyle = "#12a3a0"; ctx.lineWidth = 1.5;
       ctx.fillRect(h.x - HANDLE_SIZE / 2, h.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
       ctx.strokeRect(h.x - HANDLE_SIZE / 2, h.y - HANDLE_SIZE / 2, HANDLE_SIZE, HANDLE_SIZE);
     });
@@ -492,7 +492,7 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
         <div style={{ display: "flex", gap: 2, marginRight: 8 }}>
           {TOOLS.map((t) => (
             <button key={t} title={t} onClick={() => { setTool(t); if (t !== "select") setSelectedId(null); }}
-              style={{ border: tool === t ? "2px solid #3b82f6" : "1px solid #e5e7eb", background: tool === t ? "#eff6ff" : "#fff", borderRadius: 6, padding: "5px 7px", cursor: "pointer", color: tool === t ? "#3b82f6" : "#374151", display: "flex", alignItems: "center" }}>
+              style={{ border: tool === t ? "2px solid #12a3a0" : "1px solid #e5e7eb", background: tool === t ? "#e8f6f6" : "#fff", borderRadius: 6, padding: "5px 7px", cursor: "pointer", color: tool === t ? "#12a3a0" : "#374151", display: "flex", alignItems: "center" }}>
               {toolIcon(t)}
             </button>
           ))}
@@ -502,7 +502,7 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
         <div style={{ display: "flex", gap: 4, marginRight: 8 }}>
           {COLORS.map((c) => (
             <button key={c} onClick={() => setColor(c)}
-              style={{ width: 20, height: 20, borderRadius: "50%", background: c, border: color === c ? "2px solid #3b82f6" : "2px solid #d1d5db", cursor: "pointer", padding: 0, flexShrink: 0 }} />
+              style={{ width: 20, height: 20, borderRadius: "50%", background: c, border: color === c ? "2px solid #12a3a0" : "2px solid #d1d5db", cursor: "pointer", padding: 0, flexShrink: 0 }} />
           ))}
           <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
             style={{ width: 22, height: 22, border: "none", padding: 0, borderRadius: "50%", cursor: "pointer", background: "none" }} />
@@ -512,7 +512,7 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
         <div style={{ display: "flex", gap: 4, alignItems: "center", marginRight: 8 }}>
           {WIDTHS.map((w) => (
             <button key={w} onClick={() => setWidth(w)} title={`${w}px`}
-              style={{ border: width === w ? "2px solid #3b82f6" : "1px solid #e5e7eb", background: width === w ? "#eff6ff" : "#fff", borderRadius: 4, padding: "4px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+              style={{ border: width === w ? "2px solid #12a3a0" : "1px solid #e5e7eb", background: width === w ? "#e8f6f6" : "#fff", borderRadius: 4, padding: "4px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
               <div style={{ width: Math.min(w * 2 + 4, 20), height: w, background: color, borderRadius: 99 }} />
             </button>
           ))}
@@ -555,7 +555,7 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
             onChange={(e) => setTextValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") commitText(); if (e.key === "Escape") setTextInput(null); }}
             onBlur={commitText}
-            style={{ position: "absolute", left: textInput.x, top: textInput.y - 16, fontSize: 16, color, border: "1px dashed #3b82f6", background: "transparent", outline: "none", minWidth: 80, padding: "2px 4px", fontFamily: "Inter, sans-serif" }}
+            style={{ position: "absolute", left: textInput.x, top: textInput.y - 16, fontSize: 16, color, border: "1px dashed #12a3a0", background: "transparent", outline: "none", minWidth: 80, padding: "2px 4px", fontFamily: "Inter, sans-serif" }}
           />
         )}
         {selectedId && (

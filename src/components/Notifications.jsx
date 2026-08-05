@@ -118,7 +118,7 @@ export default function Notifications({ profile, onOpenTask }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 10px" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>Notifications</span>
             {unread > 0 && (
-              <button onClick={markAllRead} style={{ fontSize: 12, color: "#1d4ed8", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+              <button onClick={markAllRead} style={{ fontSize: 12, color: "#0d7d82", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
                 Mark all read
               </button>
             )}
@@ -134,12 +134,12 @@ export default function Notifications({ profile, onOpenTask }) {
               onClick={() => clickItem(n)}
               style={{
                 display: "flex", gap: 10, padding: "9px 10px", borderRadius: 8, cursor: "pointer",
-                background: n.read ? "transparent" : "#eff6ff",
+                background: n.read ? "transparent" : "#e8f6f6",
               }}
               onMouseEnter={(e) => { if (n.read) e.currentTarget.style.background = "#f5f5f4"; }}
               onMouseLeave={(e) => { if (n.read) e.currentTarget.style.background = "transparent"; }}
             >
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: n.read ? "transparent" : "#3b82f6", marginTop: 6, flexShrink: 0 }} />
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: n.read ? "transparent" : "#12a3a0", marginTop: 6, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginBottom: 2 }}>{n.title}</div>
                 {n.body && <div style={{ fontSize: 12, color: "#555", lineHeight: 1.4 }}>{n.body}</div>}
@@ -158,9 +158,9 @@ export default function Notifications({ profile, onOpenTask }) {
                   <button
                     onClick={(e) => { e.stopPropagation(); markRead(n.id); }}
                     title="Mark as read"
-                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #bfdbfe", background: "#eff6ff", cursor: "pointer", color: "#2563eb", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "#dbeafe"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #b3e3e1", background: "#e8f6f6", cursor: "pointer", color: "#0d7d82", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#cdeeee"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#e8f6f6"; }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   </button>
