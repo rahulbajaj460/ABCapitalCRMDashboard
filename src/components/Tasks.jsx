@@ -120,6 +120,27 @@ const PRIORITY_STYLES = {
   Low: { bg: "#dcfce7", color: "#15803d", dot: "#22c55e" },
 };
 
+// Return a text color with enough contrast on a light tint of `hex`: light
+// status colors get darkened so pills stay readable (fixes pale-on-pale text).
+function readableInk(hex) {
+  if (!hex || hex[0] !== "#" || hex.length < 7) return hex || "#374151";
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  if (lum > 0.55) {
+    const d = (x) => Math.round(x * 0.42);
+    return `rgb(${d(r)}, ${d(g)}, ${d(b)})`;
+  }
+  return hex;
+}
+
+// White or dark text for a SOLID background of `hex` (keeps bold pills readable).
+function contrastText(hex) {
+  if (!hex || hex[0] !== "#" || hex.length < 7) return "#fff";
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? "#1f2937" : "#fff";
+}
+
 const FORMULA_PRESETS = [
   {
     key: "days_since_created",
@@ -3671,9 +3692,10 @@ export default function Tasks({
               padding: "3px 6px",
               width: "100%",
               borderRadius: 20,
-              border: `1px solid ${statusColor}`,
+              border: `1px solid ${statusColor}44`,
               background: statusColor + "1f",
-              color: statusColor,
+              color: readableInk(statusColor),
+              fontWeight: 600,
               cursor: "pointer",
             }}
           >
@@ -4861,8 +4883,8 @@ export default function Tasks({
                                     groupBy === "status"
                                       ? getStatusColor(groupName)
                                       : "#f0f0ef",
-                                  color: groupBy === "status" ? "#fff" : "#333",
-                                  padding: "2px 10px",
+                                  color: groupBy === "status" ? contrastText(getStatusColor(groupName)) : "#333",
+                                  padding: "3px 12px",
                                   borderRadius: 20,
                                   fontSize: 11,
                                   fontWeight: 600,
@@ -4939,10 +4961,11 @@ export default function Tasks({
                             groupBy === "status"
                               ? getStatusColor(groupName)
                               : "#f0f0ef",
-                          color: groupBy === "status" ? "#fff" : "#333",
-                          padding: "2px 10px",
+                          color: groupBy === "status" ? contrastText(getStatusColor(groupName)) : "#333",
+                          padding: "3px 12px",
                           borderRadius: 20,
                           fontSize: 11,
+                          fontWeight: 600,
                         }}
                       >
                         {groupName}
