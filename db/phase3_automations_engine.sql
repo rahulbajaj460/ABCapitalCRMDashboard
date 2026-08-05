@@ -283,13 +283,26 @@ end $$;
 -- automation message.
 create or replace function _abcap_render_tokens(msg text, t tasks)
 returns text language plpgsql stable security definer set search_path=public as $$
-declare out text := msg;
+declare out text := msg; m text; fname text; fval text;
 begin
-  out := replace(out, '{task}',     coalesce(t.title, ''));
-  out := replace(out, '{status}',   coalesce(t.status, ''));
-  out := replace(out, '{priority}', coalesce(t.priority, ''));
-  out := replace(out, '{due_date}', coalesce(t.due_date::text, ''));
-  out := replace(out, '{list}',     coalesce((select name from lists where id = t.list_id), ''));
+  out := replace(out, '{task}',        coalesce(t.title, ''));
+  out := replace(out, '{title}',       coalesce(t.title, ''));
+  out := replace(out, '{description}', coalesce(t.description, ''));
+  out := replace(out, '{status}',      coalesce(t.status, ''));
+  out := replace(out, '{priority}',    coalesce(t.priority, ''));
+  out := replace(out, '{due_date}',    coalesce(t.due_date::text, ''));
+  out := replace(out, '{assignee}',    coalesce(array_to_string(_abcap_assignees(t), ', '), ''));
+  out := replace(out, '{list}',        coalesce((select name from lists where id = t.list_id), ''));
+  -- Custom columns: {field:Column Name} -> the task's value for that field.
+  for m in select distinct (regexp_matches(out, '\{field:([^}]+)\}', 'g'))[1] loop
+    fname := btrim(m);
+    select fv.value into fval
+    from task_field_values fv
+    join space_fields sf on sf.id = fv.field_id
+    where fv.task_id = t.id and lower(sf.field_name) = lower(fname)
+    limit 1;
+    out := replace(out, '{field:' || m || '}', coalesce(fval, ''));
+  end loop;
   return out;
 end $$;
 
