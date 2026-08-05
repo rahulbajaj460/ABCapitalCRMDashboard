@@ -1,6 +1,23 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
 
+function StatCard({ label, value, sub, icon, accent, tint, valueColor }) {
+  return (
+    <div className="metric-card">
+      <div className="metric-top">
+        <span className="metric-label">{label}</span>
+        <span className="metric-icon" style={{ background: tint, color: accent }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {icon}
+          </svg>
+        </span>
+      </div>
+      <div className="metric-value" style={valueColor ? { color: valueColor } : undefined}>{value}</div>
+      <div className="metric-sub">{sub}</div>
+    </div>
+  );
+}
+
 export default function Dashboard({ spaces, onNavigate, onSpaceSelect }) {
   const [tasks, setTasks] = useState([]);
 
@@ -44,34 +61,27 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect }) {
       <div className="content-area">
         {/* Metrics */}
         <div className="metrics-grid">
-          <div className="metric-card">
-            <div className="metric-label">Total tasks</div>
-            <div className="metric-value">{total}</div>
-            <div className="metric-sub">across all spaces</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">In progress</div>
-            <div className="metric-value" style={{ color: "#d97706" }}>
-              {inProgress}
-            </div>
-            <div className="metric-sub">active work</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Completed</div>
-            <div className="metric-value" style={{ color: "#16a34a" }}>
-              {done}
-            </div>
-            <div className="metric-sub">
-              {total > 0 ? Math.round((done / total) * 100) : 0}% completion
-            </div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Urgent</div>
-            <div className="metric-value" style={{ color: "#dc2626" }}>
-              {urgent}
-            </div>
-            <div className="metric-sub">high priority open</div>
-          </div>
+          <StatCard
+            label="Total tasks" value={total} sub="across all spaces"
+            accent="#0d7d82" tint="#e8f6f6"
+            icon={<path d="M4 6h16M4 12h16M4 18h10" />}
+          />
+          <StatCard
+            label="In progress" value={inProgress} sub="active work"
+            accent="#d97706" tint="#fef3e2" valueColor="#b45309"
+            icon={<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>}
+          />
+          <StatCard
+            label="Completed" value={done}
+            sub={`${total > 0 ? Math.round((done / total) * 100) : 0}% completion`}
+            accent="#16a34a" tint="#e7f6ec" valueColor="#15803d"
+            icon={<><circle cx="12" cy="12" r="9" /><path d="M8.5 12.5l2.5 2.5 4.5-5" /></>}
+          />
+          <StatCard
+            label="Urgent" value={urgent} sub="high priority open"
+            accent="#dc2626" tint="#fdeaea" valueColor="#b91c1c"
+            icon={<><path d="M12 3l9 16H3z" /><path d="M12 10v4M12 17h.01" /></>}
+          />
         </div>
 
         {/* Spaces overview */}
@@ -94,15 +104,9 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect }) {
               return (
                 <div
                   key={space.id}
+                  className="dash-space-tile"
                   onClick={() => onSpaceSelect(space)}
-                  style={{
-                    background: "#fff",
-                    border: "1px solid #e8e8e8",
-                    borderRadius: 8,
-                    padding: "14px 16px",
-                    cursor: "pointer",
-                    borderLeft: `4px solid ${space.color}`,
-                  }}
+                  style={{ borderLeft: `4px solid ${space.color}` }}
                 >
                   <div
                     style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}
