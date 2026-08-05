@@ -373,10 +373,19 @@ textarea:focus {
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  gap: 5px;
+  padding: 3px 11px;
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+}
+.status-group-header {
+  transition: background 0.12s;
+}
+.status-group-header:hover {
+  background: #f1f9f9;
 }
 
 /* ─── Modal ─── */
@@ -497,7 +506,7 @@ textarea:focus {
 }
 
 .task-grid-row:hover {
-  background: #fafaf9;
+  background: #f1f9f9;
 }
 /* Virtualize rows: the browser skips layout/paint for off-screen rows,
    keeping large lists smooth. contain-intrinsic-size reserves height so
@@ -510,7 +519,7 @@ textarea:focus {
   background: #fff;
 }
 .task-grid-row:hover .task-name-cell {
-  background: #fafaf9;
+  background: #f1f9f9;
 }
 /* Newly-arrived task: brief highlight that fades out. Animations sit above
    inline styles in the cascade, so this wins over the row's inline bg. */
