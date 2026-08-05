@@ -402,10 +402,27 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                         <textarea
                           value={a.params.message || ""}
                           onChange={(e) => updAction(a.id, { params: { ...a.params, message: e.target.value } })}
-                          placeholder="Leave blank for an automatic message. You can use: {task}, {status}, {priority}, {due_date}, {list}"
-                          rows={2}
+                          placeholder="Leave blank for an automatic message, or write your own and insert task details with the tags below."
+                          rows={3}
                           style={{ width: "100%", fontSize: 13, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
                         />
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6, alignItems: "center" }}>
+                          <span style={{ fontSize: 10.5, color: "#9ca3af" }}>Insert:</span>
+                          {["{task}", "{description}", "{status}", "{priority}", "{assignee}", "{due_date}", "{list}"].map((tok) => (
+                            <button
+                              key={tok}
+                              type="button"
+                              title={`Insert ${tok}`}
+                              onClick={() => updAction(a.id, { params: { ...a.params, message: (a.params.message || "") + tok } })}
+                              style={{ fontSize: 10.5, padding: "2px 6px", borderRadius: 4, border: "1px solid #e5e7eb", background: "#f9fafb", color: "#4b5563", cursor: "pointer", fontFamily: "monospace" }}
+                            >
+                              {tok}
+                            </button>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 4 }}>
+                          For a custom column, type <code>{"{field:Column Name}"}</code> — e.g. <code>{"{field:Expiry Date}"}</code>.
+                        </div>
                       </div>
                     </div>
                   )}
