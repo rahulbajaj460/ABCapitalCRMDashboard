@@ -1547,8 +1547,9 @@ body {
   margin: 0 20px 20px;
 }
 
-/* Bold redesign: board columns as cards on the tinted canvas */
-.kanban-board { padding: 4px 20px 20px; }
+/* Bold redesign: board columns as cards on the tinted canvas.
+   Top padding matches the list view so toggling List/Board doesn't shift. */
+.kanban-board { padding: 0 20px 20px; }
 .kanban-col {
   background: #fff;
   border: 1px solid #e4ecec;
