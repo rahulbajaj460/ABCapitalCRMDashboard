@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import Papa from "papaparse";
+import { IconClose, IconCheck } from "./icons";
 
 const FIELD_TYPES = [
   "text",
@@ -648,8 +649,8 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
             Upload a ClickUp CSV and map columns to your task fields
           </div>
         </div>
-        <button className="btn" onClick={onDone}>
-          ✕ Close
+        <button className="btn" onClick={onDone} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <IconClose size={14} /> Close
         </button>
       </div>
 
@@ -693,7 +694,7 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
                 flexShrink: 0,
               }}
             >
-              {currentStepNum > i + 1 ? "✓" : i + 1}
+              {currentStepNum > i + 1 ? <IconCheck size={14} /> : i + 1}
             </div>
             <span
               style={{

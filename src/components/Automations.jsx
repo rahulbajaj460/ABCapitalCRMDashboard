@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import { IconTrash } from "./icons";
 
 const TRIGGERS = [
   { value: "assigned", label: "Task is assigned" },
@@ -241,7 +242,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                     {a.enabled ? "On" : "Off"}
                   </label>
                   <button className="btn btn-sm" onClick={() => setEditing({ ...a, ...scopeToSel(a), conditions: a.conditions || [], actions: a.actions || [] })}>Edit</button>
-                  <button className="btn btn-sm btn-danger" onClick={() => removeAutomation(a)}>🗑</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => removeAutomation(a)} title="Delete"><IconTrash size={15} /></button>
                 </div>
               </div>
             ))}
@@ -342,7 +343,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                   {c.op !== "is_set" && c.op !== "is_empty" && (
                     <ValueInput field={c.field} value={c.value} onChange={(v) => updCondition(c.id, { value: v })} />
                   )}
-                  <button className="btn btn-sm btn-danger" onClick={() => rmCondition(c.id)}>🗑</button>
+                  <button className="btn btn-sm btn-danger" onClick={() => rmCondition(c.id)} title="Remove"><IconTrash size={15} /></button>
                 </div>
               ))}
               <button onClick={addCondition} style={{ background: "none", border: "none", color: "#0d7d82", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add condition</button>
@@ -358,7 +359,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                     <div style={{ flex: 1 }} />
-                    <button className="btn btn-sm btn-danger" onClick={() => rmAction(a.id)}>🗑</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => rmAction(a.id)} title="Remove"><IconTrash size={15} /></button>
                   </div>
                   {a.type === "notify" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

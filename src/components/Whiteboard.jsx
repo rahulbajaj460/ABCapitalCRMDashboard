@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
+import { IconTrash } from "./icons";
 
 const COLORS = ["#1a1a1a", "#ef4444", "#f59e0b", "#22c55e", "#12a3a0", "#8b5cf6", "#ec4899", "#ffffff"];
 const WIDTHS = [2, 4, 8, 16];
@@ -526,7 +527,7 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
             style={{ border: "1px solid #e5e7eb", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#374151" }}>↪ Redo</button>
           {selectedId && (
             <button onClick={deleteSelected}
-              style={{ border: "1px solid #fca5a5", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#dc2626" }}>🗑 Delete</button>
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid #fca5a5", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#dc2626" }}><IconTrash size={13} /> Delete</button>
           )}
           <button onClick={importImage}
             style={{ border: "1px solid #e5e7eb", background: "#fff", borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12, color: "#374151" }}>↑ Import Image</button>
