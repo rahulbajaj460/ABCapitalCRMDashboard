@@ -1521,7 +1521,7 @@ body {
 .page-header {
   background: transparent;
   border-bottom: none;
-  padding: 22px 24px 10px;
+  padding: 22px 24px 18px;
 }
 .page-title {
   font-size: 24px;
@@ -1533,7 +1533,7 @@ body {
 .toolbar-row {
   background: transparent;
   border-bottom: none;
-  padding: 4px 24px 12px;
+  padding: 12px 24px 12px;
   min-height: 0;
 }
 /* The task list floats as a rounded white card on the tinted canvas. */
