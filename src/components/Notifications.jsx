@@ -92,7 +92,7 @@ export default function Notifications({ profile, onOpenTask }) {
         onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = "#f5f5f4"; }}
         onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = "transparent"; }}
       >
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#b7d2d1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>

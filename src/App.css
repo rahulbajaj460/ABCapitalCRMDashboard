@@ -1492,3 +1492,26 @@ body {
     transition: none !important;
   }
 }
+
+/* ─── Dark teal sidebar (bold redesign) ─── */
+.sidebar {
+  background: #0b2b30;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); }
+.sidebar-section { color: #5f8286; }
+.nav-item { color: #b7d2d1; }
+.nav-item:hover { background: rgba(255, 255, 255, 0.05); color: #eafffe; }
+.nav-item.active { background: rgba(18, 163, 160, 0.16); color: #fff; }
+.space-item { color: #b7d2d1; }
+.space-item:hover { background: rgba(255, 255, 255, 0.05); }
+.space-item.active { background: rgba(18, 163, 160, 0.16); color: #fff; }
+.folder-item { color: #9db8ba; }
+.folder-item:hover { background: rgba(255, 255, 255, 0.05); color: #eafffe; }
+.folder-item.active { background: rgba(18, 163, 160, 0.16); color: #fff; }
+.folder-item:hover svg { color: #cfe4e3; }
+.folder-item.active svg { color: #fff; }
+.space-count-badge { background: rgba(255, 255, 255, 0.08); color: #7f9c9f; }
+.add-btn-sidebar { color: #8aa8aa; }
+.add-btn-sidebar:hover { background: rgba(255, 255, 255, 0.05); color: #eafffe; }
+/* active accent bar already set via inset box-shadow var(--accent) */
