@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import Notifications from "./Notifications";
-import { IconDashboard, IconWiki, IconMyTasks, IconSettings } from "./icons";
+import { IconDashboard, IconWiki, IconMyTasks, IconSettings, IconTrash } from "./icons";
 
 const SPACE_COLORS = [
   "#378ADD",
@@ -1584,11 +1584,11 @@ export default function Sidebar({
               marginTop: 4,
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              gap: 7,
               color: "#9fb9bb",
             }}
           >
-            🗑 Trash
+            <IconTrash size={15} /> Trash
           </button>
         </div>
       </div>

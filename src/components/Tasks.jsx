@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
 import Automations from "./Automations";
-import { IconList, IconBoard, IconBolt } from "./icons";
+import { IconList, IconBoard, IconBolt, IconUpload, IconDownload } from "./icons";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -4079,11 +4079,11 @@ export default function Tasks({
             <button className="btn btn-sm" onClick={() => setShowAutomations(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <IconBolt size={14} /> Automations
             </button>
-            <button className="btn btn-sm" onClick={() => setShowImport(true)}>
-              ⬆ Import CSV
+            <button className="btn btn-sm" onClick={() => setShowImport(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <IconUpload size={14} /> Import CSV
             </button>
-            <button className="btn btn-sm" onClick={() => setShowExportModal(true)}>
-              ⬇ Export CSV
+            <button className="btn btn-sm" onClick={() => setShowExportModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <IconDownload size={14} /> Export CSV
             </button>
             <button className="btn btn-primary" onClick={openNewTask}>
               + New Task
