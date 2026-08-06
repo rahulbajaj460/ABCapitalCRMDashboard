@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import Notifications from "./Notifications";
+import { IconDashboard, IconWiki, IconMyTasks, IconSettings } from "./icons";
 
 const SPACE_COLORS = [
   "#378ADD",
@@ -1170,17 +1171,17 @@ export default function Sidebar({
       <div style={{ padding: "8px 0 4px" }}>
         <div className="sidebar-section">Main</div>
         {[
-          { key: "dashboard", icon: "📊", label: "Dashboard" },
-          { key: "wiki", icon: "📗", label: "Wiki" },
-          { key: "mytasks", icon: "👤", label: "My Tasks" },
-          ...(profile?.role === "admin" ? [{ key: "settings", icon: "⚙️", label: "Settings" }] : []),
+          { key: "dashboard", Icon: IconDashboard, label: "Dashboard" },
+          { key: "wiki", Icon: IconWiki, label: "Wiki" },
+          { key: "mytasks", Icon: IconMyTasks, label: "My Tasks" },
+          ...(profile?.role === "admin" ? [{ key: "settings", Icon: IconSettings, label: "Settings" }] : []),
         ].map((item) => (
           <div
             key={item.key}
             className={`nav-item ${view === item.key ? "active" : ""}`}
             onClick={() => onNavigate(item.key)}
           >
-            <span>{item.icon}</span>
+            <span style={{ display: "inline-flex", opacity: 0.9 }}><item.Icon size={17} /></span>
             <span>{item.label}</span>
           </div>
         ))}

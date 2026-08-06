@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
 import Automations from "./Automations";
+import { IconList, IconBoard, IconBolt } from "./icons";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -115,9 +116,11 @@ function TaskDescEditor({ value, onChange }) {
 }
 
 const PRIORITY_STYLES = {
+  // High keeps the loud red (it's the signal that matters); Medium is the
+  // neutral default, so it's muted grey; Low recedes to a soft slate.
   High: { bg: "#fee2e2", color: "#b91c1c", dot: "#ef4444" },
-  Medium: { bg: "#fef9c3", color: "#854d0e", dot: "#eab308" },
-  Low: { bg: "#dcfce7", color: "#15803d", dot: "#22c55e" },
+  Medium: { bg: "#eef1f4", color: "#556270", dot: "#94a3b8" },
+  Low: { bg: "#f1f5f4", color: "#5c7a6f", dot: "#84b09e" },
 };
 
 // Return a text color with enough contrast on a light tint of `hex`: light
@@ -4073,8 +4076,8 @@ export default function Tasks({
                 </button>
               </>
             )}
-            <button className="btn btn-sm" onClick={() => setShowAutomations(true)}>
-              ⚡ Automations
+            <button className="btn btn-sm" onClick={() => setShowAutomations(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <IconBolt size={14} /> Automations
             </button>
             <button className="btn btn-sm" onClick={() => setShowImport(true)}>
               ⬆ Import CSV
@@ -4094,14 +4097,16 @@ export default function Tasks({
             <div
               className={`tab ${viewMode === "list" ? "active" : ""}`}
               onClick={() => setViewMode("list")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
-              📋 List
+              <IconList size={15} /> List
             </div>
             <div
               className={`tab ${viewMode === "board" ? "active" : ""}`}
               onClick={() => setViewMode("board")}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
-              📌 Board
+              <IconBoard size={15} /> Board
             </div>
           </div>
           <div className="toolbar-right">
