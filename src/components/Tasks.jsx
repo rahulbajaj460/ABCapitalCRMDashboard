@@ -5052,27 +5052,27 @@ export default function Tasks({
         <div
           ref={drawerRef}
           style={{
-            width: 420,
+            width: 452,
             flexShrink: 0,
-            borderLeft: "1px solid #e8e8e8",
+            borderLeft: "1px solid #dfeaea",
             background: "#fff",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             height: "100%",
-            boxShadow: "-4px 0 20px rgba(0,0,0,0.06)",
+            boxShadow: "-6px 0 24px rgba(12,47,52,0.08)",
             animation: "slideInRight 0.18s ease",
           }}
         >
           {/* Drawer header */}
           <div
             style={{
-              padding: "12px 18px",
-              borderBottom: "1px solid #ebebeb",
+              padding: "13px 18px",
+              borderBottom: "1px solid #e6eded",
               display: "flex",
               alignItems: "center",
               gap: 10,
-              background: "#fff",
+              background: "#f6fbfb",
               flexShrink: 0,
             }}
           >
@@ -5161,8 +5161,8 @@ export default function Tasks({
           <div
             style={{
               display: "flex",
-              borderBottom: "1px solid #ebebeb",
-              background: "#fff",
+              borderBottom: "1px solid #e6eded",
+              background: "#f6fbfb",
               flexShrink: 0,
             }}
           >
@@ -5225,6 +5225,7 @@ export default function Tasks({
               overflowY: "auto",
               scrollbarWidth: "thin",
               scrollbarColor: "#e0e0de transparent",
+              background: "#fbfdfd",
             }}
           >
             {/* DETAILS TAB */}
