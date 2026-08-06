@@ -3692,8 +3692,8 @@ export default function Tasks({
               padding: "3px 6px",
               width: "100%",
               borderRadius: 20,
-              border: `1px solid ${statusColor}44`,
-              background: statusColor + "1f",
+              border: `1px solid ${statusColor}59`,
+              background: statusColor + "29",
               color: readableInk(statusColor),
               fontWeight: 600,
               cursor: "pointer",
@@ -4884,7 +4884,7 @@ export default function Tasks({
                                   gap: 7,
                                   background:
                                     groupBy === "status"
-                                      ? getStatusColor(groupName) + "1f"
+                                      ? getStatusColor(groupName) + "29"
                                       : "#f0f0ef",
                                   color: groupBy === "status" ? readableInk(getStatusColor(groupName)) : "#333",
                                   padding: "4px 12px",
@@ -4893,7 +4893,7 @@ export default function Tasks({
                                   fontWeight: 700,
                                   border:
                                     groupBy === "status"
-                                      ? `1px solid ${getStatusColor(groupName)}33`
+                                      ? `1px solid ${getStatusColor(groupName)}59`
                                       : "1px solid #e8e8e8",
                                 }}
                               >
@@ -4968,7 +4968,7 @@ export default function Tasks({
                           gap: 7,
                           background:
                             groupBy === "status"
-                              ? getStatusColor(groupName) + "1f"
+                              ? getStatusColor(groupName) + "29"
                               : "#f0f0ef",
                           color: groupBy === "status" ? readableInk(getStatusColor(groupName)) : "#333",
                           padding: "4px 12px",
@@ -4977,7 +4977,7 @@ export default function Tasks({
                           fontWeight: 700,
                           border:
                             groupBy === "status"
-                              ? `1px solid ${getStatusColor(groupName)}33`
+                              ? `1px solid ${getStatusColor(groupName)}59`
                               : "1px solid #e8e8e8",
                         }}
                       >
