@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Claude Code local tooling (not needed for the app)
+.claude/
+CLAUDE.md
