@@ -1,7 +1,24 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import Notifications from "./Notifications";
-import { IconDashboard, IconWiki, IconMyTasks, IconSettings, IconTrash } from "./icons";
+import { IconDashboard, IconWiki, IconMyTasks, IconSettings, IconTrash, IconEdit, IconPalette, IconFolderPlus, IconFile, IconList, IconPlus } from "./icons";
+
+// Map the emoji used in context-menu configs to the shared SVG icon set.
+// Unmapped values fall back to the original glyph so nothing breaks.
+const MENU_ICON_MAP = {
+  "✏️": IconEdit,
+  "🎨": IconPalette,
+  "📁": IconFolderPlus,
+  "🗑️": IconTrash,
+  "📄": IconFile,
+  "📝": IconEdit,
+  "📋": IconList,
+  "➕": IconPlus,
+};
+function renderMenuIcon(icon) {
+  const C = MENU_ICON_MAP[icon];
+  return C ? <C size={15} /> : <span style={{ fontSize: 15 }}>{icon}</span>;
+}
 
 const SPACE_COLORS = [
   "#378ADD",
@@ -1138,7 +1155,7 @@ export default function Sidebar({
               }
               onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
             >
-              <span style={{ fontSize: 15, flexShrink: 0 }}>{item.icon}</span>
+              <span style={{ display: "inline-flex", flexShrink: 0, opacity: 0.85 }}>{renderMenuIcon(item.icon)}</span>
               {item.label}
             </button>
           ),
