@@ -4879,21 +4879,27 @@ export default function Tasks({
                               </span>
                               <span
                                 style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 7,
                                   background:
                                     groupBy === "status"
-                                      ? getStatusColor(groupName)
+                                      ? getStatusColor(groupName) + "1f"
                                       : "#f0f0ef",
-                                  color: groupBy === "status" ? contrastText(getStatusColor(groupName)) : "#333",
-                                  padding: "3px 12px",
+                                  color: groupBy === "status" ? readableInk(getStatusColor(groupName)) : "#333",
+                                  padding: "4px 12px",
                                   borderRadius: 20,
-                                  fontSize: 11,
-                                  fontWeight: 600,
+                                  fontSize: 11.5,
+                                  fontWeight: 700,
                                   border:
-                                    groupBy !== "status"
-                                      ? "1px solid #e8e8e8"
-                                      : "none",
+                                    groupBy === "status"
+                                      ? `1px solid ${getStatusColor(groupName)}33`
+                                      : "1px solid #e8e8e8",
                                 }}
                               >
+                                {groupBy === "status" && (
+                                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: getStatusColor(groupName), flexShrink: 0 }} />
+                                )}
                                 {groupName}
                               </span>
                               <span style={{ fontSize: 12, color: "#aaa" }}>
@@ -4957,17 +4963,27 @@ export default function Tasks({
                     <div className="kanban-col-header">
                       <span
                         style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 7,
                           background:
                             groupBy === "status"
-                              ? getStatusColor(groupName)
+                              ? getStatusColor(groupName) + "1f"
                               : "#f0f0ef",
-                          color: groupBy === "status" ? contrastText(getStatusColor(groupName)) : "#333",
-                          padding: "3px 12px",
+                          color: groupBy === "status" ? readableInk(getStatusColor(groupName)) : "#333",
+                          padding: "4px 12px",
                           borderRadius: 20,
-                          fontSize: 11,
-                          fontWeight: 600,
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          border:
+                            groupBy === "status"
+                              ? `1px solid ${getStatusColor(groupName)}33`
+                              : "1px solid #e8e8e8",
                         }}
                       >
+                        {groupBy === "status" && (
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: getStatusColor(groupName), flexShrink: 0 }} />
+                        )}
                         {groupName}
                       </span>
                       <span style={{ fontSize: 12, color: "#aaa" }}>
