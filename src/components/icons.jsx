@@ -63,3 +63,9 @@ export const IconFile = (p) => (
 export const IconPlus = (p) => (
   <Svg {...p}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></Svg>
 );
+export const IconSearch = (p) => (
+  <Svg {...p}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Svg>
+);
+export const IconColumns = (p) => (
+  <Svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></Svg>
+);

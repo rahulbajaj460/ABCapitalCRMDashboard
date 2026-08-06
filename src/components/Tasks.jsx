@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
 import Automations from "./Automations";
-import { IconList, IconBoard, IconBolt, IconUpload, IconDownload } from "./icons";
+import { IconList, IconBoard, IconBolt, IconUpload, IconDownload, IconSearch, IconColumns } from "./icons";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -4111,7 +4111,7 @@ export default function Tasks({
           </div>
           <div className="toolbar-right">
             <div className="toolbar-search">
-              <span style={{ color: "#bbb", fontSize: 13 }}>🔍</span>
+              <span style={{ color: "#9aacad", display: "inline-flex" }}><IconSearch size={15} /></span>
               <input
                 placeholder="Search tasks..."
                 value={search}
@@ -4126,7 +4126,7 @@ export default function Tasks({
                 className="toolbar-btn"
                 onClick={() => setShowColumnPicker((p) => !p)}
               >
-                ⊞ Columns
+                <IconColumns size={14} /> Columns
               </button>
               {showColumnPicker && (() => {
                 const fieldList = getFields();

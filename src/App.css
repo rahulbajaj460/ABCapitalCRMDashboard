@@ -1563,3 +1563,21 @@ body {
   background: transparent;
   border-bottom: none;
 }
+
+/* Bold redesign: unified toolbar controls (consistent radius/border/focus) */
+.toolbar-btn,
+.toolbar-select,
+.toolbar-search {
+  border-radius: 9px;
+  border-color: #dfe7e7;
+}
+.toolbar-search { background: #eef3f3; }
+.toolbar-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(13, 125, 130, 0.09);
+}
+.toolbar-btn:hover,
+.toolbar-select:hover {
+  border-color: #c6d6d6;
+  background: #f6fafa;
+}
