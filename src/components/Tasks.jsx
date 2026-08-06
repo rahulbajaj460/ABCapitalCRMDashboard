@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import ImportTasks from "./ImportTasks";
 import Automations from "./Automations";
-import { IconList, IconBoard, IconBolt, IconUpload, IconDownload, IconSearch, IconColumns } from "./icons";
+import { IconList, IconBoard, IconBolt, IconUpload, IconDownload, IconSearch, IconColumns, IconTrash, IconClose, IconCheck, IconEdit } from "./icons";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -2091,7 +2091,7 @@ export default function Tasks({
               style={{ fontSize: 12, padding: "5px 6px", border: "1px solid #d1d5db", borderRadius: 6, flex: 1, minWidth: 0 }}
             />
           ))}
-        <button onClick={() => setDraftTree((t) => treeRemove(t, cond.id))} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0 }}>🗑</button>
+        <button onClick={() => setDraftTree((t) => treeRemove(t, cond.id))} title="Remove" style={{ display: "inline-flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0 }}><IconTrash size={14} /></button>
       </div>
     );
   }
@@ -2106,7 +2106,7 @@ export default function Tasks({
             <div key={child.id} style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 8 }}>
               {conjCell(child, idx)}
               <div style={{ flex: 1, minWidth: 0 }}>{renderFilterGroup(child, depth + 1)}</div>
-              <button onClick={() => setDraftTree((t) => treeRemove(t, child.id))} title="Remove group" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0, marginTop: 8 }}>🗑</button>
+              <button onClick={() => setDraftTree((t) => treeRemove(t, child.id))} title="Remove group" style={{ display: "inline-flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, flexShrink: 0, marginTop: 8 }}><IconTrash size={14} /></button>
             </div>
           ) : (
             renderFilterCondition(child, group, idx)
@@ -3714,9 +3714,10 @@ export default function Tasks({
             <button
               className="btn btn-sm btn-danger"
               onClick={() => deleteTask(task.id)}
-              style={{ padding: "3px 8px", fontSize: 11 }}
+              title="Delete task"
+              style={{ display: "inline-flex", alignItems: "center", padding: "3px 8px", fontSize: 11 }}
             >
-              🗑
+              <IconTrash size={13} />
             </button>
           )}
         </div>
@@ -3907,7 +3908,7 @@ export default function Tasks({
                       {initials(name)}
                     </span>
                     <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
-                    {selected && <span style={{ color: "#0d7d82", fontSize: 13 }}>✓</span>}
+                    {selected && <span style={{ color: "#0d7d82", display: "inline-flex", alignItems: "center" }}><IconCheck size={14} /></span>}
                   </div>
                 );
               });
@@ -3957,7 +3958,7 @@ export default function Tasks({
                 >
                   {statusGlyph(s, c)}
                   <span style={{ flex: 1, fontSize: 13, fontWeight: cur ? 600 : 400, color: "#333" }}>{s}</span>
-                  {cur && <span style={{ color: "#0d7d82", fontSize: 13 }}>✓</span>}
+                  {cur && <span style={{ color: "#0d7d82", display: "inline-flex", alignItems: "center" }}><IconCheck size={14} /></span>}
                 </div>
               );
             })}
@@ -4174,7 +4175,7 @@ export default function Tasks({
                         Columns
                       </span>
                       {viewSaved ? (
-                        <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Saved for everyone</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#16a34a", fontWeight: 600 }}><IconCheck size={13} /> Saved for everyone</span>
                       ) : (
                         <button
                           onClick={publishView}
@@ -4359,7 +4360,7 @@ export default function Tasks({
                           {savedFilters.map((s) => (
                             <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 6px", borderRadius: 6 }}>
                               <span onClick={() => loadSavedFilter(s)} style={{ flex: 1, fontSize: 12, cursor: "pointer" }}>{s.name}</span>
-                              <button onClick={() => deleteSavedFilter(s.name)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 12 }}>🗑</button>
+                              <button onClick={() => deleteSavedFilter(s.name)} title="Delete" style={{ display: "inline-flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 12 }}><IconTrash size={13} /></button>
                             </div>
                           ))}
                         </div>
@@ -4412,9 +4413,9 @@ export default function Tasks({
                 className="toolbar-btn"
                 onClick={() => setSortConfig({ key: null, direction: "asc" })}
                 title="Clear column sort"
-                style={{ color: "#0d7d82", fontWeight: 600 }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#0d7d82", fontWeight: 600 }}
               >
-                ✕ Sort: {sortConfig.key.replace("field_", "")} (
+                <IconClose size={13} /> Sort: {sortConfig.key.replace("field_", "")} (
                 {sortConfig.direction === "asc" ? "▲" : "▼"})
               </button>
             )}
@@ -5153,7 +5154,7 @@ export default function Tasks({
                 flexShrink: 0,
               }}
             >
-              ✕
+              <IconClose size={16} />
             </button>
           </div>
 
@@ -5763,7 +5764,7 @@ export default function Tasks({
                         fontWeight: 500,
                       }}
                     >
-                      🗑 Delete task
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconTrash size={14} /> Delete task</span>
                     </button>
                   )}
                 </div>
@@ -5833,9 +5834,9 @@ export default function Tasks({
                                 <button
                                   onClick={() => deleteTask(child.id)}
                                   title="Delete subtask"
-                                  style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, padding: "0 2px" }}
+                                  style={{ display: "inline-flex", alignItems: "center", flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 13, padding: "0 2px" }}
                                 >
-                                  🗑
+                                  <IconTrash size={14} />
                                 </button>
                               )}
                             </div>
@@ -6241,9 +6242,11 @@ export default function Tasks({
                             fontSize: 14,
                             color: "#b91c1c",
                             flexShrink: 0,
+                            display: "inline-flex",
+                            alignItems: "center",
                           }}
                         >
-                          🗑
+                          <IconTrash size={14} />
                         </button>
                       </div>
                     ))}
@@ -7404,8 +7407,10 @@ export default function Tasks({
               <button
                 className="btn btn-sm"
                 onClick={() => setShowFieldModal(false)}
+                title="Close"
+                style={{ display: "inline-flex", alignItems: "center" }}
               >
-                ✕
+                <IconClose size={14} />
               </button>
             </div>
             <div style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
@@ -7544,15 +7549,16 @@ export default function Tasks({
                               style={{ padding: "2px 8px", fontSize: 11 }}
                               onClick={() => startEditFieldOptions(f)}
                             >
-                              ✏️ Edit options
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconEdit size={13} /> Edit options</span>
                             </button>
                           )}
                         <button
                           className="btn btn-sm btn-danger"
-                          style={{ padding: "2px 8px", fontSize: 11 }}
+                          style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", fontSize: 11 }}
                           onClick={() => deleteCustomField(f.id)}
+                          title="Delete field"
                         >
-                          ✕
+                          <IconTrash size={13} />
                         </button>
                       </div>
                     </div>
@@ -8066,8 +8072,10 @@ export default function Tasks({
               <button
                 className="btn btn-sm"
                 onClick={() => setShowStatusModal(false)}
+                title="Close"
+                style={{ display: "inline-flex", alignItems: "center" }}
               >
-                ✕
+                <IconClose size={14} />
               </button>
             </div>
             <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>

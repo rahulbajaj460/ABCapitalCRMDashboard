@@ -11,6 +11,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
+import { IconTrash, IconEdit, IconClose } from "./icons";
 
 // Single clean theme — consistent with task folders
 const CAT_COLOR = { bg: "#f0f0ef", icon: "#6b7280" };
@@ -400,7 +401,7 @@ function RichEditor({ content, onChange }) {
               active={false}
               title="Delete table"
             >
-              🗑 Table
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><IconTrash size={13} /> Table</span>
             </ToolbarBtn>
             <ToolbarBtn
               onClick={() => editor.chain().focus().toggleHeaderRow().run()}
@@ -1079,7 +1080,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   flexShrink: 0,
                 }}
               >
-                🗑
+                <IconTrash size={14} />
               </button>
             )}
             <button
@@ -1156,7 +1157,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 }}
                 onClick={() => setSearch("")}
               >
-                ✕
+                <IconClose size={13} />
               </span>
             )}
           </div>
@@ -1455,7 +1456,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       fontWeight: 500,
                     }}
                   >
-                    ✏️ Edit
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconEdit size={14} /> Edit</span>
                   </button>
                   {profile?.role === "admin" && (
                     <button
@@ -1474,7 +1475,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                         fontWeight: 500,
                       }}
                     >
-                      🗑 Delete
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconTrash size={14} /> Delete</span>
                     </button>
                   )}
                   <button
@@ -1493,7 +1494,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       justifyContent: "center",
                     }}
                   >
-                    ✕
+                    <IconClose size={16} />
                   </button>
                 </div>
               </div>
@@ -1552,7 +1553,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                             <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmtSize(a.file_size)}{a.uploaded_by ? ` · ${a.uploaded_by}` : ""}</div>
                           </div>
                           <button className="btn btn-sm" onClick={() => downloadArticleAttachment(a)}>Download</button>
-                          <button className="btn btn-sm btn-danger" onClick={() => deleteArticleAttachment(a)}>🗑</button>
+                          <button className="btn btn-sm btn-danger" onClick={() => deleteArticleAttachment(a)} title="Delete"><IconTrash size={14} /></button>
                         </div>
                       ))}
                     </div>
@@ -1982,7 +1983,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                     marginBottom: 2,
                   }}
                 >
-                  🗑 Trash
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconTrash size={16} /> Trash</span>
                 </div>
                 <div style={{ fontSize: 12, color: "#888" }}>
                   Deleted pages and categories — restore anytime
@@ -2029,7 +2030,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
               ) : trashedArticles.length === 0 &&
                 trashedCategories.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>🗑</div>
+                  <div style={{ marginBottom: 8, color: "#c4c9c9" }}><IconTrash size={24} /></div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
                     Trash is empty
                   </div>
@@ -2261,8 +2262,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
               <div className="modal-title" style={{ margin: 0 }}>
                 {editingArticle ? "Edit page" : "New page"}
               </div>
-              <button className="btn btn-sm" onClick={closeArticleModal}>
-                ✕
+              <button className="btn btn-sm" onClick={closeArticleModal} title="Close" style={{ display: "inline-flex", alignItems: "center" }}>
+                <IconClose size={14} />
               </button>
             </div>
             <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
@@ -2368,10 +2369,10 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       <button
                         type="button"
                         onClick={() => setPendingFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                        style={{ border: "none", background: "none", cursor: "pointer", color: "#dc2626", fontSize: 14 }}
+                        style={{ border: "none", background: "none", cursor: "pointer", color: "#dc2626", fontSize: 14, display: "inline-flex", alignItems: "center" }}
                         title="Remove"
                       >
-                        ✕
+                        <IconClose size={14} />
                       </button>
                     </div>
                   ))}
@@ -2414,8 +2415,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
               <div className="modal-title" style={{ margin: 0 }}>
                 {editingCat ? "Edit category" : "New category"}
               </div>
-              <button className="btn btn-sm" onClick={closeCatModal}>
-                ✕
+              <button className="btn btn-sm" onClick={closeCatModal} title="Close" style={{ display: "inline-flex", alignItems: "center" }}>
+                <IconClose size={14} />
               </button>
             </div>
             <div className="form-group">
@@ -2577,7 +2578,7 @@ function CategoryNode({
             }}
             title="Rename"
           >
-            ✏️
+            <IconEdit size={14} />
           </button>
           {profile?.role === "admin" && (
             <button
@@ -2588,7 +2589,7 @@ function CategoryNode({
               }}
               title="Delete"
             >
-              🗑
+              <IconTrash size={14} />
             </button>
           )}
         </div>

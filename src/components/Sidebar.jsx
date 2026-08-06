@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
 import Notifications from "./Notifications";
-import { IconDashboard, IconWiki, IconMyTasks, IconSettings, IconTrash, IconEdit, IconPalette, IconFolderPlus, IconFile, IconList, IconPlus } from "./icons";
+import { IconDashboard, IconWiki, IconMyTasks, IconSettings, IconTrash, IconEdit, IconPalette, IconFolderPlus, IconFile, IconList, IconPlus, IconCheck } from "./icons";
 
 // Map the emoji used in context-menu configs to the shared SVG icon set.
 // Unmapped values fall back to the original glyph so nothing breaks.
@@ -1966,7 +1966,7 @@ export default function Sidebar({
                         color: "#555",
                       }}
                     >
-                      ✎
+                      <IconEdit size={9} />
                     </span>
                   </button>
                   <input
@@ -2584,9 +2584,11 @@ export default function Sidebar({
                                 marginLeft: "auto",
                                 color: "#0d7d82",
                                 fontSize: 12,
+                                display: "inline-flex",
+                                alignItems: "center",
                               }}
                             >
-                              ✓
+                              <IconCheck size={13} />
                             </span>
                           )}
                         </button>
@@ -2857,7 +2859,7 @@ export default function Sidebar({
                             color: "#555",
                           }}
                         >
-                          ✎
+                          <IconEdit size={10} />
                         </span>
                       </button>
                       <input
@@ -3256,9 +3258,11 @@ export default function Sidebar({
                               color: "#0d7d82",
                               fontSize: 14,
                               flexShrink: 0,
+                              display: "inline-flex",
+                              alignItems: "center",
                             }}
                           >
-                            ✓
+                            <IconCheck size={15} />
                           </span>
                         )}
                       </button>
@@ -3393,7 +3397,7 @@ export default function Sidebar({
                       outline: "none",
                     }}
                   >
-                    Create Space ✓
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>Create Space <IconCheck size={15} /></span>
                   </button>
                 </div>
               </>
@@ -3451,7 +3455,7 @@ export default function Sidebar({
                     marginBottom: 2,
                   }}
                 >
-                  🗑 Trash
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconTrash size={16} /> Trash</span>
                 </div>
                 <div style={{ fontSize: 12, color: "#888" }}>
                   Deleted spaces, folders, and tasks — restore anytime
@@ -3496,7 +3500,7 @@ export default function Sidebar({
                 trashedLists.length === 0 &&
                 trashedTasks.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>🗑</div>
+                  <div style={{ marginBottom: 8, color: "#c4c9c9" }}><IconTrash size={24} /></div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#555" }}>
                     Trash is empty
                   </div>

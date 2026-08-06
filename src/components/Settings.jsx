@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../supabase";
 import { supabaseAdmin } from "../supabaseAdmin";
+import { IconClose } from "./icons";
 
 const DEFAULT_COL_WIDTHS = { member: 220, email: 240, role: 130, joined: 140, actions: 60 };
 
@@ -353,7 +354,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                         <button onClick={() => openManage("space", spaceId, space.name)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#374151", fontWeight: 500 }}>Edit</button>
-                        <button onClick={() => clearRule("space", spaceId)} style={{ fontSize: 12, padding: "5px 10px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fff", cursor: "pointer", color: "#ef4444" }}>✕</button>
+                        <button onClick={() => clearRule("space", spaceId)} title="Clear" style={{ display: "inline-flex", alignItems: "center", fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fff", cursor: "pointer", color: "#ef4444" }}><IconClose size={13} /></button>
                       </div>
                     </div>
                   );
@@ -378,7 +379,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                       </div>
                       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                         <button onClick={() => openManage("folder", folderId, folder.name, folder.spaceName)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", color: "#374151", fontWeight: 500 }}>Edit</button>
-                        <button onClick={() => clearRule("folder", folderId)} style={{ fontSize: 12, padding: "5px 10px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fff", cursor: "pointer", color: "#ef4444" }}>✕</button>
+                        <button onClick={() => clearRule("folder", folderId)} title="Clear" style={{ display: "inline-flex", alignItems: "center", fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid #fca5a5", background: "#fff", cursor: "pointer", color: "#ef4444" }}><IconClose size={13} /></button>
                       </div>
                     </div>
                   );
