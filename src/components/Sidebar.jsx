@@ -1153,13 +1153,13 @@ export default function Sidebar({
     >
       {/* Header */}
       <div
-        style={{ padding: "16px 16px 12px", borderBottom: "1px solid #ebebeb", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}
+        style={{ padding: "16px 16px 12px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a1a" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", letterSpacing: "-0.01em" }}>
             AB Capital
           </div>
-          <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "#6f9295", marginTop: 2 }}>
             Internal workspace
           </div>
         </div>
@@ -1584,7 +1584,7 @@ export default function Sidebar({
               display: "flex",
               alignItems: "center",
               gap: 6,
-              color: "#888",
+              color: "#9fb9bb",
             }}
           >
             🗑 Trash
@@ -1596,7 +1596,7 @@ export default function Sidebar({
       <div
         style={{
           padding: "12px 14px",
-          borderTop: "1px solid #ebebeb",
+          borderTop: "1px solid rgba(255,255,255,0.08)",
           display: "flex",
           alignItems: "center",
           gap: 8,
@@ -1624,7 +1624,7 @@ export default function Sidebar({
             style={{
               fontSize: 12,
               fontWeight: 500,
-              color: "#1a1a1a",
+              color: "#ffffff",
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -1632,7 +1632,7 @@ export default function Sidebar({
           >
             {profile?.full_name || "User"}
           </div>
-          <div style={{ fontSize: 11, color: "#aaa" }}>
+          <div style={{ fontSize: 11, color: "#6f9295" }}>
             {profile?.role || "member"}
           </div>
         </div>
@@ -1643,7 +1643,7 @@ export default function Sidebar({
             background: "none",
             border: "none",
             cursor: "pointer",
-            color: "#aaa",
+            color: "#6f9295",
             fontSize: 16,
             padding: 4,
             borderRadius: 4,
