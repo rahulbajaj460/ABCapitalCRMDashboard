@@ -985,6 +985,11 @@ textarea:focus {
 }
 
 /* ─── Wiki rich text content ─── */
+.wiki-content h1,
+.wiki-content h2,
+.wiki-content h3 {
+  scroll-margin-top: 24px;
+}
 .wiki-content h1 {
   font-size: 21px;
   font-weight: 800;

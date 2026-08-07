@@ -464,6 +464,60 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
   const [pendingFiles, setPendingFiles] = useState([]); // PDFs staged in the New/Edit page modal
   const modalAttRef = useRef(null);
 
+  // ── On-page table of contents (heading rail for long articles) ──
+  const contentRef = useRef(null);
+  const bodyScrollRef = useRef(null);
+  const [toc, setToc] = useState([]); // [{ id, text, level }]
+  const [activeHeading, setActiveHeading] = useState(null);
+
+  // Build the TOC from the rendered article: tag each heading with a stable id
+  // and collect h2/h3 (the levels a page is structured with). Runs after the
+  // dangerouslySetInnerHTML content is in the DOM.
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!root) {
+      setToc([]);
+      return;
+    }
+    const heads = Array.from(root.querySelectorAll("h1, h2, h3"));
+    const items = heads.map((el, i) => {
+      const text = (el.textContent || "").trim();
+      const id = `wiki-h-${i}`;
+      el.id = id;
+      return { id, text, level: Number(el.tagName[1]) };
+    }).filter((h) => h.text.length > 0);
+    setToc(items);
+    setActiveHeading(items[0]?.id || null);
+  }, [activeArticle?.id, activeArticle?.content]);
+
+  // Scroll-spy: highlight the heading currently at the top of the reading pane.
+  useEffect(() => {
+    const root = contentRef.current;
+    const scroller = bodyScrollRef.current;
+    if (!root || !scroller || toc.length === 0) return;
+    const heads = toc.map((t) => document.getElementById(t.id)).filter(Boolean);
+    if (heads.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveHeading(visible[0].target.id);
+      },
+      { root: scroller, rootMargin: "0px 0px -70% 0px", threshold: 0 }
+    );
+    heads.forEach((h) => obs.observe(h));
+    return () => obs.disconnect();
+  }, [toc]);
+
+  const scrollToHeading = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveHeading(id);
+    }
+  };
+
   const [newArticle, setNewArticle] = useState({
     title: "",
     content: "",
@@ -1493,6 +1547,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
 
             {/* Article body */}
             <div
+              ref={bodyScrollRef}
               style={{
                 flex: 1,
                 overflowY: "auto",
@@ -1501,8 +1556,18 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 scrollbarColor: "#e0e0de transparent",
               }}
             >
-              <div style={{ maxWidth: 720 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 44,
+                  maxWidth: toc.length >= 3 ? 984 : 720,
+                  margin: "0 auto",
+                }}
+              >
+              <div style={{ maxWidth: 720, flex: 1, minWidth: 0 }}>
                 <div
+                  ref={contentRef}
                   className="wiki-content"
                   dangerouslySetInnerHTML={{ __html: activeArticle.content }}
                   onMouseOver={handleContentMouseOver}
@@ -1550,6 +1615,66 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* On-page table of contents */}
+              {toc.length >= 3 && (
+                <aside
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    width: 200,
+                    flexShrink: 0,
+                    alignSelf: "flex-start",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "#aaa",
+                      textTransform: "uppercase",
+                      letterSpacing: ".07em",
+                      padding: "0 0 8px 12px",
+                    }}
+                  >
+                    On this page
+                  </div>
+                  <nav style={{ display: "flex", flexDirection: "column", gap: 1, borderLeft: "1px solid #ececec" }}>
+                    {toc.map((h) => {
+                      const active = activeHeading === h.id;
+                      return (
+                        <button
+                          key={h.id}
+                          onClick={() => scrollToHeading(h.id)}
+                          title={h.text}
+                          style={{
+                            textAlign: "left",
+                            border: "none",
+                            background: "none",
+                            cursor: "pointer",
+                            font: "inherit",
+                            fontSize: 12.5,
+                            lineHeight: 1.35,
+                            padding: "4px 8px 4px 12px",
+                            marginLeft: -1,
+                            paddingLeft: 12 + (h.level - 1) * 12,
+                            borderLeft: `2px solid ${active ? "var(--accent)" : "transparent"}`,
+                            color: active ? "var(--accent)" : "#8a8f98",
+                            fontWeight: active ? 600 : 400,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            transition: "color 0.1s",
+                          }}
+                        >
+                          {h.text}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </aside>
+              )}
               </div>
             </div>
           </div>
