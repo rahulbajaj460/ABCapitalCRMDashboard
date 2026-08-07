@@ -11,7 +11,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
-import { IconTrash, IconEdit, IconClose } from "./icons";
+import { IconTrash, IconEdit, IconClose, IconClock, IconPaperclip, IconFile } from "./icons";
 
 // Single clean theme — consistent with task folders
 const CAT_COLOR = { bg: "#f0f0ef", icon: "#6b7280" };
@@ -101,7 +101,7 @@ function IconPage({ color = "#9ca3af", size = 14 }) {
   );
 }
 
-function IconKnowledge({ size = 18, color = "#6366f1" }) {
+function IconKnowledge({ size = 18, color = "var(--accent)" }) {
   return (
     <svg
       width={size}
@@ -1052,7 +1052,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
             className="wiki-sidebar-title"
             style={{ display: "flex", alignItems: "center", gap: 8 }}
           >
-            <IconKnowledge size={18} color="#6366f1" />
+            <IconKnowledge size={18} color="var(--accent)" />
             <span style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>
               Knowledge Base
             </span>
@@ -1237,8 +1237,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 const folderArticles = getFolderArticles(fid);
                 return (
                   <div key={fid} style={{ marginTop: 8 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#bbb", padding: "6px 12px 4px", textTransform: "uppercase", letterSpacing: ".06em" }}>
-                      📁 {folder?.name || "Folder"}
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, color: "#bbb", padding: "6px 12px 4px", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      <IconFolder color="#bbb" size={12} /> {folder?.name || "Folder"}
                     </div>
                     {folderArticles.map((a) => (
                       <ArticleTreeItem key={a.id} article={a} active={activeArticle?.id === a.id} onSelect={setActiveArticle} depth={0} />
@@ -1280,14 +1280,14 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       width: 48,
                       height: 48,
                       borderRadius: 12,
-                      background: "#f0f0ff",
+                      background: "var(--accent-weak)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       margin: "0 auto 12px",
                     }}
                   >
-                    <IconKnowledge size={24} color="#6366f1" />
+                    <IconKnowledge size={24} color="var(--accent)" />
                   </div>
                   <div
                     style={{
@@ -1389,15 +1389,6 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       flexWrap: "wrap",
                     }}
                   >
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "#22c55e",
-                        display: "inline-block",
-                      }}
-                    />
                     {activeArticle.updated_by ? (
                       <>
                         Last edited by{" "}
@@ -1438,7 +1429,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       fontWeight: 500,
                     }}
                   >
-                    🕐 History
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconClock size={14} /> History</span>
                   </button>
                   <button
                     onClick={() => openEditArticle(activeArticle)}
@@ -1448,12 +1439,12 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       gap: 5,
                       padding: "7px 14px",
                       borderRadius: 7,
-                      border: "1px solid #e0e0e0",
-                      background: "#fff",
+                      border: "1px solid var(--accent)",
+                      background: "var(--accent)",
                       fontSize: 12,
                       cursor: "pointer",
-                      color: "#444",
-                      fontWeight: 500,
+                      color: "#fff",
+                      fontWeight: 600,
                     }}
                   >
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><IconEdit size={14} /> Edit</span>
@@ -1510,7 +1501,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 scrollbarColor: "#e0e0de transparent",
               }}
             >
-              <div style={{ maxWidth: 820 }}>
+              <div style={{ maxWidth: 720 }}>
                 <div
                   className="wiki-content"
                   dangerouslySetInnerHTML={{ __html: activeArticle.content }}
@@ -1521,8 +1512,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 {/* PDF attachments */}
                 <div style={{ marginTop: 28, borderTop: "1px solid #ececec", paddingTop: 16 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
-                      📎 Attachments{attachments.length ? ` (${attachments.length})` : ""}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: "#374151" }}>
+                      <IconPaperclip size={14} /> Attachments{attachments.length ? ` (${attachments.length})` : ""}
                     </div>
                     <button className="btn btn-sm" onClick={() => attFileRef.current?.click()} disabled={attUploading}>
                       {attUploading ? "Uploading…" : "+ Attach PDF"}
@@ -1547,7 +1538,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {attachments.map((a) => (
                         <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid #ececec", borderRadius: 8 }}>
-                          <span style={{ fontSize: 16, flexShrink: 0 }}>📄</span>
+                          <span style={{ flexShrink: 0, color: "#9ca3af", display: "inline-flex" }}><IconFile size={16} /></span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.file_name}</div>
                             <div style={{ fontSize: 11, color: "#9ca3af" }}>{fmtSize(a.file_size)}{a.uploaded_by ? ` · ${a.uploaded_by}` : ""}</div>
@@ -1581,15 +1572,15 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   width: 72,
                   height: 72,
                   borderRadius: 20,
-                  background: "linear-gradient(135deg, var(--accent-weak), #f0f0ff)",
+                  background: "linear-gradient(135deg, var(--accent-weak), #fff)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   margin: "0 auto 20px",
-                  boxShadow: "0 2px 16px rgba(99,102,241,0.12)",
+                  boxShadow: "0 2px 16px rgba(13, 125, 130, 0.12)",
                 }}
               >
-                <IconKnowledge size={36} color="#6366f1" />
+                <IconKnowledge size={36} color="var(--accent)" />
               </div>
               <div
                 style={{
@@ -1725,7 +1716,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                         marginBottom: 2,
                       }}
                     >
-                      🕐 Version history
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconClock size={15} /> Version history</span>
                     </div>
                     <div style={{ fontSize: 12, color: "#888" }}>
                       {activeArticle.title} · {articleHistory.filter((h) => !h.action).length} saved
@@ -1830,7 +1821,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                     </div>
                   ) : articleHistory.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "40px 0" }}>
-                      <div style={{ fontSize: 24, marginBottom: 8 }}>📄</div>
+                      <div style={{ marginBottom: 8, color: "#c4c9c9", display: "flex", justifyContent: "center" }}><IconFile size={24} /></div>
                       <div
                         style={{ fontSize: 13, fontWeight: 600, color: "#555" }}
                       >
@@ -1854,7 +1845,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                             key={entry.id}
                             style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 12.5, color: "#6b7280", borderBottom: "1px solid #f0f0f0" }}
                           >
-                            <span style={{ fontSize: 15 }}>{isAdd ? "📎" : "🗑"}</span>
+                            <span style={{ display: "inline-flex", color: isAdd ? "var(--accent)" : "#b91c1c" }}>{isAdd ? <IconPaperclip size={14} /> : <IconTrash size={14} />}</span>
                             <span style={{ flex: 1, minWidth: 0 }}>
                               <strong style={{ color: "#374151" }}>{entry.changed_by || "Someone"}</strong>{" "}
                               {isAdd ? "attached" : "deleted"}{" "}
@@ -2293,7 +2284,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                     fontSize: 13,
                     color: "#444",
                   }}>
-                    📁 {spaces.flatMap((s) => s.folders || []).find((f) => f.id === newArticle.folder_id)?.name || "Selected folder"}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><IconFolder color="#6b7280" size={13} /> {spaces.flatMap((s) => s.folders || []).find((f) => f.id === newArticle.folder_id)?.name || "Selected folder"}</span>
                   </div>
                 </div>
               ) : (
@@ -2363,7 +2354,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
                   {pendingFiles.map((f, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, background: "#f5f5f4", borderRadius: 6, padding: "5px 8px" }}>
-                      <span>📄</span>
+                      <span style={{ display: "inline-flex", color: "#9ca3af" }}><IconFile size={14} /></span>
                       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
                       <span style={{ color: "#9ca3af" }}>{fmtSize(f.size)}</span>
                       <button
