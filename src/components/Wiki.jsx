@@ -11,7 +11,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
-import { IconTrash, IconEdit, IconClose, IconClock, IconPaperclip, IconFile, IconSparkles } from "./icons";
+import { IconTrash, IconEdit, IconClose, IconClock, IconPaperclip, IconFile, IconSparkles, IconList } from "./icons";
 
 // Single clean theme — consistent with task folders
 const CAT_COLOR = { bg: "#f0f0ef", icon: "#6b7280" };
@@ -435,7 +435,7 @@ function RichEditor({ content, onChange }) {
   );
 }
 
-export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpaceId, spaces = [], onDocCreated }) {
+export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpaceId, spaces = [], onDocCreated, onOpenTask }) {
   const [categories, setCategories] = useState([]);
   const [articles, setArticles] = useState([]);
   const [activeArticle, setActiveArticle] = useState(null);
@@ -525,9 +525,19 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
   const [askTurns, setAskTurns] = useState([]); // [{ q, result }]
   const askScrollRef = useRef(null);
 
-  // Open a wiki page by id from an AI result, and close the panel.
-  const openArticleById = (id) => {
-    const art = articles.find((a) => a.id === id);
+  // Open a source from an AI result, and close the panel.
+  const openSource = (src) => {
+    if (src.kind === "task") {
+      onOpenTask?.({
+        space_id: src.space_id,
+        folder_id: src.folder_id,
+        list_id: src.list_id,
+        task_id: src.id,
+      });
+      setAskOpen(false);
+      return;
+    }
+    const art = articles.find((a) => a.id === src.id);
     if (art) {
       setActiveArticle(art);
       setSearch("");
@@ -1156,26 +1166,6 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
             </span>
           </span>
           <div className="wiki-sidebar-actions">
-            <button
-              onClick={() => setAskOpen(true)}
-              title="Ask AI about the Knowledge Base"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "5px 10px",
-                borderRadius: 7,
-                border: "1px solid var(--accent)",
-                background: "var(--accent-weak)",
-                fontSize: 11,
-                cursor: "pointer",
-                color: "var(--accent-hover)",
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
-            >
-              <IconSparkles size={13} /> Ask AI
-            </button>
             {profile?.role === "admin" && (
               <button
                 onClick={() => {
@@ -1187,18 +1177,18 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 28,
-                  height: 28,
+                  width: 32,
+                  height: 32,
                   borderRadius: 7,
                   border: "1px solid #e0e0e0",
                   background: "#fff",
                   fontSize: 13,
                   cursor: "pointer",
-                  color: "#888",
+                  color: "#666",
                   flexShrink: 0,
                 }}
               >
-                <IconTrash size={14} />
+                <IconTrash size={17} />
               </button>
             )}
             <button
@@ -1813,6 +1803,34 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
         )}
       </div>
 
+      {/* ── ASK AI FLOATING BUTTON ── */}
+      {!askOpen && (
+        <button
+          onClick={() => setAskOpen(true)}
+          title="Ask AI about the Knowledge Base"
+          style={{
+            position: "fixed",
+            bottom: 26,
+            right: 26,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "12px 20px",
+            borderRadius: 999,
+            border: "none",
+            background: "var(--accent)",
+            color: "#fff",
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: "pointer",
+            boxShadow: "0 6px 20px rgba(13,125,130,0.34)",
+          }}
+        >
+          <IconSparkles size={18} /> Ask AI
+        </button>
+      )}
+
       {/* ── ASK AI SLIDE-OVER PANEL ── */}
       {askOpen && (
         <>
@@ -1951,8 +1969,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {(turn.result.options || []).map((o) => (
                           <button
-                            key={o.id}
-                            onClick={() => openArticleById(o.id)}
+                            key={`${o.kind}:${o.id}`}
+                            onClick={() => openSource(o)}
                             style={{
                               textAlign: "left",
                               border: "1px solid #e5e7eb",
@@ -1963,7 +1981,10 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                             }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 7, fontWeight: 600, fontSize: 13, color: "var(--accent-hover)" }}>
-                              <IconFile size={14} /> {o.title}
+                              {o.kind === "task" ? <IconList size={14} /> : <IconFile size={14} />} {o.title}
+                              <span style={{ fontSize: 10, fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                                {o.kind === "task" ? "Task" : "Page"}
+                              </span>
                             </div>
                             {o.reason && (
                               <div style={{ fontSize: 12, color: "#8a8f98", marginTop: 3, lineHeight: 1.45 }}>{o.reason}</div>
@@ -1985,8 +2006,8 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                             {turn.result.sources.map((s) => (
                               <button
-                                key={s.id}
-                                onClick={() => openArticleById(s.id)}
+                                key={`${s.kind}:${s.id}`}
+                                onClick={() => openSource(s)}
                                 title={`Open "${s.title}"`}
                                 style={{
                                   display: "inline-flex",
@@ -2002,7 +2023,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                                   cursor: "pointer",
                                 }}
                               >
-                                <IconFile size={12} /> {s.title}
+                                {s.kind === "task" ? <IconList size={12} /> : <IconFile size={12} />} {s.title}
                               </button>
                             ))}
                           </div>

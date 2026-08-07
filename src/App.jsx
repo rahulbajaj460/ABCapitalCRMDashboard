@@ -449,6 +449,10 @@ export default function App() {
             newDocSpaceId={newDocSpaceId}
             spaces={spaces}
             onDocCreated={() => { setNewDocFolderId(null); setNewDocSpaceId(null); }}
+            onOpenTask={(scope) => handleOpenTaskFromNotification({
+              link_scope: { space_id: scope.space_id, folder_id: scope.folder_id, list_id: scope.list_id },
+              task_id: scope.task_id,
+            })}
           />
         )}
         {view === "whiteboard" && activeWhiteboard && (
