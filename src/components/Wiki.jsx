@@ -11,7 +11,7 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { supabase } from "../supabase";
-import { IconTrash, IconEdit, IconClose, IconClock, IconPaperclip, IconFile } from "./icons";
+import { IconTrash, IconEdit, IconClose, IconClock, IconPaperclip, IconFile, IconSparkles } from "./icons";
 
 // Single clean theme — consistent with task folders
 const CAT_COLOR = { bg: "#f0f0ef", icon: "#6b7280" };
@@ -517,6 +517,50 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
       setActiveHeading(id);
     }
   };
+
+  // ── Ask AI (Knowledge Base assistant) ──
+  const [askOpen, setAskOpen] = useState(false);
+  const [askInput, setAskInput] = useState("");
+  const [askLoading, setAskLoading] = useState(false);
+  const [askTurns, setAskTurns] = useState([]); // [{ q, result }]
+  const askScrollRef = useRef(null);
+
+  // Open a wiki page by id from an AI result, and close the panel.
+  const openArticleById = (id) => {
+    const art = articles.find((a) => a.id === id);
+    if (art) {
+      setActiveArticle(art);
+      setSearch("");
+      setAskOpen(false);
+    }
+  };
+
+  async function runAsk(e) {
+    e?.preventDefault?.();
+    const q = askInput.trim();
+    if (!q || askLoading) return;
+    setAskLoading(true);
+    setAskInput("");
+    // Optimistically add the question; fill the result in when it arrives.
+    setAskTurns((t) => [...t, { q, result: null }]);
+    try {
+      const { data, error } = await supabase.functions.invoke("wiki-ai-search", {
+        body: { query: q },
+      });
+      const result = error ? { error: error.message || "Request failed" } : data;
+      setAskTurns((t) => t.map((turn, i) => (i === t.length - 1 ? { ...turn, result } : turn)));
+    } catch (err) {
+      setAskTurns((t) =>
+        t.map((turn, i) => (i === t.length - 1 ? { ...turn, result: { error: err.message } } : turn)),
+      );
+    } finally {
+      setAskLoading(false);
+      requestAnimationFrame(() => {
+        const el = askScrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    }
+  }
 
   const [newArticle, setNewArticle] = useState({
     title: "",
@@ -1112,6 +1156,26 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
             </span>
           </span>
           <div className="wiki-sidebar-actions">
+            <button
+              onClick={() => setAskOpen(true)}
+              title="Ask AI about the Knowledge Base"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "5px 10px",
+                borderRadius: 7,
+                border: "1px solid var(--accent)",
+                background: "var(--accent-weak)",
+                fontSize: 11,
+                cursor: "pointer",
+                color: "var(--accent-hover)",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <IconSparkles size={13} /> Ask AI
+            </button>
             {profile?.role === "admin" && (
               <button
                 onClick={() => {
@@ -1748,6 +1812,249 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
           </div>
         )}
       </div>
+
+      {/* ── ASK AI SLIDE-OVER PANEL ── */}
+      {askOpen && (
+        <>
+          <div
+            onClick={() => setAskOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(12,47,52,0.28)",
+              zIndex: 60,
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              height: "100vh",
+              width: 440,
+              maxWidth: "92vw",
+              background: "#fff",
+              boxShadow: "-8px 0 32px rgba(12,47,52,0.18)",
+              zIndex: 61,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 18px",
+                borderBottom: "1px solid #ebebeb",
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 8, color: "#1a1a1a", fontWeight: 700, fontSize: 15 }}>
+                <span style={{ color: "var(--accent)", display: "inline-flex" }}><IconSparkles size={18} /></span>
+                Ask AI
+              </span>
+              <button
+                onClick={() => setAskOpen(false)}
+                title="Close"
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 7,
+                  border: "1px solid #e0e0e0",
+                  background: "#fff",
+                  cursor: "pointer",
+                  color: "#999",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <IconClose size={15} />
+              </button>
+            </div>
+
+            {/* Conversation */}
+            <div ref={askScrollRef} style={{ flex: 1, overflowY: "auto", padding: "18px" }}>
+              {askTurns.length === 0 && !askLoading && (
+                <div style={{ color: "#8a8f98", fontSize: 13, lineHeight: 1.6, marginTop: 8 }}>
+                  <div style={{ fontWeight: 600, color: "#555", marginBottom: 8 }}>
+                    Search the Knowledge Base in plain English.
+                  </div>
+                  I scan every wiki page you can access, then answer with the details — or show you the
+                  matching page(s) to open. Try:
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {[
+                      "What's the sponsor visa cost in Dubai?",
+                      "Get me the page on visa cost for a sponsor",
+                    ].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setAskInput(s)}
+                        style={{
+                          textAlign: "left",
+                          border: "1px solid #ececec",
+                          background: "#fafaf9",
+                          borderRadius: 8,
+                          padding: "8px 12px",
+                          fontSize: 12.5,
+                          color: "#444",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {askTurns.map((turn, i) => (
+                <div key={i} style={{ marginBottom: 22 }}>
+                  {/* Question */}
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                    <div
+                      style={{
+                        background: "var(--accent)",
+                        color: "#fff",
+                        borderRadius: "12px 12px 2px 12px",
+                        padding: "8px 13px",
+                        fontSize: 13,
+                        maxWidth: "85%",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {turn.q}
+                    </div>
+                  </div>
+
+                  {/* Answer */}
+                  {turn.result === null ? (
+                    <div style={{ color: "#9ca3af", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "var(--accent)", display: "inline-flex" }}><IconSparkles size={15} /></span>
+                      Searching the Knowledge Base…
+                    </div>
+                  ) : turn.result.error ? (
+                    <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#b91c1c", borderRadius: 10, padding: "10px 13px", fontSize: 12.5, lineHeight: 1.5 }}>
+                      {turn.result.error}
+                    </div>
+                  ) : turn.result.mode === "not_found" ? (
+                    <div style={{ color: "#6b7280", fontSize: 13, lineHeight: 1.6 }}>
+                      {turn.result.message || "I couldn't find anything relevant."}
+                    </div>
+                  ) : turn.result.mode === "disambiguate" ? (
+                    <div>
+                      <div style={{ color: "#555", fontSize: 12.5, marginBottom: 10, lineHeight: 1.6 }}>
+                        A few pages could match — which one do you mean?
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {(turn.result.options || []).map((o) => (
+                          <button
+                            key={o.id}
+                            onClick={() => openArticleById(o.id)}
+                            style={{
+                              textAlign: "left",
+                              border: "1px solid #e5e7eb",
+                              background: "#fff",
+                              borderRadius: 10,
+                              padding: "10px 12px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 7, fontWeight: 600, fontSize: 13, color: "var(--accent-hover)" }}>
+                              <IconFile size={14} /> {o.title}
+                            </div>
+                            {o.reason && (
+                              <div style={{ fontSize: 12, color: "#8a8f98", marginTop: 3, lineHeight: 1.45 }}>{o.reason}</div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ color: "#1f2937", fontSize: 13.5, lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                        {turn.result.answer}
+                      </div>
+                      {(turn.result.sources || []).length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>
+                            {turn.result.sources.length > 1 ? "Sources" : "Source"}
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {turn.result.sources.map((s) => (
+                              <button
+                                key={s.id}
+                                onClick={() => openArticleById(s.id)}
+                                title={`Open "${s.title}"`}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  border: "1px solid var(--accent)",
+                                  background: "var(--accent-weak)",
+                                  color: "var(--accent-hover)",
+                                  borderRadius: 20,
+                                  padding: "4px 11px",
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <IconFile size={12} /> {s.title}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Input */}
+            <form
+              onSubmit={runAsk}
+              style={{ borderTop: "1px solid #ebebeb", padding: "12px 14px", flexShrink: 0, display: "flex", gap: 8 }}
+            >
+              <input
+                autoFocus
+                value={askInput}
+                onChange={(e) => setAskInput(e.target.value)}
+                placeholder="Ask about anything in the wiki…"
+                style={{
+                  flex: 1,
+                  border: "1px solid #e0e0e0",
+                  borderRadius: 9,
+                  padding: "10px 12px",
+                  fontSize: 13,
+                  outline: "none",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
+                onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
+              />
+              <button
+                type="submit"
+                disabled={askLoading || !askInput.trim()}
+                style={{
+                  border: "none",
+                  borderRadius: 9,
+                  padding: "0 16px",
+                  background: askLoading || !askInput.trim() ? "#e5e7eb" : "var(--accent)",
+                  color: askLoading || !askInput.trim() ? "#aaa" : "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: askLoading || !askInput.trim() ? "default" : "pointer",
+                }}
+              >
+                {askLoading ? "…" : "Ask"}
+              </button>
+            </form>
+          </div>
+        </>
+      )}
 
       {/* WIKI HISTORY MODAL */}
       {showHistoryModal &&
