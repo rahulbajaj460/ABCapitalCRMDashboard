@@ -118,7 +118,7 @@ export default function Notifications({ profile, onOpenTask }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 10px" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>Notifications</span>
             {unread > 0 && (
-              <button onClick={markAllRead} style={{ fontSize: 12, color: "#0d7d82", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+              <button onClick={markAllRead} style={{ fontSize: 12, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
                 Mark all read
               </button>
             )}
@@ -134,7 +134,7 @@ export default function Notifications({ profile, onOpenTask }) {
               onClick={() => clickItem(n)}
               style={{
                 display: "flex", gap: 10, padding: "9px 10px", borderRadius: 8, cursor: "pointer",
-                background: n.read ? "transparent" : "#e8f6f6",
+                background: n.read ? "transparent" : "var(--accent-weak)",
               }}
               onMouseEnter={(e) => { if (n.read) e.currentTarget.style.background = "#f5f5f4"; }}
               onMouseLeave={(e) => { if (n.read) e.currentTarget.style.background = "transparent"; }}
@@ -158,9 +158,9 @@ export default function Notifications({ profile, onOpenTask }) {
                   <button
                     onClick={(e) => { e.stopPropagation(); markRead(n.id); }}
                     title="Mark as read"
-                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #b3e3e1", background: "#e8f6f6", cursor: "pointer", color: "#0d7d82", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #b3e3e1", background: "var(--accent-weak)", cursor: "pointer", color: "var(--accent)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = "#cdeeee"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "#e8f6f6"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--accent-weak)"; }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   </button>

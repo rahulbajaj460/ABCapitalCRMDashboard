@@ -493,7 +493,7 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
         <div style={{ display: "flex", gap: 2, marginRight: 8 }}>
           {TOOLS.map((t) => (
             <button key={t} title={t} onClick={() => { setTool(t); if (t !== "select") setSelectedId(null); }}
-              style={{ border: tool === t ? "2px solid #12a3a0" : "1px solid #e5e7eb", background: tool === t ? "#e8f6f6" : "#fff", borderRadius: 6, padding: "5px 7px", cursor: "pointer", color: tool === t ? "#12a3a0" : "#374151", display: "flex", alignItems: "center" }}>
+              style={{ border: tool === t ? "2px solid #12a3a0" : "1px solid #e5e7eb", background: tool === t ? "var(--accent-weak)" : "#fff", borderRadius: 6, padding: "5px 7px", cursor: "pointer", color: tool === t ? "#12a3a0" : "#374151", display: "flex", alignItems: "center" }}>
               {toolIcon(t)}
             </button>
           ))}
@@ -513,7 +513,7 @@ export default function Whiteboard({ whiteboard, profile, onBack }) {
         <div style={{ display: "flex", gap: 4, alignItems: "center", marginRight: 8 }}>
           {WIDTHS.map((w) => (
             <button key={w} onClick={() => setWidth(w)} title={`${w}px`}
-              style={{ border: width === w ? "2px solid #12a3a0" : "1px solid #e5e7eb", background: width === w ? "#e8f6f6" : "#fff", borderRadius: 4, padding: "4px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
+              style={{ border: width === w ? "2px solid #12a3a0" : "1px solid #e5e7eb", background: width === w ? "var(--accent-weak)" : "#fff", borderRadius: 4, padding: "4px 6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
               <div style={{ width: Math.min(w * 2 + 4, 20), height: w, background: color, borderRadius: 99 }} />
             </button>
           ))}

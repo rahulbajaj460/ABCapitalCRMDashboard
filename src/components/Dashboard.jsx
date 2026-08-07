@@ -63,7 +63,7 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect }) {
         <div className="metrics-grid">
           <StatCard
             label="Total tasks" value={total} sub="across all spaces"
-            accent="#0d7d82" tint="#e8f6f6"
+            accent="var(--accent)" tint="var(--accent-weak)"
             icon={<path d="M4 6h16M4 12h16M4 18h10" />}
           />
           <StatCard

@@ -148,11 +148,11 @@ export default function MyTasks({ profile }) {
                               style={{
                                 background:
                                   name === profile?.full_name
-                                    ? "#e8f6f6"
+                                    ? "var(--accent-weak)"
                                     : "#f0f0ef",
                                 color:
                                   name === profile?.full_name
-                                    ? "#0d7d82"
+                                    ? "var(--accent)"
                                     : "#555",
                                 borderRadius: 20,
                                 padding: "1px 8px",

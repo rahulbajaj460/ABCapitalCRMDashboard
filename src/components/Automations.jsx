@@ -346,7 +346,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                   <button className="btn btn-sm btn-danger" onClick={() => rmCondition(c.id)} title="Remove"><IconTrash size={15} /></button>
                 </div>
               ))}
-              <button onClick={addCondition} style={{ background: "none", border: "none", color: "#0d7d82", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add condition</button>
+              <button onClick={addCondition} style={{ background: "none", border: "none", color: "var(--accent)", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add condition</button>
             </div>
 
             {/* Actions */}
@@ -374,7 +374,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                                 const list = a.params.recipients || [];
                                 const next = on ? list.filter((x) => x !== r) : [...list, r];
                                 updAction(a.id, { params: { ...a.params, recipients: next } });
-                              }} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, cursor: "pointer", border: "1px solid " + (on ? "#0d7d82" : "#d1d5db"), background: on ? "#e8f6f6" : "#fff", color: on ? "#0d7d82" : "#374151" }}>
+                              }} style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, cursor: "pointer", border: "1px solid " + (on ? "var(--accent)" : "#d1d5db"), background: on ? "var(--accent-weak)" : "#fff", color: on ? "var(--accent)" : "#374151" }}>
                                 {label}
                               </button>
                             );
@@ -391,7 +391,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                                 const list = a.params.channels || [];
                                 const next = on ? list.filter((x) => x !== ch) : [...list, ch];
                                 updAction(a.id, { params: { ...a.params, channels: next } });
-                              }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 20, cursor: "pointer", border: "1px solid " + (on ? "#0d7d82" : "#d1d5db"), background: on ? "#e8f6f6" : "#fff", color: on ? "#0d7d82" : "#374151", fontWeight: on ? 600 : 400 }}>
+                              }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 20, cursor: "pointer", border: "1px solid " + (on ? "var(--accent)" : "#d1d5db"), background: on ? "var(--accent-weak)" : "#fff", color: on ? "var(--accent)" : "#374151", fontWeight: on ? 600 : 400 }}>
                                 {label}
                               </button>
                             );
@@ -450,7 +450,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                   )}
                 </div>
               ))}
-              <button onClick={addAction} style={{ background: "none", border: "none", color: "#0d7d82", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add action</button>
+              <button onClick={addAction} style={{ background: "none", border: "none", color: "var(--accent)", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add action</button>
             </div>
 
             <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, margin: "6px 0 14px" }}>

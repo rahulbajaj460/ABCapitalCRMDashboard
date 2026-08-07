@@ -993,7 +993,7 @@ export default function Sidebar({
               fontSize: 13,
               fontWeight: 600,
               padding: "3px 10px",
-              border: "1.5px solid #0d7d82",
+              border: "1.5px solid var(--accent)",
               borderRadius: 20,
               outline: "none",
               background: "#fff",
@@ -1091,7 +1091,7 @@ export default function Sidebar({
             padding: "6px 16px",
             borderRadius: 7,
             border: "none",
-            background: value.trim() ? "#0d7d82" : "#e0e0e0",
+            background: value.trim() ? "var(--accent)" : "#e0e0e0",
             color: "#fff",
             fontSize: 12,
             fontWeight: 600,
@@ -1625,7 +1625,7 @@ export default function Sidebar({
             width: 30,
             height: 30,
             borderRadius: "50%",
-            background: profile?.avatar_color || "#0d7d82",
+            background: profile?.avatar_color || "var(--accent)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1837,7 +1837,7 @@ export default function Sidebar({
             />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
               <button onClick={() => setEditListModal(null)} style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontSize: 13 }}>Cancel</button>
-              <button onClick={saveEditList} style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "#0d7d82", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Save</button>
+              <button onClick={saveEditList} style={{ padding: "6px 16px", borderRadius: 6, border: "none", background: "var(--accent)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Save</button>
             </div>
           </div>
         </div>
@@ -1936,7 +1936,7 @@ export default function Sidebar({
                       height: 48,
                       borderRadius: 10,
                       background: editSpaceColor,
-                      border: showEditIconPicker ? "2px solid #0d7d82" : "none",
+                      border: showEditIconPicker ? "2px solid var(--accent)" : "none",
                       fontSize: 22,
                       cursor: "pointer",
                       flexShrink: 0,
@@ -1984,7 +1984,7 @@ export default function Sidebar({
                       fontWeight: 500,
                       marginTop: 2,
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = "#0d7d82")}
+                    onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
                     onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                   />
                 </div>
@@ -2228,7 +2228,7 @@ export default function Sidebar({
                 onChange={(e) => setEditFolderName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && saveEditFolder()}
                 style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = "#0d7d82")}
+                onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
                 onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
               />
             </div>
@@ -2389,7 +2389,7 @@ export default function Sidebar({
                       if (e.key === "Escape") setShowAddFolderModal(null);
                     }}
                     style={inputStyle}
-                    onFocus={(e) => (e.target.style.borderColor = "#0d7d82")}
+                    onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
                     onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                   />
                 </div>
@@ -2410,7 +2410,7 @@ export default function Sidebar({
                     value={newFolderDesc}
                     onChange={(e) => setNewFolderDesc(e.target.value)}
                     style={inputStyle}
-                    onFocus={(e) => (e.target.style.borderColor = "#0d7d82")}
+                    onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
                     onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                   />
                 </div>
@@ -2436,7 +2436,7 @@ export default function Sidebar({
                       borderRadius: 10,
                       border:
                         "1.5px solid " +
-                        (folderUseSpaceStatuses ? "#0d7d82" : "#e0e0e0"),
+                        (folderUseSpaceStatuses ? "var(--accent)" : "#e0e0e0"),
                       background: folderUseSpaceStatuses
                         ? "#eaf6f6"
                         : "#fafaf9",
@@ -2492,7 +2492,7 @@ export default function Sidebar({
                         width: 40,
                         height: 22,
                         borderRadius: 20,
-                        background: folderUseSpaceStatuses ? "#0d7d82" : "#ddd",
+                        background: folderUseSpaceStatuses ? "var(--accent)" : "#ddd",
                         position: "relative",
                         flexShrink: 0,
                         transition: "background 0.2s",
@@ -2582,7 +2582,7 @@ export default function Sidebar({
                             <span
                               style={{
                                 marginLeft: "auto",
-                                color: "#0d7d82",
+                                color: "var(--accent)",
                                 fontSize: 12,
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -2618,8 +2618,8 @@ export default function Sidebar({
                       <span
                         style={{
                           fontSize: 11,
-                          background: "#e8f6f6",
-                          color: "#0d7d82",
+                          background: "var(--accent-weak)",
+                          color: "var(--accent)",
                           borderRadius: 20,
                           padding: "2px 10px",
                           fontWeight: 600,
@@ -2829,7 +2829,7 @@ export default function Sidebar({
                           height: 52,
                           borderRadius: 12,
                           background: newSpace.color,
-                          border: showIconPicker ? "2px solid #0d7d82" : "none",
+                          border: showIconPicker ? "2px solid var(--accent)" : "none",
                           fontSize: 24,
                           cursor: "pointer",
                           flexShrink: 0,
@@ -2890,7 +2890,7 @@ export default function Sidebar({
                           marginTop: 2,
                         }}
                         onFocus={(e) => {
-                          e.target.style.borderColor = "#0d7d82";
+                          e.target.style.borderColor = "var(--accent)";
                           setShowIconPicker(false);
                         }}
                         onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
@@ -3060,7 +3060,7 @@ export default function Sidebar({
                         lineHeight: 1.6,
                       }}
                       onFocus={(e) => {
-                        e.target.style.borderColor = "#0d7d82";
+                        e.target.style.borderColor = "var(--accent)";
                         setShowIconPicker(false);
                       }}
                       onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
@@ -3255,7 +3255,7 @@ export default function Sidebar({
                         {selectedTemplate === t.key && (
                           <span
                             style={{
-                              color: "#0d7d82",
+                              color: "var(--accent)",
                               fontSize: 14,
                               flexShrink: 0,
                               display: "inline-flex",
@@ -3302,8 +3302,8 @@ export default function Sidebar({
                       <span
                         style={{
                           fontSize: 11,
-                          background: "#e8f6f6",
-                          color: "#0d7d82",
+                          background: "var(--accent-weak)",
+                          color: "var(--accent)",
                           borderRadius: 20,
                           padding: "2px 10px",
                           fontWeight: 600,
@@ -3561,9 +3561,9 @@ export default function Sidebar({
                             style={{
                               padding: "4px 12px",
                               borderRadius: 6,
-                              border: "1px solid #0d7d82",
-                              background: "#e8f6f6",
-                              color: "#0d7d82",
+                              border: "1px solid var(--accent)",
+                              background: "var(--accent-weak)",
+                              color: "var(--accent)",
                               fontSize: 11,
                               cursor: "pointer",
                               fontWeight: 500,
@@ -3645,9 +3645,9 @@ export default function Sidebar({
                             style={{
                               padding: "4px 12px",
                               borderRadius: 6,
-                              border: "1px solid #0d7d82",
-                              background: "#e8f6f6",
-                              color: "#0d7d82",
+                              border: "1px solid var(--accent)",
+                              background: "var(--accent-weak)",
+                              color: "var(--accent)",
                               fontSize: 11,
                               cursor: "pointer",
                               fontWeight: 500,
@@ -3699,7 +3699,7 @@ export default function Sidebar({
                           </div>
                           <button
                             onClick={() => restoreList(l.id)}
-                            style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #0d7d82", background: "#e8f6f6", color: "#0d7d82", fontSize: 11, cursor: "pointer", fontWeight: 500, flexShrink: 0 }}
+                            style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid var(--accent)", background: "var(--accent-weak)", color: "var(--accent)", fontSize: 11, cursor: "pointer", fontWeight: 500, flexShrink: 0 }}
                           >
                             ↺ Restore
                           </button>
@@ -3767,9 +3767,9 @@ export default function Sidebar({
                             style={{
                               padding: "4px 12px",
                               borderRadius: 6,
-                              border: "1px solid #0d7d82",
-                              background: "#e8f6f6",
-                              color: "#0d7d82",
+                              border: "1px solid var(--accent)",
+                              background: "var(--accent-weak)",
+                              color: "var(--accent)",
                               fontSize: 11,
                               cursor: "pointer",
                               fontWeight: 500,

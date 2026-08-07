@@ -15,7 +15,7 @@ import { IconTrash, IconEdit, IconClose } from "./icons";
 
 // Single clean theme — consistent with task folders
 const CAT_COLOR = { bg: "#f0f0ef", icon: "#6b7280" };
-const CAT_COLOR_ACTIVE = { bg: "#e8f6f6", icon: "#0d7d82" };
+const CAT_COLOR_ACTIVE = { bg: "var(--accent-weak)", icon: "var(--accent)" };
 
 function getCatColor() {
   return CAT_COLOR;
@@ -150,7 +150,7 @@ function ToolbarBtn({ onClick, active, title, children }) {
         borderRadius: 5,
         border: "none",
         background: active ? "#cdeeee" : "transparent",
-        color: active ? "#0d7d82" : "#555",
+        color: active ? "var(--accent)" : "#555",
         cursor: "pointer",
         fontSize: 13,
         fontWeight: active ? 600 : 400,
@@ -527,7 +527,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
         span.style.cssText = "vertical-align:middle;margin-left:2px;";
         link.appendChild(img);
         link.appendChild(span);
-        link.style.cssText = `display:inline-flex!important;align-items:center!important;gap:4px!important;background:#f0f0ef!important;border-radius:4px!important;padding:2px 8px 2px 5px!important;text-decoration:none!important;color:#0d7d82!important;font-size:13px!important;font-weight:500!important;cursor:pointer!important;border:none!important;vertical-align:middle!important;max-width:320px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;`;
+        link.style.cssText = `display:inline-flex!important;align-items:center!important;gap:4px!important;background:#f0f0ef!important;border-radius:4px!important;padding:2px 8px 2px 5px!important;text-decoration:none!important;color:var(--accent)!important;font-size:13px!important;font-weight:500!important;cursor:pointer!important;border:none!important;vertical-align:middle!important;max-width:320px!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;`;
       });
     };
     const t1 = setTimeout(transform, 100);
@@ -1002,7 +1002,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
             <div style="font-size:13px;font-weight:500;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${domain}</div>
             <div style="font-size:11px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;">${link.href}</div>
           </div>
-          <a href="${link.href}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#0d7d82;white-space:nowrap;text-decoration:none;background:#e8f6f6;padding:3px 8px;border-radius:4px;flex-shrink:0;pointer-events:all;">Open ↗</a>
+          <a href="${link.href}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--accent);white-space:nowrap;text-decoration:none;background:var(--accent-weak);padding:3px 8px;border-radius:4px;flex-shrink:0;pointer-events:all;">Open ↗</a>
         `;
       } catch {}
     }
@@ -1111,7 +1111,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 padding: "5px 10px",
                 borderRadius: 7,
                 border: "none",
-                background: "#0d7d82",
+                background: "var(--accent)",
                 color: "#fff",
                 fontSize: 11,
                 cursor: "pointer",
@@ -1203,7 +1203,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                     }}
                   >
                     <IconPage
-                      color={activeArticle?.id === a.id ? "#0d7d82" : "#9ca3af"}
+                      color={activeArticle?.id === a.id ? "var(--accent)" : "#9ca3af"}
                     />
                     <span className="wiki-page-name">{a.title}</span>
                   </div>
@@ -1581,7 +1581,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   width: 72,
                   height: 72,
                   borderRadius: 20,
-                  background: "linear-gradient(135deg, #e8f6f6, #f0f0ff)",
+                  background: "linear-gradient(135deg, var(--accent-weak), #f0f0ff)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -1618,7 +1618,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                   padding: "10px 24px",
                   borderRadius: 8,
                   border: "none",
-                  background: "#0d7d82",
+                  background: "var(--accent)",
                   color: "#fff",
                   fontSize: 13,
                   cursor: "pointer",
@@ -2089,9 +2089,9 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                             style={{
                               padding: "4px 12px",
                               borderRadius: 6,
-                              border: "1px solid #0d7d82",
-                              background: "#e8f6f6",
-                              color: "#0d7d82",
+                              border: "1px solid var(--accent)",
+                              background: "var(--accent-weak)",
+                              color: "var(--accent)",
                               fontSize: 11,
                               cursor: "pointer",
                               fontWeight: 500,
@@ -2175,9 +2175,9 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                             style={{
                               padding: "4px 12px",
                               borderRadius: 6,
-                              border: "1px solid #0d7d82",
-                              background: "#e8f6f6",
-                              color: "#0d7d82",
+                              border: "1px solid var(--accent)",
+                              background: "var(--accent-weak)",
+                              color: "var(--accent)",
                               fontSize: 11,
                               cursor: "pointer",
                               fontWeight: 500,
@@ -2674,7 +2674,7 @@ function HistoryEntry({
             width: 26,
             height: 26,
             borderRadius: "50%",
-            background: "#0d7d82",
+            background: "var(--accent)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2807,9 +2807,9 @@ function HistoryEntry({
           style={{
             padding: "4px 12px",
             borderRadius: 6,
-            border: "1px solid #0d7d82",
-            background: "#e8f6f6",
-            color: "#0d7d82",
+            border: "1px solid var(--accent)",
+            background: "var(--accent-weak)",
+            color: "var(--accent)",
             fontSize: 11,
             cursor: "pointer",
             fontWeight: 500,
@@ -3020,8 +3020,8 @@ function HistoryEntry({
 // ── Article tree item ──
 function ArticleTreeItem({ article, active, onSelect, depth }) {
   const indent = 8 + depth * 12;
-  const pageColor = active ? "#0d7d82" : "#b0b7c3";
-  const pageBg = active ? "#e8f6f6" : "transparent";
+  const pageColor = active ? "var(--accent)" : "#b0b7c3";
+  const pageBg = active ? "var(--accent-weak)" : "transparent";
 
   return (
     <div
@@ -3039,7 +3039,7 @@ function ArticleTreeItem({ article, active, onSelect, depth }) {
       <span
         className="wiki-page-name"
         style={{
-          color: active ? "#0d7d82" : "#555",
+          color: active ? "var(--accent)" : "#555",
           fontWeight: active ? 600 : 400,
         }}
       >
