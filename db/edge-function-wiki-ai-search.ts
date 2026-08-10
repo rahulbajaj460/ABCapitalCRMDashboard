@@ -37,10 +37,16 @@ const cors = {
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-// One-line cost/quality lever. Currently on Sonnet for lower per-query cost;
-// swap to "claude-opus-5" for maximum reasoning quality, or "claude-haiku-4-5"
-// for the cheapest/fastest option.
-const MODEL = "claude-sonnet-5";
+// Cost/quality levers:
+// - ROUTING_MODEL (Stage A) just PICKS which pages/tasks are relevant from the
+//   full catalog — cheap work, so Haiku. Its big, stable catalog prefix is also
+//   prompt-cached, so repeated questions within ~5 min pay ~1/10th on Stage A.
+// - ANSWER_MODEL (Stage B) writes the actual answer from the chosen items —
+//   quality matters, so Sonnet (swap to "claude-opus-5" for the best answers).
+// NOTE: Haiku 4.5 does NOT support the `effort` param — only pass effort to
+// Sonnet/Opus, never to the routing model.
+const ROUTING_MODEL = "claude-haiku-4-5";
+const ANSWER_MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 // Which space holds the task-based knowledge (matched by name).
@@ -65,13 +71,29 @@ function stripHtml(html: string): string {
 }
 
 // Minimal Anthropic Messages call with structured (JSON-schema) output.
+// When cacheSystem is true, the system prompt is sent as a cacheable prefix so
+// a stable, repeated prefix (the Stage A catalog) is billed at ~0.1x on reuse.
+// effort is optional because Haiku 4.5 rejects it — omit it for the router.
 async function askClaude(
   apiKey: string,
-  system: string,
-  userText: string,
-  schema: Record<string, unknown>,
-  maxTokens = 2000,
+  opts: {
+    model: string;
+    system: string;
+    userText: string;
+    schema: Record<string, unknown>;
+    maxTokens?: number;
+    effort?: "low" | "medium" | "high";
+    cacheSystem?: boolean;
+  },
 ): Promise<Record<string, unknown>> {
+  const { model, system, userText, schema, maxTokens = 2000, effort, cacheSystem = false } = opts;
+
+  const systemField = cacheSystem
+    ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }]
+    : system;
+  const outputConfig: Record<string, unknown> = { format: { type: "json_schema", schema } };
+  if (effort) outputConfig.effort = effort;
+
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: {
@@ -80,11 +102,11 @@ async function askClaude(
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       max_tokens: maxTokens,
-      system,
+      system: systemField,
       messages: [{ role: "user", content: userText }],
-      output_config: { effort: "medium", format: { type: "json_schema", schema } },
+      output_config: outputConfig,
     }),
   });
 
@@ -245,12 +267,16 @@ Deno.serve(async (req) => {
       required: ["mode", "item_keys", "options"],
     };
 
-    const routing = await askClaude(
-      apiKey,
-      stageASystem,
-      `User question: ${query}\n\nItems:\n${catalog}`,
-      stageASchema,
-    );
+    // Catalog goes into the (cached) system prefix; only the question varies.
+    const routing = await askClaude(apiKey, {
+      model: ROUTING_MODEL,
+      system: `${stageASystem}\n\nItems the user can see:\n${catalog}`,
+      userText: `User question: ${query}`,
+      schema: stageASchema,
+      maxTokens: 1500,
+      cacheSystem: true,
+      // no effort — Haiku 4.5 does not support the effort parameter
+    });
 
     // Shape an item into the client-facing source/option object.
     const toSource = (it: Item) =>
@@ -303,13 +329,14 @@ Deno.serve(async (req) => {
       required: ["answer", "source_keys"],
     };
 
-    const result = await askClaude(
-      apiKey,
-      stageBSystem,
-      `User question: ${query}\n\n${docs}`,
-      stageBSchema,
-      3000,
-    );
+    const result = await askClaude(apiKey, {
+      model: ANSWER_MODEL,
+      system: stageBSystem,
+      userText: `User question: ${query}\n\n${docs}`,
+      schema: stageBSchema,
+      maxTokens: 3000,
+      effort: "medium",
+    });
 
     const usedKeys = ((result.source_keys as string[]) || []).filter((k) => items.has(k));
     const sources = (usedKeys.length ? usedKeys : chosenKeys).map((k) => toSource(items.get(k)!));
