@@ -519,13 +519,34 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
   };
 
   // ── Ask AI (Knowledge Base assistant) ──
-  const [askOpen, setAskOpen] = useState(false);
+  // Persisted to sessionStorage so the panel + chat survive navigating to a
+  // task (which unmounts Wiki) and coming back — no lost history, no surprise
+  // "cleared chat".
+  const [askOpen, setAskOpen] = useState(() => sessionStorage.getItem("abc_wiki_ask_open") === "1");
   const [askInput, setAskInput] = useState("");
   const [askLoading, setAskLoading] = useState(false);
-  const [askTurns, setAskTurns] = useState([]); // [{ q, result }]
+  const [askTurns, setAskTurns] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem("abc_wiki_ask_turns") || "[]");
+    } catch {
+      return [];
+    }
+  });
   const askScrollRef = useRef(null);
 
-  // Open a source from an AI result, and close the panel.
+  useEffect(() => {
+    sessionStorage.setItem("abc_wiki_ask_open", askOpen ? "1" : "0");
+  }, [askOpen]);
+  useEffect(() => {
+    // Don't persist an in-flight turn (result === null) — it can't resolve
+    // after a remount and would show a stuck "Searching…".
+    const settled = askTurns.filter((t) => t.result !== null);
+    sessionStorage.setItem("abc_wiki_ask_turns", JSON.stringify(settled));
+  }, [askTurns]);
+
+  // Open a source from an AI result. Pages open in-place with the panel left
+  // OPEN (article shifts clear of it); tasks navigate to the Tasks view, which
+  // unmounts Wiki — the persisted panel reopens with its history on return.
   const openSource = (src) => {
     if (src.kind === "task") {
       onOpenTask?.({
@@ -534,14 +555,12 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
         list_id: src.list_id,
         task_id: src.id,
       });
-      setAskOpen(false);
       return;
     }
     const art = articles.find((a) => a.id === src.id);
     if (art) {
       setActiveArticle(art);
       setSearch("");
-      setAskOpen(false);
     }
   };
 
@@ -1433,7 +1452,10 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
       />
 
       {/* ── MAIN CONTENT ── */}
-      <div className="wiki-main">
+      <div
+        className="wiki-main"
+        style={{ marginRight: askOpen ? "min(440px, 92vw)" : 0, transition: "margin-right 0.2s ease" }}
+      >
         {activeArticle ? (
           <div
             style={{ display: "flex", flexDirection: "column", height: "100%" }}
@@ -1831,18 +1853,9 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
         </button>
       )}
 
-      {/* ── ASK AI SLIDE-OVER PANEL ── */}
+      {/* ── ASK AI SLIDE-OVER PANEL (non-blocking side drawer) ── */}
       {askOpen && (
         <>
-          <div
-            onClick={() => setAskOpen(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(12,47,52,0.28)",
-              zIndex: 60,
-            }}
-          />
           <div
             style={{
               position: "fixed",
@@ -1873,6 +1886,25 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
                 <span style={{ color: "var(--accent)", display: "inline-flex" }}><IconSparkles size={18} /></span>
                 Ask AI
               </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {askTurns.length > 0 && (
+                  <button
+                    onClick={() => setAskTurns([])}
+                    title="Start a new chat"
+                    style={{
+                      border: "1px solid #e0e0e0",
+                      background: "#fff",
+                      borderRadius: 7,
+                      padding: "6px 11px",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: "#666",
+                      cursor: "pointer",
+                    }}
+                  >
+                    New chat
+                  </button>
+                )}
               <button
                 onClick={() => setAskOpen(false)}
                 title="Close"
@@ -1891,6 +1923,7 @@ export default function Wiki({ profile, openArticleId, newDocFolderId, newDocSpa
               >
                 <IconClose size={15} />
               </button>
+              </div>
             </div>
 
             {/* Conversation */}
