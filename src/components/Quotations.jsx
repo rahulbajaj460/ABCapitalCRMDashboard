@@ -58,7 +58,8 @@ function docName(ctx, fields, extra = "") {
 }
 
 // Build the docxtemplater context from one record (form values or an Excel row).
-function buildContext(record, fields, seq, usdRate) {
+// extraRows = ad-hoc line items added at generation time: [{ label, amount, remarks }].
+function buildContext(record, fields, seq, usdRate, extraRows = []) {
   const rate = Number(usdRate) > 0 ? Number(usdRate) : DEFAULT_USD_RATE;
   const ctx = { ...record }; // pass every raw key through (Excel headers included)
 
@@ -69,21 +70,37 @@ function buildContext(record, fields, seq, usdRate) {
     if (f.type === "date") ctx[f.key] = fmtDate(ctx[f.key]);
   }
 
-  // fee line items + totals (AED and USD)
+  // fee line items + totals (AED and USD). The {{#items}} loop renders one row
+  // per item: {{ label }} | {{ amount }} | {{ amount_usd }} | {{ remarks }}.
   const items = [];
   let total = 0;
+  const pushItem = (label, n, remarks) => {
+    const usd = n / rate;
+    items.push({ label, amount: fmtMoney(n), amount_usd: fmtMoney(usd), remarks: remarks || "" });
+    total += n;
+    return usd;
+  };
+
   for (const f of fields) {
     if (!f.fee) continue;
     const raw = ctx[f.key];
-    if (raw === "" || raw === null || raw === undefined) continue;
+    if (raw === "" || raw === null || raw === undefined) continue; // blank → omit row
     const n = Number(raw);
-    if (!Number.isFinite(n) || n === 0) continue;
-    const usd = n / rate;
+    if (!Number.isFinite(n)) continue; // non-numeric → omit (0 is kept, shows 0 / $0)
+    const usd = pushItem(f.label, n, f.remarks);
     ctx[f.key] = fmtMoney(n);            // display the AED amount formatted
     ctx[`${f.key}_usd`] = fmtMoney(usd); // e.g. {{ license_fee_usd }}
-    items.push({ label: f.label, amount: fmtMoney(n), amount_usd: fmtMoney(usd) });
-    total += n;
   }
+
+  // ad-hoc rows added in the form (label + amount + remarks)
+  for (const r of extraRows || []) {
+    const label = (r.label || "").trim();
+    if (!label) continue;
+    const n = Number(r.amount);
+    if (!Number.isFinite(n)) continue;
+    pushItem(label, n, r.remarks);
+  }
+
   ctx.items = items;
   ctx.total = fmtMoney(total);              // {{ total }}
   ctx.total_usd = fmtMoney(total / rate);   // {{ total_usd }}
@@ -219,6 +236,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
   const [tplId, setTplId] = useState(templates[0]?.id || "");
   const [mode, setMode] = useState("form");
   const [values, setValues] = useState({});
+  const [extraRows, setExtraRows] = useState([]); // ad-hoc [{ label, amount, remarks }]
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const excelRef = useRef(null);
@@ -229,8 +247,13 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
   const pickTemplate = (id) => {
     setTplId(id);
     setValues({});
+    setExtraRows([]);
     setStatus(null);
   };
+
+  const addExtraRow = () => setExtraRows((r) => [...r, { label: "", amount: "", remarks: "" }]);
+  const setExtraRow = (i, patch) => setExtraRows((r) => r.map((row, j) => (j === i ? { ...row, ...patch } : row)));
+  const removeExtraRow = (i) => setExtraRows((r) => r.filter((_, j) => j !== i));
 
   if (templates.length === 0) {
     return (
@@ -247,7 +270,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
     setStatus(null);
     try {
       const buf = await downloadTemplateBuffer(tpl);
-      const ctx = buildContext(values, fields, 1, tpl.usd_rate);
+      const ctx = buildContext(values, fields, 1, tpl.usd_rate, extraRows);
       const blob = renderDocx(buf, ctx);
       const fname = docName(ctx, fields);
       saveAs(blob, fname);
@@ -348,6 +371,42 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
               </div>
             ))}
           </div>
+
+          {/* Additional (ad-hoc) rows */}
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#555" }}>
+                Additional rows <span style={{ fontWeight: 400, color: "#999" }}>(optional — appear in the fee table &amp; totals)</span>
+              </label>
+              <button onClick={addExtraRow} className="btn btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <IconPlus size={13} /> Add row
+              </button>
+            </div>
+            {extraRows.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 1.2fr 28px", gap: 8, fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".04em" }}>
+                  <span>Description</span><span>Amount (AED)</span><span>Remarks</span><span />
+                </div>
+                {extraRows.map((r, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 1.2fr 28px", gap: 8, alignItems: "center" }}>
+                    <input value={r.label} placeholder="e.g. Bank Account opening Assistance"
+                      onChange={(e) => setExtraRow(i, { label: e.target.value })}
+                      style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }} />
+                    <input type="number" value={r.amount} placeholder="0"
+                      onChange={(e) => setExtraRow(i, { amount: e.target.value })}
+                      style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }} />
+                    <input value={r.remarks} placeholder="e.g. One Time"
+                      onChange={(e) => setExtraRow(i, { remarks: e.target.value })}
+                      style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }} />
+                    <button onClick={() => removeExtraRow(i)} title="Remove" style={{ border: "none", background: "none", cursor: "pointer", color: "#c4c9c9" }}>
+                      <IconTrash size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={generateOne}
             disabled={busy}
@@ -478,7 +537,7 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
   const fileRef = useRef(null);
 
   const setField = (i, patch) => setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
-  const addField = () => setFields((fs) => [...fs, { key: "", label: "", type: "text", fee: false }]);
+  const addField = () => setFields((fs) => [...fs, { key: "", label: "", type: "text", fee: false, remarks: "" }]);
   const removeField = (i) => setFields((fs) => fs.filter((_, j) => j !== i));
 
   async function save() {
@@ -543,7 +602,7 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 620, width: "100%", maxHeight: "88vh", overflowY: "auto", padding: 24 }}>
+      <div className="modal" style={{ maxWidth: 760, width: "100%", maxHeight: "88vh", overflowY: "auto", padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{isNew ? "New template" : "Edit template"}</h2>
           <button onClick={onClose} className="btn btn-sm" style={{ display: "inline-flex" }}><IconClose size={15} /></button>
@@ -589,11 +648,11 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
           </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1.3fr 0.9fr 0.7fr 30px", gap: 8, fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".04em" }}>
-            <span>Label</span><span>Key (placeholder)</span><span>Type</span><span>Fee?</span><span />
+          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 0.75fr 0.5fr 1.1fr 28px", gap: 8, fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".04em" }}>
+            <span>Label</span><span>Key (placeholder)</span><span>Type</span><span>Fee?</span><span>Remarks</span><span />
           </div>
           {fields.map((f, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.3fr 1.3fr 0.9fr 0.7fr 30px", gap: 8, alignItems: "center" }}>
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 0.75fr 0.5fr 1.1fr 28px", gap: 8, alignItems: "center" }}>
               <input value={f.label} placeholder="Business name"
                 onChange={(e) => setField(i, { label: e.target.value, key: f.key || slugify(e.target.value) })}
                 style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }} />
@@ -608,6 +667,10 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
               </select>
               <input type="checkbox" checked={!!f.fee} onChange={(e) => setField(i, { fee: e.target.checked })}
                 title="Include in the fee table and Total" style={{ justifySelf: "center", width: 16, height: 16 }} />
+              <input value={f.remarks || ""} placeholder={f.fee ? "e.g. Renewed Every Year" : ""} disabled={!f.fee}
+                title={f.fee ? "Shown in the fee table's Remarks column" : "Remarks apply to fee rows"}
+                onChange={(e) => setField(i, { remarks: e.target.value })}
+                style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5, background: f.fee ? "#fff" : "#f5f5f4" }} />
               <button onClick={() => removeField(i)} title="Remove" style={{ border: "none", background: "none", cursor: "pointer", color: "#c4c9c9" }}>
                 <IconTrash size={15} />
               </button>
@@ -637,12 +700,16 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
               <div style={groupLabel}>Always available</div>
               <div style={row}>{autoKeys.map(chip)}</div>
 
-              <div style={{ fontSize: 11.5, color: "#888", lineHeight: 1.6, borderTop: "1px solid #ececec", paddingTop: 8 }}>
-                Fee table (put in one table row):{" "}
-                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{#items}} {{label}} | {{amount}} | {{amount_usd}} {{/items}}"}</code>
+              <div style={{ fontSize: 11.5, color: "#888", lineHeight: 1.7, borderTop: "1px solid #ececec", paddingTop: 8 }}>
+                <strong style={{ color: "#666" }}>For a table that supports extra rows,</strong> make the fee table a single
+                repeating row (put this in one table row of your .docx):
                 <br />
-                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total }}"}</code> sums all fee fields in AED;{" "}
-                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total_usd }}"}</code> is the USD total.
+                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{#items}} {{label}} | {{amount}} | {{amount_usd}} | {{remarks}} {{/items}}"}</code>
+                <br />
+                That one row auto-repeats for every fee <em>and</em> any additional rows added at generation time.
+                <br />
+                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total }}"}</code> (AED) and{" "}
+                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total_usd }}"}</code> include those extra rows too.
               </div>
             </div>
           );
