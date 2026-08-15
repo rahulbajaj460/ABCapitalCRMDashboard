@@ -8,6 +8,7 @@ import { supabase } from "../supabase";
 import { IconPlus, IconTrash, IconUpload, IconFile, IconClose } from "./icons";
 
 // ── helpers ──
+// Normalize a key on SAVE (collapses runs, trims ends).
 const slugify = (s) =>
   (s || "")
     .toString()
@@ -16,9 +17,24 @@ const slugify = (s) =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
+// Sanitize a key WHILE TYPING — keeps underscores you're mid-typing (does not
+// strip trailing "_"), so "license_fee" can be typed left to right.
+const keyLive = (s) =>
+  (s || "").toString().toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+
+const DEFAULT_USD_RATE = 3.6725; // AED per 1 USD (UAE dirham peg)
+
 const fmtMoney = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(v ?? "");
+};
+
+const fmtDate = (v) => {
+  if (v === "" || v === null || v === undefined) return "";
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime())
+    ? String(v)
+    : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const today = () =>
@@ -27,16 +43,18 @@ const today = () =>
 const safeName = (s) => (s || "quotation").replace(/[^A-Za-z0-9._ -]/g, "").trim() || "quotation";
 
 // Build the docxtemplater context from one record (form values or an Excel row).
-function buildContext(record, fields, seq) {
+function buildContext(record, fields, seq, usdRate) {
+  const rate = Number(usdRate) > 0 ? Number(usdRate) : DEFAULT_USD_RATE;
   const ctx = { ...record }; // pass every raw key through (Excel headers included)
 
   // map declared fields by key, falling back to label-keyed values (Excel)
   for (const f of fields) {
     if (ctx[f.key] === undefined && record[f.label] !== undefined) ctx[f.key] = record[f.label];
     if (ctx[f.key] === undefined) ctx[f.key] = "";
+    if (f.type === "date") ctx[f.key] = fmtDate(ctx[f.key]);
   }
 
-  // fee line items + total
+  // fee line items + totals (AED and USD)
   const items = [];
   let total = 0;
   for (const f of fields) {
@@ -44,12 +62,17 @@ function buildContext(record, fields, seq) {
     const raw = ctx[f.key];
     if (raw === "" || raw === null || raw === undefined) continue;
     const n = Number(raw);
-    if (n === 0) continue;
-    items.push({ label: f.label, amount: fmtMoney(raw) });
-    if (Number.isFinite(n)) total += n;
+    if (!Number.isFinite(n) || n === 0) continue;
+    const usd = n / rate;
+    ctx[f.key] = fmtMoney(n);            // display the AED amount formatted
+    ctx[`${f.key}_usd`] = fmtMoney(usd); // e.g. {{ license_fee_usd }}
+    items.push({ label: f.label, amount: fmtMoney(n), amount_usd: fmtMoney(usd) });
+    total += n;
   }
   ctx.items = items;
-  ctx.total = fmtMoney(total);
+  ctx.total = fmtMoney(total);              // {{ total }}
+  ctx.total_usd = fmtMoney(total / rate);   // {{ total_usd }}
+  ctx.usd_rate = String(rate);
   if (!ctx.date) ctx.date = today();
   if (!ctx.quotation_no)
     ctx.quotation_no = `QT-${new Date().getFullYear()}-${String(seq).padStart(3, "0")}`;
@@ -209,7 +232,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
     setStatus(null);
     try {
       const buf = await downloadTemplateBuffer(tpl);
-      const ctx = buildContext(values, fields, 1);
+      const ctx = buildContext(values, fields, 1, tpl.usd_rate);
       const blob = renderDocx(buf, ctx);
       const fname = `${safeName(ctx.business_name)} - ${safeName(ctx.quotation_no)}.docx`;
       saveAs(blob, fname);
@@ -227,7 +250,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
     setStatus(null);
     try {
       const buf = await downloadTemplateBuffer(tpl);
-      const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: "" }).filter((r) =>
         Object.values(r).some((v) => String(v).trim() !== ""),
@@ -236,7 +259,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
 
       const zip = new JSZip();
       rows.forEach((row, i) => {
-        const ctx = buildContext(row, fields, i + 1);
+        const ctx = buildContext(row, fields, i + 1, tpl.usd_rate);
         const blob = renderDocx(buf, ctx);
         zip.file(`${safeName(ctx.business_name)} - ${safeName(ctx.quotation_no)}.docx`, blob);
       });
@@ -302,7 +325,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
                   {f.label}{f.fee ? " (AED)" : ""}
                 </label>
                 <input
-                  type={f.type === "number" ? "number" : "text"}
+                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
                   value={values[f.key] ?? ""}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                   style={{ width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
@@ -424,6 +447,7 @@ function TemplatesTab({ templates, profile, onChanged }) {
 function TemplateEditor({ template, profile, onClose, onSaved }) {
   const isNew = !template.id;
   const [freezone, setFreezone] = useState(template.freezone || "");
+  const [usdRate, setUsdRate] = useState(template.usd_rate ?? DEFAULT_USD_RATE);
   const [fields, setFields] = useState(
     template.fields?.length
       ? template.fields
@@ -467,6 +491,7 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
       const payload = {
         freezone: freezone.trim(),
         fields: cleanFields,
+        usd_rate: Number(usdRate) > 0 ? Number(usdRate) : DEFAULT_USD_RATE,
         storage_path,
         file_name,
         updated_by: profile?.full_name || "Unknown",
@@ -495,10 +520,11 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
     onSaved();
   }
 
-  const placeholders = [
-    ...fields.filter((f) => f.key).map((f) => `{{ ${f.key} }}`),
-    "{{ total }}", "{{ date }}", "{{ quotation_no }}",
-  ];
+  const fieldKeys = [...new Set(fields.filter((f) => f.key).map((f) => f.key))];
+  const feeKeys = [...new Set(fields.filter((f) => f.key && f.fee).map((f) => f.key))];
+  // total_usd/date/quotation_no are always provided; don't repeat any that are
+  // already declared fields.
+  const autoKeys = ["total", "total_usd", "date", "quotation_no"].filter((k) => !fieldKeys.includes(k));
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -523,6 +549,23 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
           <span style={{ fontSize: 12.5, color: "#666" }}>{file?.name || template.file_name || "No file chosen"}</span>
         </div>
 
+        {/* USD rate */}
+        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 5 }}>
+          AED → USD rate
+        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <input
+            type="number"
+            step="0.0001"
+            value={usdRate}
+            onChange={(e) => setUsdRate(e.target.value)}
+            style={{ width: 140, padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
+          />
+          <span style={{ fontSize: 12, color: "#888" }}>
+            AED per 1 USD. Each fee's USD value = amount ÷ this rate (e.g. 3.6725).
+          </span>
+        </div>
+
         {/* Fields */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: "#555" }}>Fields / columns</label>
@@ -540,12 +583,13 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
                 onChange={(e) => setField(i, { label: e.target.value, key: f.key || slugify(e.target.value) })}
                 style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }} />
               <input value={f.key} placeholder="business_name"
-                onChange={(e) => setField(i, { key: slugify(e.target.value) })}
+                onChange={(e) => setField(i, { key: keyLive(e.target.value) })}
                 style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5, fontFamily: "monospace" }} />
               <select value={f.type} onChange={(e) => setField(i, { type: e.target.value })}
                 style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }}>
                 <option value="text">text</option>
                 <option value="number">number</option>
+                <option value="date">date</option>
               </select>
               <input type="checkbox" checked={!!f.fee} onChange={(e) => setField(i, { fee: e.target.checked })}
                 title="Include in the fee table and Total" style={{ justifySelf: "center", width: 16, height: 16 }} />
@@ -557,19 +601,37 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
         </div>
 
         {/* Placeholders helper */}
-        <div style={{ background: "#fafaf9", border: "1px solid #ececec", borderRadius: 8, padding: "10px 12px", marginBottom: 18 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>
-            Placeholders to use in your .docx
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-            {placeholders.map((p) => (
-              <code key={p} style={{ fontSize: 11.5, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 5, padding: "2px 7px", color: "#444" }}>{p}</code>
-            ))}
-          </div>
-          <div style={{ fontSize: 11.5, color: "#888", lineHeight: 1.5 }}>
-            Fee table (put in a table row): <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{#items}} {{label}} | {{amount}} {{/items}}"}</code>
-          </div>
-        </div>
+        {(() => {
+          const chip = (p) => (
+            <code key={p} style={{ fontSize: 11.5, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 5, padding: "2px 7px", color: "#444" }}>{`{{ ${p} }}`}</code>
+          );
+          const groupLabel = { fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 5 };
+          const row = { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 };
+          return (
+            <div style={{ background: "#fafaf9", border: "1px solid #ececec", borderRadius: 8, padding: "12px 14px", marginBottom: 18 }}>
+              <div style={groupLabel}>Your fields</div>
+              <div style={row}>{fieldKeys.length ? fieldKeys.map(chip) : <span style={{ fontSize: 11.5, color: "#bbb" }}>—</span>}</div>
+
+              {feeKeys.length > 0 && (
+                <>
+                  <div style={groupLabel}>USD (auto-converted from each fee)</div>
+                  <div style={row}>{feeKeys.map((k) => chip(`${k}_usd`))}</div>
+                </>
+              )}
+
+              <div style={groupLabel}>Always available</div>
+              <div style={row}>{autoKeys.map(chip)}</div>
+
+              <div style={{ fontSize: 11.5, color: "#888", lineHeight: 1.6, borderTop: "1px solid #ececec", paddingTop: 8 }}>
+                Fee table (put in one table row):{" "}
+                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{#items}} {{label}} | {{amount}} | {{amount_usd}} {{/items}}"}</code>
+                <br />
+                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total }}"}</code> sums all fee fields in AED;{" "}
+                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total_usd }}"}</code> is the USD total.
+              </div>
+            </div>
+          );
+        })()}
 
         {err && (
           <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#b91c1c", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, marginBottom: 14 }}>
