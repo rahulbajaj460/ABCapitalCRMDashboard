@@ -42,6 +42,21 @@ const today = () =>
 
 const safeName = (s) => (s || "quotation").replace(/[^A-Za-z0-9._ -]/g, "").trim() || "quotation";
 
+// Filename stamp: YYYY-MM-DD_HHMMSS at generation time.
+const stamp = () => {
+  const d = new Date();
+  const p = (x) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+};
+
+// Output filename = <business activity / name> + date-time stamp.
+function docName(ctx, fields, extra = "") {
+  const firstText = fields.find((f) => !f.fee && f.type !== "date" && ctx[f.key]);
+  const name =
+    ctx.business_activity || ctx.business_name || (firstText ? ctx[firstText.key] : "") || "quotation";
+  return `${safeName(name)} - ${stamp()}${extra}.docx`;
+}
+
 // Build the docxtemplater context from one record (form values or an Excel row).
 function buildContext(record, fields, seq, usdRate) {
   const rate = Number(usdRate) > 0 ? Number(usdRate) : DEFAULT_USD_RATE;
@@ -234,7 +249,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
       const buf = await downloadTemplateBuffer(tpl);
       const ctx = buildContext(values, fields, 1, tpl.usd_rate);
       const blob = renderDocx(buf, ctx);
-      const fname = `${safeName(ctx.business_name)} - ${safeName(ctx.quotation_no)}.docx`;
+      const fname = docName(ctx, fields);
       saveAs(blob, fname);
       setStatus({ ok: true, msg: `Generated ${fname}` });
     } catch (e) {
@@ -261,7 +276,7 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
       rows.forEach((row, i) => {
         const ctx = buildContext(row, fields, i + 1, tpl.usd_rate);
         const blob = renderDocx(buf, ctx);
-        zip.file(`${safeName(ctx.business_name)} - ${safeName(ctx.quotation_no)}.docx`, blob);
+        zip.file(docName(ctx, fields, ` (${i + 1})`), blob);
       });
       const out = await zip.generateAsync({ type: "blob" });
       saveAs(out, `${safeName(tpl.freezone)} - quotations.zip`);
