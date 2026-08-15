@@ -1190,6 +1190,7 @@ export default function Sidebar({
         {[
           { key: "dashboard", Icon: IconDashboard, label: "Dashboard" },
           { key: "wiki", Icon: IconWiki, label: "Wiki" },
+          { key: "quotations", Icon: IconFile, label: "Quotations" },
           { key: "mytasks", Icon: IconMyTasks, label: "My Tasks" },
           ...(profile?.role === "admin" ? [{ key: "settings", Icon: IconSettings, label: "Settings" }] : []),
         ].map((item) => (

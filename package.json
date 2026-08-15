@@ -23,10 +23,15 @@
     "@tiptap/pm": "^3.24.0",
     "@tiptap/react": "^3.24.0",
     "@tiptap/starter-kit": "^3.24.0",
+    "docxtemplater": "^3.69.3",
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1",
     "papaparse": "^5.5.3",
+    "pizzip": "^3.2.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.15.1"
+    "react-router-dom": "^7.15.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

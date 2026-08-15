@@ -1,0 +1,597 @@
+import { useState, useEffect, useRef } from "react";
+import PizZip from "pizzip";
+import Docxtemplater from "docxtemplater";
+import * as XLSX from "xlsx";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
+import { supabase } from "../supabase";
+import { IconPlus, IconTrash, IconUpload, IconFile, IconClose } from "./icons";
+
+// ── helpers ──
+const slugify = (s) =>
+  (s || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+const fmtMoney = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(v ?? "");
+};
+
+const today = () =>
+  new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+const safeName = (s) => (s || "quotation").replace(/[^A-Za-z0-9._ -]/g, "").trim() || "quotation";
+
+// Build the docxtemplater context from one record (form values or an Excel row).
+function buildContext(record, fields, seq) {
+  const ctx = { ...record }; // pass every raw key through (Excel headers included)
+
+  // map declared fields by key, falling back to label-keyed values (Excel)
+  for (const f of fields) {
+    if (ctx[f.key] === undefined && record[f.label] !== undefined) ctx[f.key] = record[f.label];
+    if (ctx[f.key] === undefined) ctx[f.key] = "";
+  }
+
+  // fee line items + total
+  const items = [];
+  let total = 0;
+  for (const f of fields) {
+    if (!f.fee) continue;
+    const raw = ctx[f.key];
+    if (raw === "" || raw === null || raw === undefined) continue;
+    const n = Number(raw);
+    if (n === 0) continue;
+    items.push({ label: f.label, amount: fmtMoney(raw) });
+    if (Number.isFinite(n)) total += n;
+  }
+  ctx.items = items;
+  ctx.total = fmtMoney(total);
+  if (!ctx.date) ctx.date = today();
+  if (!ctx.quotation_no)
+    ctx.quotation_no = `QT-${new Date().getFullYear()}-${String(seq).padStart(3, "0")}`;
+  return ctx;
+}
+
+// Trimming parser so both {{ key }} and {{key}} work (docxtemplater doesn't
+// trim tag whitespace by default), with dotted-path + scope-climbing support.
+const trimParser = (tag) => {
+  const path = tag.trim().split(".");
+  return {
+    get(scope, context) {
+      const head = path[0];
+      let base = scope;
+      if (base == null || base[head] === undefined) {
+        const list = (context && context.scopeList) || [];
+        for (let i = list.length - 1; i >= 0; i--) {
+          if (list[i] != null && list[i][head] !== undefined) {
+            base = list[i];
+            break;
+          }
+        }
+      }
+      return path.reduce((o, k) => (o == null ? undefined : o[k]), base);
+    },
+  };
+};
+
+// Fill a template (ArrayBuffer) with a context → docx Blob.
+function renderDocx(arrayBuffer, data) {
+  const zip = new PizZip(arrayBuffer);
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    delimiters: { start: "{{", end: "}}" },
+    parser: trimParser,
+    nullGetter: () => "",
+  });
+  doc.render(data);
+  return doc.getZip().generate({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+}
+
+export default function Quotations({ profile }) {
+  const isAdmin = profile?.role === "admin";
+  const [tab, setTab] = useState("generate");
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  async function fetchTemplates() {
+    setLoading(true);
+    const { data } = await supabase
+      .from("quotation_templates")
+      .select("*")
+      .is("deleted_at", null)
+      .order("freezone");
+    setTemplates(data || []);
+    setLoading(false);
+  }
+
+  async function downloadTemplateBuffer(tpl) {
+    const { data, error } = await supabase.storage
+      .from("quotation-templates")
+      .download(tpl.storage_path);
+    if (error || !data) throw new Error(error?.message || "Could not download the template file.");
+    return await data.arrayBuffer();
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#f7f8fa" }}>
+      {/* Header */}
+      <div style={{ padding: "22px 40px 0", background: "#fff", borderBottom: "1px solid #ebebeb" }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1a1a1a", margin: 0, letterSpacing: "-0.3px" }}>
+          Quotations
+        </h1>
+        <div style={{ fontSize: 13, color: "#999", marginTop: 4 }}>
+          Generate quotation documents from your freezone templates.
+        </div>
+        <div style={{ display: "flex", gap: 22, marginTop: 16 }}>
+          {[
+            { key: "generate", label: "Generate" },
+            ...(isAdmin ? [{ key: "templates", label: "Templates" }] : []),
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              style={{
+                border: "none",
+                background: "none",
+                padding: "0 0 12px",
+                fontSize: 14,
+                fontWeight: tab === t.key ? 700 : 500,
+                color: tab === t.key ? "var(--accent)" : "#888",
+                borderBottom: `2px solid ${tab === t.key ? "var(--accent)" : "transparent"}`,
+                cursor: "pointer",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "28px 40px" }}>
+        {loading ? (
+          <div style={{ color: "#9ca3af", fontSize: 13 }}>Loading…</div>
+        ) : tab === "generate" ? (
+          <GenerateTab templates={templates} downloadTemplateBuffer={downloadTemplateBuffer} />
+        ) : (
+          <TemplatesTab
+            templates={templates}
+            profile={profile}
+            onChanged={fetchTemplates}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────── Generate ───────────────────────────
+function GenerateTab({ templates, downloadTemplateBuffer }) {
+  const [tplId, setTplId] = useState(templates[0]?.id || "");
+  const [mode, setMode] = useState("form");
+  const [values, setValues] = useState({});
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const excelRef = useRef(null);
+
+  const tpl = templates.find((t) => t.id === tplId);
+  const fields = tpl?.fields || [];
+
+  const pickTemplate = (id) => {
+    setTplId(id);
+    setValues({});
+    setStatus(null);
+  };
+
+  if (templates.length === 0) {
+    return (
+      <div style={{ color: "#6b7280", fontSize: 13, maxWidth: 520, lineHeight: 1.6 }}>
+        No freezone templates yet. An admin can add one under the <strong>Templates</strong> tab —
+        upload a Word (.docx) template and define its fields.
+      </div>
+    );
+  }
+
+  async function generateOne() {
+    if (!tpl) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const buf = await downloadTemplateBuffer(tpl);
+      const ctx = buildContext(values, fields, 1);
+      const blob = renderDocx(buf, ctx);
+      const fname = `${safeName(ctx.business_name)} - ${safeName(ctx.quotation_no)}.docx`;
+      saveAs(blob, fname);
+      setStatus({ ok: true, msg: `Generated ${fname}` });
+    } catch (e) {
+      setStatus({ ok: false, msg: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generateFromExcel(file) {
+    if (!tpl || !file) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const buf = await downloadTemplateBuffer(tpl);
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: "" }).filter((r) =>
+        Object.values(r).some((v) => String(v).trim() !== ""),
+      );
+      if (rows.length === 0) throw new Error("The sheet has no data rows.");
+
+      const zip = new JSZip();
+      rows.forEach((row, i) => {
+        const ctx = buildContext(row, fields, i + 1);
+        const blob = renderDocx(buf, ctx);
+        zip.file(`${safeName(ctx.business_name)} - ${safeName(ctx.quotation_no)}.docx`, blob);
+      });
+      const out = await zip.generateAsync({ type: "blob" });
+      saveAs(out, `${safeName(tpl.freezone)} - quotations.zip`);
+      setStatus({ ok: true, msg: `Generated ${rows.length} document${rows.length > 1 ? "s" : ""} (zip).` });
+    } catch (e) {
+      setStatus({ ok: false, msg: e.message });
+    } finally {
+      setBusy(false);
+      if (excelRef.current) excelRef.current.value = "";
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      {/* Freezone picker */}
+      <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#555", marginBottom: 6 }}>
+        Freezone template
+      </label>
+      <select
+        value={tplId}
+        onChange={(e) => pickTemplate(e.target.value)}
+        style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, background: "#fff", marginBottom: 20 }}
+      >
+        {templates.map((t) => (
+          <option key={t.id} value={t.id}>{t.freezone}</option>
+        ))}
+      </select>
+
+      {/* Mode toggle */}
+      <div style={{ display: "inline-flex", gap: 2, background: "#eceeef", borderRadius: 8, padding: 3, marginBottom: 20 }}>
+        {[
+          { key: "form", label: "Fill a form" },
+          { key: "excel", label: "Upload Excel (batch)" },
+        ].map((m) => (
+          <button
+            key={m.key}
+            onClick={() => setMode(m.key)}
+            style={{
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 14px",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: mode === m.key ? "#fff" : "transparent",
+              color: mode === m.key ? "var(--accent)" : "#777",
+              boxShadow: mode === m.key ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+            }}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "form" ? (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {fields.map((f) => (
+              <div key={f.key}>
+                <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 4 }}>
+                  {f.label}{f.fee ? " (AED)" : ""}
+                </label>
+                <input
+                  type={f.type === "number" ? "number" : "text"}
+                  value={values[f.key] ?? ""}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={generateOne}
+            disabled={busy}
+            style={{
+              marginTop: 20,
+              padding: "10px 22px",
+              borderRadius: 8,
+              border: "none",
+              background: busy ? "#e5e7eb" : "var(--accent)",
+              color: busy ? "#aaa" : "#fff",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: busy ? "default" : "pointer",
+            }}
+          >
+            {busy ? "Generating…" : "Generate .docx"}
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 13, color: "#666", lineHeight: 1.6, marginBottom: 14 }}>
+            Upload an Excel sheet for <strong>{tpl?.freezone}</strong>. Column headers should match the
+            field keys below; each row becomes one document (downloaded as a zip).
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+            {fields.map((f) => (
+              <code key={f.key} style={{ fontSize: 11.5, background: "#f1f1f0", borderRadius: 5, padding: "3px 8px", color: "#444" }}>
+                {f.key}
+              </code>
+            ))}
+          </div>
+          <input ref={excelRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
+            onChange={(e) => e.target.files?.[0] && generateFromExcel(e.target.files[0])} />
+          <button
+            onClick={() => excelRef.current?.click()}
+            disabled={busy}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              padding: "10px 22px", borderRadius: 8, border: "none",
+              background: busy ? "#e5e7eb" : "var(--accent)", color: busy ? "#aaa" : "#fff",
+              fontSize: 13, fontWeight: 600, cursor: busy ? "default" : "pointer",
+            }}
+          >
+            <IconUpload size={15} /> {busy ? "Generating…" : "Upload Excel"}
+          </button>
+        </div>
+      )}
+
+      {status && (
+        <div style={{
+          marginTop: 18, fontSize: 12.5, borderRadius: 8, padding: "10px 13px", lineHeight: 1.5,
+          background: status.ok ? "#dcfce7" : "#fef2f2",
+          border: `1px solid ${status.ok ? "#86efac" : "#fca5a5"}`,
+          color: status.ok ? "#15803d" : "#b91c1c",
+        }}>
+          {status.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────── Templates (admin) ───────────────────────────
+function TemplatesTab({ templates, profile, onChanged }) {
+  const [editing, setEditing] = useState(null); // template object or {} for new
+
+  return (
+    <div style={{ maxWidth: 760 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: "#666" }}>
+          One Word template per freezone. Placeholders use <code style={{ background: "#f1f1f0", padding: "1px 5px", borderRadius: 4 }}>{"{{ key }}"}</code> syntax.
+        </div>
+        <button
+          onClick={() => setEditing({})}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+        >
+          <IconPlus size={14} /> New template
+        </button>
+      </div>
+
+      {templates.length === 0 ? (
+        <div style={{ color: "#9ca3af", fontSize: 13 }}>No templates yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {templates.map((t) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "#fff", border: "1px solid #ececec", borderRadius: 10 }}>
+              <IconFile size={18} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{t.freezone}</div>
+                <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                  {(t.fields || []).length} field{(t.fields || []).length === 1 ? "" : "s"} · {t.file_name || "template.docx"}
+                </div>
+              </div>
+              <button onClick={() => setEditing(t)} className="btn btn-sm">Edit</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <TemplateEditor
+          template={editing}
+          profile={profile}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); onChanged(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TemplateEditor({ template, profile, onClose, onSaved }) {
+  const isNew = !template.id;
+  const [freezone, setFreezone] = useState(template.freezone || "");
+  const [fields, setFields] = useState(
+    template.fields?.length
+      ? template.fields
+      : [
+          { key: "business_name", label: "Business name", type: "text", fee: false },
+          { key: "client_name", label: "Client name", type: "text", fee: false },
+          { key: "license_fee", label: "License fee", type: "number", fee: true },
+        ],
+  );
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const fileRef = useRef(null);
+
+  const setField = (i, patch) => setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  const addField = () => setFields((fs) => [...fs, { key: "", label: "", type: "text", fee: false }]);
+  const removeField = (i) => setFields((fs) => fs.filter((_, j) => j !== i));
+
+  async function save() {
+    setErr(null);
+    if (!freezone.trim()) return setErr("Freezone name is required.");
+    if (isNew && !file) return setErr("Upload a .docx template.");
+    const cleanFields = fields
+      .map((f) => ({ ...f, key: f.key.trim() || slugify(f.label), label: f.label.trim() }))
+      .filter((f) => f.key && f.label);
+    if (cleanFields.length === 0) return setErr("Add at least one field.");
+
+    setBusy(true);
+    try {
+      let storage_path = template.storage_path;
+      let file_name = template.file_name;
+      if (file) {
+        storage_path = `${slugify(freezone)}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+        file_name = file.name;
+        const { error: upErr } = await supabase.storage
+          .from("quotation-templates")
+          .upload(storage_path, file, { upsert: false });
+        if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
+      }
+
+      const payload = {
+        freezone: freezone.trim(),
+        fields: cleanFields,
+        storage_path,
+        file_name,
+        updated_by: profile?.full_name || "Unknown",
+        updated_at: new Date().toISOString(),
+      };
+
+      const res = isNew
+        ? await supabase.from("quotation_templates").insert(payload)
+        : await supabase.from("quotation_templates").update(payload).eq("id", template.id);
+      if (res.error) throw new Error(res.error.message);
+      onSaved();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function del() {
+    if (!confirm(`Delete the "${freezone}" template?`)) return;
+    setBusy(true);
+    await supabase
+      .from("quotation_templates")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", template.id);
+    onSaved();
+  }
+
+  const placeholders = [
+    ...fields.filter((f) => f.key).map((f) => `{{ ${f.key} }}`),
+    "{{ total }}", "{{ date }}", "{{ quotation_no }}",
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 620, width: "100%", maxHeight: "88vh", overflowY: "auto", padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{isNew ? "New template" : "Edit template"}</h2>
+          <button onClick={onClose} className="btn btn-sm" style={{ display: "inline-flex" }}><IconClose size={15} /></button>
+        </div>
+
+        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 5 }}>Freezone name</label>
+        <input value={freezone} onChange={(e) => setFreezone(e.target.value)} placeholder="e.g. DMCC, IFZA, Meydan"
+          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, marginBottom: 18 }} />
+
+        {/* Template file */}
+        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 5 }}>Word template (.docx)</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <input ref={fileRef} type="file" accept=".docx" style={{ display: "none" }}
+            onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          <button onClick={() => fileRef.current?.click()} className="btn btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <IconUpload size={14} /> {file ? "Change file" : (isNew ? "Choose .docx" : "Replace .docx")}
+          </button>
+          <span style={{ fontSize: 12.5, color: "#666" }}>{file?.name || template.file_name || "No file chosen"}</span>
+        </div>
+
+        {/* Fields */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#555" }}>Fields / columns</label>
+          <button onClick={addField} className="btn btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <IconPlus size={13} /> Add field
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1.3fr 0.9fr 0.7fr 30px", gap: 8, fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".04em" }}>
+            <span>Label</span><span>Key (placeholder)</span><span>Type</span><span>Fee?</span><span />
+          </div>
+          {fields.map((f, i) => (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.3fr 1.3fr 0.9fr 0.7fr 30px", gap: 8, alignItems: "center" }}>
+              <input value={f.label} placeholder="Business name"
+                onChange={(e) => setField(i, { label: e.target.value, key: f.key || slugify(e.target.value) })}
+                style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }} />
+              <input value={f.key} placeholder="business_name"
+                onChange={(e) => setField(i, { key: slugify(e.target.value) })}
+                style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5, fontFamily: "monospace" }} />
+              <select value={f.type} onChange={(e) => setField(i, { type: e.target.value })}
+                style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }}>
+                <option value="text">text</option>
+                <option value="number">number</option>
+              </select>
+              <input type="checkbox" checked={!!f.fee} onChange={(e) => setField(i, { fee: e.target.checked })}
+                title="Include in the fee table and Total" style={{ justifySelf: "center", width: 16, height: 16 }} />
+              <button onClick={() => removeField(i)} title="Remove" style={{ border: "none", background: "none", cursor: "pointer", color: "#c4c9c9" }}>
+                <IconTrash size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Placeholders helper */}
+        <div style={{ background: "#fafaf9", border: "1px solid #ececec", borderRadius: 8, padding: "10px 12px", marginBottom: 18 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>
+            Placeholders to use in your .docx
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+            {placeholders.map((p) => (
+              <code key={p} style={{ fontSize: 11.5, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 5, padding: "2px 7px", color: "#444" }}>{p}</code>
+            ))}
+          </div>
+          <div style={{ fontSize: 11.5, color: "#888", lineHeight: 1.5 }}>
+            Fee table (put in a table row): <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{#items}} {{label}} | {{amount}} {{/items}}"}</code>
+          </div>
+        </div>
+
+        {err && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#b91c1c", borderRadius: 8, padding: "9px 12px", fontSize: 12.5, marginBottom: 14 }}>
+            {err}
+          </div>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {!isNew ? (
+            <button onClick={del} disabled={busy} className="btn btn-sm btn-danger" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <IconTrash size={14} /> Delete
+            </button>
+          ) : <span />}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={onClose} className="btn btn-sm">Cancel</button>
+            <button onClick={save} disabled={busy}
+              style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: busy ? "#e5e7eb" : "var(--accent)", color: busy ? "#aaa" : "#fff", fontSize: 13, fontWeight: 600, cursor: busy ? "default" : "pointer" }}>
+              {busy ? "Saving…" : "Save template"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
