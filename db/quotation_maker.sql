@@ -9,12 +9,16 @@ create table if not exists quotation_templates (
   freezone     text not null,
   storage_path text not null,               -- path in the quotation-templates bucket
   file_name    text,                        -- original .docx name (for display)
-  fields       jsonb not null default '[]', -- [{ key, label, type: 'text'|'number', fee: bool }]
+  fields       jsonb not null default '[]', -- [{ key, label, type: 'text'|'number'|'date', fee: bool }]
+  usd_rate     numeric default 3.6725,      -- AED per 1 USD, for auto USD conversion
   updated_by   text,
   updated_at   timestamptz default now(),
   created_at   timestamptz default now(),
   deleted_at   timestamptz
 );
+
+-- Add usd_rate to tables created before this column existed.
+alter table quotation_templates add column if not exists usd_rate numeric default 3.6725;
 
 alter table quotation_templates enable row level security;
 
