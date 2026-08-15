@@ -8,6 +8,7 @@ import WhiteboardView from "./components/Whiteboard";
 import Login from "./components/Login";
 import Settings from "./components/Settings";
 import MyTasks from "./components/MyTasks";
+import Quotations from "./components/Quotations";
 import "./App.css";
 
 export default function App() {
@@ -463,6 +464,7 @@ export default function App() {
           />
         )}
         {view === "mytasks" && <MyTasks profile={profile} />}
+        {view === "quotations" && <Quotations profile={profile} />}
         {view === "settings" && profile?.role === "admin" && (
           <Settings currentUser={user} profile={profile} spaces={spaces} onAccessChanged={() => fetchAccessRules(profile)} />
         )}
