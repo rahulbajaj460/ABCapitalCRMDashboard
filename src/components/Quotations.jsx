@@ -24,6 +24,15 @@ const keyLive = (s) =>
 
 const DEFAULT_USD_RATE = 3.6725; // AED per 1 USD (UAE dirham peg)
 
+// Where a generated quotation is filed as a CRM task, and the dropdown field
+// that records which freezone it was. Change these names if the space/folder/
+// list are renamed.
+const CRM_TARGET = { space: "Delivery", folder: "Quotation", list: "Quotations by CRM" };
+const FREEZONE_FIELD = "Free Zone";
+
+const esc = (s) =>
+  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
 const fmtMoney = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(v ?? "");
@@ -150,6 +159,91 @@ function renderDocx(arrayBuffer, data) {
   });
 }
 
+// ── CRM task creation ──
+// Readable fee breakdown stored on the task's description.
+function buildTaskDescription(ctx, tpl) {
+  const rows = (ctx.items || [])
+    .map(
+      (it) =>
+        `<tr><td>${esc(it.label)}</td><td>${esc(it.amount)}</td><td>$ ${esc(it.amount_usd)}</td><td>${esc(it.remarks || "")}</td></tr>`,
+    )
+    .join("");
+  return (
+    `<p><strong>Freezone:</strong> ${esc(tpl.freezone)}</p>` +
+    `<p><strong>Date:</strong> ${esc(ctx.date)}</p>` +
+    `<table><tr><th>Particulars</th><th>AED</th><th>USD</th><th>Remarks</th></tr>${rows}` +
+    `<tr><td><strong>Total</strong></td><td><strong>${esc(ctx.total)}</strong></td><td><strong>$ ${esc(ctx.total_usd)}</strong></td><td></td></tr></table>`
+  );
+}
+
+// First status for a list (falls back to folder, then space, then "To Do").
+async function firstStatus(space_id, folder_id, list_id) {
+  const pick = async (q) => {
+    const { data } = await q.order("status_order").limit(1);
+    return data && data[0] ? data[0].name : null;
+  };
+  return (
+    (await pick(supabase.from("space_statuses").select("name").eq("list_id", list_id))) ||
+    (await pick(supabase.from("space_statuses").select("name").eq("folder_id", folder_id).is("list_id", null))) ||
+    (await pick(supabase.from("space_statuses").select("name").eq("space_id", space_id).is("folder_id", null).is("list_id", null))) ||
+    "To Do"
+  );
+}
+
+// File a generated quotation as a task in Delivery ▸ Quotation ▸ Quotations by
+// CRM, tagged with the Free Zone dropdown. Best-effort: callers catch errors so
+// a failure here never blocks the .docx download.
+async function createCrmTask({ ctx, tpl, templates, profile }) {
+  const findOne = async (table, filters) => {
+    let q = supabase.from(table).select("*").is("deleted_at", null);
+    for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
+    const { data } = await q.limit(1).maybeSingle();
+    return data;
+  };
+  const space = await findOne("spaces", { name: CRM_TARGET.space });
+  if (!space) throw new Error(`space "${CRM_TARGET.space}" not found`);
+  const folder = await findOne("folders", { name: CRM_TARGET.folder, space_id: space.id });
+  if (!folder) throw new Error(`folder "${CRM_TARGET.folder}" not found`);
+  const list = await findOne("lists", { name: CRM_TARGET.list, folder_id: folder.id });
+  if (!list) throw new Error(`list "${CRM_TARGET.list}" not found`);
+
+  // Free Zone dropdown — reuse an existing one anywhere in the space, else make
+  // it list-scoped, seeded with the freezone names of all templates.
+  const { data: existing } = await supabase
+    .from("space_fields").select("*").eq("space_id", space.id).eq("field_name", FREEZONE_FIELD);
+  let field =
+    (existing || []).find((f) => f.list_id === list.id) ||
+    (existing || []).find((f) => !f.list_id && !f.folder_id) ||
+    (existing || [])[0];
+  const allFreezones = [...new Set((templates || []).map((t) => t.freezone).filter(Boolean))];
+  if (!field) {
+    const { data, error } = await supabase.from("space_fields").insert({
+      space_id: space.id, folder_id: null, list_id: list.id,
+      field_name: FREEZONE_FIELD, field_type: "dropdown", field_order: 999,
+      field_options: allFreezones.length ? allFreezones : [tpl.freezone],
+    }).select().single();
+    if (error) throw new Error("Free Zone field: " + error.message);
+    field = data;
+  } else if (!(field.field_options || []).includes(tpl.freezone)) {
+    await supabase.from("space_fields")
+      .update({ field_options: [...(field.field_options || []), tpl.freezone] })
+      .eq("id", field.id);
+  }
+
+  const status = await firstStatus(space.id, folder.id, list.id);
+  const { data: task, error } = await supabase.from("tasks").insert({
+    title: ctx.business_activity || "Quotation",
+    description: buildTaskDescription(ctx, tpl),
+    space_id: space.id, folder_id: folder.id, list_id: list.id,
+    status, priority: "Medium", assignee: "", assignees: [],
+    updated_by: profile?.full_name || "Unknown", updated_at: new Date().toISOString(),
+  }).select().single();
+  if (error) throw new Error("task: " + error.message);
+
+  await supabase.from("task_field_values").insert({ task_id: task.id, field_id: field.id, value: tpl.freezone });
+  return task;
+}
+
 export default function Quotations({ profile }) {
   const isAdmin = profile?.role === "admin";
   const [tab, setTab] = useState("generate");
@@ -218,7 +312,7 @@ export default function Quotations({ profile }) {
         {loading ? (
           <div style={{ color: "#9ca3af", fontSize: 13 }}>Loading…</div>
         ) : tab === "generate" ? (
-          <GenerateTab templates={templates} downloadTemplateBuffer={downloadTemplateBuffer} />
+          <GenerateTab templates={templates} downloadTemplateBuffer={downloadTemplateBuffer} profile={profile} />
         ) : (
           <TemplatesTab
             templates={templates}
@@ -232,11 +326,12 @@ export default function Quotations({ profile }) {
 }
 
 // ─────────────────────────── Generate ───────────────────────────
-function GenerateTab({ templates, downloadTemplateBuffer }) {
+function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
   const [tplId, setTplId] = useState(templates[0]?.id || "");
   const [mode, setMode] = useState("form");
   const [values, setValues] = useState({});
   const [extraRows, setExtraRows] = useState([]); // ad-hoc [{ label, amount, remarks }]
+  const [makeTask, setMakeTask] = useState(true); // also file a CRM task
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const excelRef = useRef(null);
@@ -274,7 +369,17 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
       const blob = renderDocx(buf, ctx);
       const fname = docName(ctx, fields);
       saveAs(blob, fname);
-      setStatus({ ok: true, msg: `Generated ${fname}` });
+
+      let crmMsg = "";
+      if (makeTask) {
+        try {
+          await createCrmTask({ ctx, tpl, templates, profile });
+          crmMsg = ` · Task created in ${CRM_TARGET.list}.`;
+        } catch (e) {
+          crmMsg = ` · (CRM task not created: ${e.message})`;
+        }
+      }
+      setStatus({ ok: true, msg: `Generated ${fname}${crmMsg}` });
     } catch (e) {
       setStatus({ ok: false, msg: e.message });
     } finally {
@@ -407,11 +512,15 @@ function GenerateTab({ templates, downloadTemplateBuffer }) {
             )}
           </div>
 
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, fontSize: 13, color: "#555", cursor: "pointer" }}>
+            <input type="checkbox" checked={makeTask} onChange={(e) => setMakeTask(e.target.checked)} style={{ width: 15, height: 15 }} />
+            Also create a task in <strong>{CRM_TARGET.list}</strong> (named by Business Activity, tagged with Free Zone)
+          </label>
           <button
             onClick={generateOne}
             disabled={busy}
             style={{
-              marginTop: 20,
+              marginTop: 14,
               padding: "10px 22px",
               borderRadius: 8,
               border: "none",
