@@ -181,12 +181,12 @@ async function firstStatus(space_id, folder_id, list_id) {
 // the same name anywhere in the space. Cached within one task creation.
 async function ensureField(space, list, name, type, options, order, cache) {
   if (cache.has(name)) return cache.get(name);
+  // Must be scoped to THIS list, so it shows in the list's Columns menu
+  // (which only lists fields whose list_id === the active list). A same-named
+  // field at space/folder scope is NOT reused — we create a list-scoped one.
   const { data: existing } = await supabase
-    .from("space_fields").select("*").eq("space_id", space.id).eq("field_name", name);
-  let field =
-    (existing || []).find((f) => f.list_id === list.id) ||
-    (existing || []).find((f) => !f.list_id && !f.folder_id) ||
-    (existing || [])[0];
+    .from("space_fields").select("*").eq("space_id", space.id).eq("list_id", list.id).eq("field_name", name);
+  let field = (existing || [])[0];
   if (!field) {
     const { data, error } = await supabase.from("space_fields").insert({
       space_id: space.id, folder_id: null, list_id: list.id,
