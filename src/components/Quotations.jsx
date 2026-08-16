@@ -30,6 +30,10 @@ const DEFAULT_USD_RATE = 3.6725; // AED per 1 USD (UAE dirham peg)
 const CRM_TARGET = { space: "Delivery", folder: "Quotation", list: "Quotations by CRM" };
 const FREEZONE_FIELD = "Free Zone";
 
+// Freezone label for the CRM tag: drop a trailing "Template" so "IFZA Template"
+// becomes "IFZA".
+const cleanFreezone = (s) => (String(s || "").replace(/\s*template\s*$/i, "").trim() || String(s || "").trim());
+
 const fmtMoney = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(v ?? "");
@@ -223,12 +227,18 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate }) {
   if (!list) throw new Error(`list "${CRM_TARGET.list}" not found`);
 
   const cache = new Map();
-  const allFreezones = [...new Set((templates || []).map((t) => t.freezone).filter(Boolean))];
+  // Clean, de-duplicated freezone names from all templates (e.g. "IFZA").
+  const freeZoneName = cleanFreezone(tpl.freezone);
+  const freeZoneOptions = [...new Set((templates || []).map((t) => cleanFreezone(t.freezone)).filter(Boolean))];
+  const options = freeZoneOptions.length ? freeZoneOptions : [freeZoneName];
 
   // Fields we'll set: Free Zone (dropdown) + one number field per fee (AED) +
   // Total (AED). Build the (field, value) list first, then insert the task.
-  const freeZone = await ensureField(space, list, FREEZONE_FIELD, "dropdown", allFreezones.length ? allFreezones : [tpl.freezone], 1, cache);
-  const values = [{ field_id: freeZone.id, value: tpl.freezone }];
+  const freeZone = await ensureField(space, list, FREEZONE_FIELD, "dropdown", options, 1, cache);
+  // Keep the dropdown's options as the clean template set (drops any stale
+  // "… Template" entries and stays editable via the field-options editor).
+  await supabase.from("space_fields").update({ field_options: options }).eq("id", freeZone.id);
+  const values = [{ field_id: freeZone.id, value: freeZoneName }];
 
   // Quotation date (ISO yyyy-mm-dd so it renders as a real date)
   const dateField = await ensureField(space, list, "Quotation Date", "date", null, 2, cache);
