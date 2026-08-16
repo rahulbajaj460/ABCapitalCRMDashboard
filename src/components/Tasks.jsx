@@ -4143,6 +4143,10 @@ export default function Tasks({
                   date_closed: "Date Closed",
                   date_updated_manual: "Date Updated",
                   ...Object.fromEntries(allSpaceFields.map((f) => [`field_${f.id}`, f.field_name])),
+                  // Current scope's fields (incl. list-scoped) — these aren't in
+                  // activeSpace.space_fields, so without this they'd render as
+                  // the raw "field_<id>" key.
+                  ...Object.fromEntries(fieldList.map((f) => [`field_${f.id}`, f.field_name])),
                 };
                 // Only keep columnOrder entries valid in the current scope
                 // (built-in columns + this scope's own custom fields) so

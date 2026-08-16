@@ -208,7 +208,7 @@ async function ensureField(space, list, name, type, options, order, cache) {
 // CRM. Instead of a description blob, each fee's AED value becomes a number
 // custom field (USD is skipped), plus a Free Zone dropdown and Total (AED).
 // Best-effort: callers catch errors so a failure never blocks the download.
-async function createCrmTask({ ctx, tpl, templates, profile }) {
+async function createCrmTask({ ctx, tpl, templates, profile, quotationDate }) {
   const findOne = async (table, filters) => {
     let q = supabase.from(table).select("*").is("deleted_at", null);
     for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
@@ -229,6 +229,10 @@ async function createCrmTask({ ctx, tpl, templates, profile }) {
   // Total (AED). Build the (field, value) list first, then insert the task.
   const freeZone = await ensureField(space, list, FREEZONE_FIELD, "dropdown", allFreezones.length ? allFreezones : [tpl.freezone], 1, cache);
   const values = [{ field_id: freeZone.id, value: tpl.freezone }];
+
+  // Quotation date (ISO yyyy-mm-dd so it renders as a real date)
+  const dateField = await ensureField(space, list, "Quotation Date", "date", null, 2, cache);
+  values.push({ field_id: dateField.id, value: quotationDate || new Date().toISOString().slice(0, 10) });
 
   let order = 100;
   for (const it of ctx.items || []) {
@@ -381,7 +385,9 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
       let crmMsg = "";
       if (makeTask) {
         try {
-          await createCrmTask({ ctx, tpl, templates, profile });
+          const dateField = fields.find((f) => f.type === "date");
+          const quotationDate = (dateField && values[dateField.key]) || new Date().toISOString().slice(0, 10);
+          await createCrmTask({ ctx, tpl, templates, profile, quotationDate });
           crmMsg = ` · Task created in ${CRM_TARGET.list}.`;
         } catch (e) {
           crmMsg = ` · (CRM task not created: ${e.message})`;
