@@ -30,9 +30,6 @@ const DEFAULT_USD_RATE = 3.6725; // AED per 1 USD (UAE dirham peg)
 const CRM_TARGET = { space: "Delivery", folder: "Quotation", list: "Quotations by CRM" };
 const FREEZONE_FIELD = "Free Zone";
 
-const esc = (s) =>
-  String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
 const fmtMoney = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(v ?? "");
@@ -85,7 +82,8 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
   let total = 0;
   const pushItem = (label, n, remarks) => {
     const usd = n / rate;
-    items.push({ label, amount: fmtMoney(n), amount_usd: fmtMoney(usd), remarks: remarks || "" });
+    // amount_num keeps the raw AED number for CRM number fields
+    items.push({ label, amount: fmtMoney(n), amount_usd: fmtMoney(usd), amount_num: n, remarks: remarks || "" });
     total += n;
     return usd;
   };
@@ -113,6 +111,7 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
   ctx.items = items;
   ctx.total = fmtMoney(total);              // {{ total }}
   ctx.total_usd = fmtMoney(total / rate);   // {{ total_usd }}
+  ctx.total_num = total;                    // raw AED total for the CRM field
   ctx.usd_rate = String(rate);
   if (!ctx.date) ctx.date = today();
   if (!ctx.quotation_no)
@@ -160,22 +159,6 @@ function renderDocx(arrayBuffer, data) {
 }
 
 // ── CRM task creation ──
-// Readable fee breakdown stored on the task's description.
-function buildTaskDescription(ctx, tpl) {
-  const rows = (ctx.items || [])
-    .map(
-      (it) =>
-        `<tr><td>${esc(it.label)}</td><td>${esc(it.amount)}</td><td>$ ${esc(it.amount_usd)}</td><td>${esc(it.remarks || "")}</td></tr>`,
-    )
-    .join("");
-  return (
-    `<p><strong>Freezone:</strong> ${esc(tpl.freezone)}</p>` +
-    `<p><strong>Date:</strong> ${esc(ctx.date)}</p>` +
-    `<table><tr><th>Particulars</th><th>AED</th><th>USD</th><th>Remarks</th></tr>${rows}` +
-    `<tr><td><strong>Total</strong></td><td><strong>${esc(ctx.total)}</strong></td><td><strong>$ ${esc(ctx.total_usd)}</strong></td><td></td></tr></table>`
-  );
-}
-
 // First status for a list (falls back to folder, then space, then "To Do").
 async function firstStatus(space_id, folder_id, list_id) {
   const pick = async (q) => {
@@ -190,9 +173,41 @@ async function firstStatus(space_id, folder_id, list_id) {
   );
 }
 
+// Get-or-create a space_field on the target list, reusing any existing field of
+// the same name anywhere in the space. Cached within one task creation.
+async function ensureField(space, list, name, type, options, order, cache) {
+  if (cache.has(name)) return cache.get(name);
+  const { data: existing } = await supabase
+    .from("space_fields").select("*").eq("space_id", space.id).eq("field_name", name);
+  let field =
+    (existing || []).find((f) => f.list_id === list.id) ||
+    (existing || []).find((f) => !f.list_id && !f.folder_id) ||
+    (existing || [])[0];
+  if (!field) {
+    const { data, error } = await supabase.from("space_fields").insert({
+      space_id: space.id, folder_id: null, list_id: list.id,
+      field_name: name, field_type: type, field_order: order, field_options: options,
+    }).select().single();
+    if (error) throw new Error(`field "${name}": ${error.message}`);
+    field = data;
+  } else if (type === "dropdown") {
+    // keep the dropdown's options in sync with whatever we need present
+    const have = field.field_options || [];
+    const add = (options || []).filter((o) => !have.includes(o));
+    if (add.length) {
+      const merged = [...have, ...add];
+      await supabase.from("space_fields").update({ field_options: merged }).eq("id", field.id);
+      field = { ...field, field_options: merged };
+    }
+  }
+  cache.set(name, field);
+  return field;
+}
+
 // File a generated quotation as a task in Delivery ▸ Quotation ▸ Quotations by
-// CRM, tagged with the Free Zone dropdown. Best-effort: callers catch errors so
-// a failure here never blocks the .docx download.
+// CRM. Instead of a description blob, each fee's AED value becomes a number
+// custom field (USD is skipped), plus a Free Zone dropdown and Total (AED).
+// Best-effort: callers catch errors so a failure never blocks the download.
 async function createCrmTask({ ctx, tpl, templates, profile }) {
   const findOne = async (table, filters) => {
     let q = supabase.from(table).select("*").is("deleted_at", null);
@@ -207,40 +222,33 @@ async function createCrmTask({ ctx, tpl, templates, profile }) {
   const list = await findOne("lists", { name: CRM_TARGET.list, folder_id: folder.id });
   if (!list) throw new Error(`list "${CRM_TARGET.list}" not found`);
 
-  // Free Zone dropdown — reuse an existing one anywhere in the space, else make
-  // it list-scoped, seeded with the freezone names of all templates.
-  const { data: existing } = await supabase
-    .from("space_fields").select("*").eq("space_id", space.id).eq("field_name", FREEZONE_FIELD);
-  let field =
-    (existing || []).find((f) => f.list_id === list.id) ||
-    (existing || []).find((f) => !f.list_id && !f.folder_id) ||
-    (existing || [])[0];
+  const cache = new Map();
   const allFreezones = [...new Set((templates || []).map((t) => t.freezone).filter(Boolean))];
-  if (!field) {
-    const { data, error } = await supabase.from("space_fields").insert({
-      space_id: space.id, folder_id: null, list_id: list.id,
-      field_name: FREEZONE_FIELD, field_type: "dropdown", field_order: 999,
-      field_options: allFreezones.length ? allFreezones : [tpl.freezone],
-    }).select().single();
-    if (error) throw new Error("Free Zone field: " + error.message);
-    field = data;
-  } else if (!(field.field_options || []).includes(tpl.freezone)) {
-    await supabase.from("space_fields")
-      .update({ field_options: [...(field.field_options || []), tpl.freezone] })
-      .eq("id", field.id);
+
+  // Fields we'll set: Free Zone (dropdown) + one number field per fee (AED) +
+  // Total (AED). Build the (field, value) list first, then insert the task.
+  const freeZone = await ensureField(space, list, FREEZONE_FIELD, "dropdown", allFreezones.length ? allFreezones : [tpl.freezone], 1, cache);
+  const values = [{ field_id: freeZone.id, value: tpl.freezone }];
+
+  let order = 100;
+  for (const it of ctx.items || []) {
+    const f = await ensureField(space, list, `${it.label} (AED)`, "number", null, order++, cache);
+    values.push({ field_id: f.id, value: String(it.amount_num) });
   }
+  const totalField = await ensureField(space, list, "Total (AED)", "number", null, 900, cache);
+  values.push({ field_id: totalField.id, value: String(ctx.total_num) });
 
   const status = await firstStatus(space.id, folder.id, list.id);
   const { data: task, error } = await supabase.from("tasks").insert({
     title: ctx.business_activity || "Quotation",
-    description: buildTaskDescription(ctx, tpl),
+    description: "",
     space_id: space.id, folder_id: folder.id, list_id: list.id,
     status, priority: "Medium", assignee: "", assignees: [],
     updated_by: profile?.full_name || "Unknown", updated_at: new Date().toISOString(),
   }).select().single();
   if (error) throw new Error("task: " + error.message);
 
-  await supabase.from("task_field_values").insert({ task_id: task.id, field_id: field.id, value: tpl.freezone });
+  await supabase.from("task_field_values").insert(values.map((v) => ({ task_id: task.id, ...v })));
   return task;
 }
 
