@@ -339,6 +339,33 @@ begin
   end if;
 end $$;
 
+-- Advance a date field (due_date or a custom date field) by `months`, then
+-- optionally snap to a day-of-month (clamped to the month length). Base is the
+-- field's current value; if empty, today. Used by the shift_date action.
+create or replace function _abcap_shift_date(t tasks, field text, months int, day int)
+returns void language plpgsql security definer set search_path=public as $$
+declare fid uuid; base_date date; new_date date; last_day int;
+begin
+  if field = 'due_date' then
+    base_date := t.due_date;
+  elsif field like 'field\_%' then
+    begin fid := substring(field from 7)::uuid; exception when others then return; end;
+    select nullif(value,'')::date into base_date
+      from task_field_values where task_id = t.id and field_id = fid limit 1;
+  else
+    return;
+  end if;
+  if base_date is null then base_date := current_date; end if;
+  new_date := (base_date + (coalesce(months,0) || ' months')::interval)::date;
+  if day is not null then
+    last_day := extract(day from (date_trunc('month', new_date) + interval '1 month - 1 day'))::int;
+    new_date := make_date(extract(year from new_date)::int,
+                          extract(month from new_date)::int,
+                          least(day, last_day));
+  end if;
+  perform _abcap_set_field(t, field, to_char(new_date, 'YYYY-MM-DD'));
+end $$;
+
 -- ---------------------------------------------------------------------
 -- 4. Executor — run one matched automation's actions against a task
 -- ---------------------------------------------------------------------
@@ -397,6 +424,16 @@ begin
     elsif atype = 'set_field' then
       if coalesce(act->'params'->>'field','') <> '' then
         perform _abcap_set_field(t, act->'params'->>'field', act->'params'->>'value');
+      end if;
+
+    elsif atype = 'shift_date' then
+      if coalesce(act->'params'->>'field','') <> '' then
+        perform _abcap_shift_date(
+          t,
+          act->'params'->>'field',
+          coalesce(nullif(act->'params'->>'months','')::int, 3),
+          nullif(act->'params'->>'day','')::int
+        );
       end if;
     end if;
   end loop;
