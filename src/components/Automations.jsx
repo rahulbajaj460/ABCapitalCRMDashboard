@@ -19,6 +19,7 @@ const ACTION_TYPES = [
   { value: "change_status", label: "Change status" },
   { value: "assign", label: "Assign to user" },
   { value: "set_field", label: "Set a field value" },
+  { value: "shift_date", label: "Advance a date field" },
 ];
 const RECIPIENT_PRESETS = [
   { value: "assignee", label: "Assignee" },
@@ -355,7 +356,10 @@ export default function Automations({ open, onClose, spaces, members, profile, a
               {editing.actions.map((a) => (
                 <div key={a.id} style={{ border: "1px solid #e8e8e8", borderRadius: 8, padding: 10, marginBottom: 8 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                    <select value={a.type} onChange={(e) => updAction(a.id, { type: e.target.value, params: e.target.value === "notify" ? { recipients: ["assignee"], channels: ["in_app"] } : {} })} style={sel}>
+                    <select value={a.type} onChange={(e) => updAction(a.id, { type: e.target.value, params:
+                      e.target.value === "notify" ? { recipients: ["assignee"], channels: ["in_app"] }
+                      : e.target.value === "shift_date" ? { field: "due_date", months: 3, day: 28 }
+                      : {} })} style={sel}>
                       {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                     <div style={{ flex: 1 }} />
@@ -446,6 +450,22 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                         {conditionFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                       </select>
                       {a.params.field && <ValueInput field={a.params.field} value={a.params.value} onChange={(v) => updAction(a.id, { params: { ...a.params, value: v } })} />}
+                    </div>
+                  )}
+                  {a.type === "shift_date" && (
+                    <div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <select value={a.params.field || "due_date"} onChange={(e) => updAction(a.id, { params: { ...a.params, field: e.target.value } })} style={{ ...sel, flex: 1, minWidth: 130 }}>
+                          {dateFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>+</span>
+                        <input type="number" min="1" value={a.params.months ?? 3} onChange={(e) => updAction(a.id, { params: { ...a.params, months: e.target.value } })} style={{ ...sel, width: 60 }} />
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>months, on day</span>
+                        <input type="number" min="1" max="31" value={a.params.day ?? 28} onChange={(e) => updAction(a.id, { params: { ...a.params, day: e.target.value } })} style={{ ...sel, width: 60 }} />
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 5 }}>
+                        Takes the field's current date, adds the months, and snaps to that day (blank day = keep the day). Empty date → based on today.
+                      </div>
                     </div>
                   )}
                 </div>
