@@ -482,7 +482,14 @@ begin
     end if;
 
     if matched and _abcap_eval_conditions(a.conditions, t) then
-      perform _abcap_run(a, t, actor, event);
+      -- Never let an automation failure roll back the user's task change:
+      -- run it in a subtransaction and log any error instead of raising.
+      begin
+        perform _abcap_run(a, t, actor, event);
+      exception when others then
+        insert into automation_runs(automation_id, task_id, event, detail)
+        values (a.id, t.id, event, jsonb_build_object('error', SQLERRM, 'actor', actor));
+      end;
     end if;
   end loop;
 end $$;
