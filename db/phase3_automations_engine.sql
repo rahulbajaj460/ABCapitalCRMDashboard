@@ -356,9 +356,11 @@ begin
     return;
   end if;
   if base_date is null then base_date := current_date; end if;
-  new_date := (base_date + (coalesce(months,0) || ' months')::interval)::date;
+  new_date := (base_date + make_interval(0, coalesce(months,0)))::date;
   if day is not null then
-    last_day := extract(day from (date_trunc('month', new_date) + interval '1 month - 1 day'))::int;
+    -- last day of new_date's month
+    last_day := extract(day from
+      (date_trunc('month', new_date::timestamp) + interval '1 month' - interval '1 day'))::int;
     new_date := make_date(extract(year from new_date)::int,
                           extract(month from new_date)::int,
                           least(day, last_day));
