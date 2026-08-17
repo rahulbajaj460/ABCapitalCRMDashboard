@@ -465,6 +465,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       </div>
                       <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 5 }}>
                         Takes the field's current date, adds the months, and snaps to that day (blank day = keep the day). Empty date → based on today.
+                        E.g. Due date +3 months on day 28 turns 28 Apr into 28 Jul.
                       </div>
                     </div>
                   )}
