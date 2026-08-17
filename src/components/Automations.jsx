@@ -441,7 +441,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                   )}
                   {a.type === "set_field" && (
                     <div style={{ display: "flex", gap: 8 }}>
-                      <select value={a.params.field || ""} onChange={(e) => updAction(a.id, { params: { field: e.target.value, value: "" } })} style={sel}>
+                      <select value={a.params.field || ""} onChange={(e) => updAction(a.id, { params: { field: e.target.value, value: "" } })} style={{ ...sel, flex: 1, minWidth: 0 }}>
                         <option value="">Select field…</option>
                         {conditionFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                       </select>
