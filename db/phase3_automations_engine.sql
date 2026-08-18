@@ -329,7 +329,7 @@ begin
   elsif field = 'priority' then
     update tasks set priority = val, updated_at = now() where id = t.id;
   elsif field = 'due_date' then
-    update tasks set due_date = nullif(val,''), updated_at = now() where id = t.id;
+    update tasks set due_date = nullif(val,'')::date, updated_at = now() where id = t.id;
   elsif field like 'field\_%' then
     begin fid := substring(field from 7)::uuid; exception when others then return; end;
     update task_field_values set value = val where task_id = t.id and field_id = fid;
