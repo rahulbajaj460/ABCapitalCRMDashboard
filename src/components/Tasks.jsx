@@ -390,7 +390,7 @@ export default function Tasks({
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const DEFAULT_VISIBLE_COLUMNS = ["priority", "assignees", "due_date"];
   const DEFAULT_COLUMN_ORDER = [
-    "priority", "assignees", "due_date", "date_done", "date_closed", "date_updated_manual",
+    "priority", "assignees", "due_date", "date_done", "date_closed", "date_updated_manual", "status",
   ];
   const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE_COLUMNS);
   // columnOrder defines the display sequence of ALL orderable columns (visible + hidden)
@@ -414,6 +414,7 @@ export default function Tasks({
     date_closed: 150,
     date_updated_manual: 150,
     status_select: 160,
+    status: 160,
     actions: 60,
   };
   const [columnWidths, setColumnWidths] = useState({ ...DEFAULT_COLUMN_WIDTHS });
@@ -441,9 +442,13 @@ export default function Tasks({
       ...columnOrder,
       ...fieldKeys.filter((k) => !columnOrder.includes(k)),
     ];
+    // "status" is a real, reorderable column (always visible). If a saved order
+    // doesn't track it yet, default it to the end (its historical position).
+    if (!fullOrder.includes("status")) fullOrder.push("status");
     return fullOrder
-      .filter((key) => visibleColumns.includes(key))
+      .filter((key) => key === "status" || visibleColumns.includes(key))
       .map((key) => {
+        if (key === "status") return { key: "status", label: "Status", sortable: false };
         if (key.startsWith("field_")) {
           const f = fieldList.find((f) => `field_${f.id}` === key);
           if (!f) return null;
@@ -460,7 +465,6 @@ export default function Tasks({
     parts.push(
       `${getColWidth("name")}px`,
       ...activeCols.map((c) => `${getColWidth(c.key)}px`),
-      `${getColWidth("status_select")}px`,
       `${getColWidth("actions")}px`,
     );
     return parts.join(" ");
@@ -3198,22 +3202,6 @@ export default function Tasks({
         ))}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "10px 14px",
-            fontSize: 11,
-            fontWeight: 700,
-            color: "#999",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            borderBottom: "1px solid #ebebeb",
-            background: "#fafaf9",
-          }}
-        >
-          Status
-        </div>
-        <div
-          style={{
             borderBottom: "1px solid #ebebeb",
             background: "#fafaf9",
           }}
@@ -3680,35 +3668,37 @@ export default function Tasks({
             </div>
           )}
         </div>
-        {activeCols.map((c) => (
-          <div key={c.key} style={cellStyle}>
-            {renderColumnCell(c.key, task, fieldList)}
-          </div>
-        ))}
-        <div style={cellStyle} onClick={(e) => e.stopPropagation()}>
-          <select
-            value={task.status}
-            onChange={(e) => updateTaskStatus(task.id, e.target.value)}
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              padding: "3px 6px",
-              width: "100%",
-              borderRadius: 20,
-              border: `1px solid ${statusColor}59`,
-              background: statusColor + "29",
-              color: readableInk(statusColor),
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            {statusList.map((s) => (
-              <option key={s} value={s} style={{ color: "#333", background: "#fff" }}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
+        {activeCols.map((c) =>
+          c.key === "status" ? (
+            <div key="status" style={cellStyle} onClick={(e) => e.stopPropagation()}>
+              <select
+                value={task.status}
+                onChange={(e) => updateTaskStatus(task.id, e.target.value)}
+                style={{
+                  fontSize: 11,
+                  padding: "3px 6px",
+                  width: "100%",
+                  borderRadius: 20,
+                  border: `1px solid ${statusColor}59`,
+                  background: statusColor + "29",
+                  color: readableInk(statusColor),
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {statusList.map((s) => (
+                  <option key={s} value={s} style={{ color: "#333", background: "#fff" }}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div key={c.key} style={cellStyle}>
+              {renderColumnCell(c.key, task, fieldList)}
+            </div>
+          ),
+        )}
         <div style={cellStyle} onClick={(e) => e.stopPropagation()}>
           {profile?.role === "admin" && (
             <button
