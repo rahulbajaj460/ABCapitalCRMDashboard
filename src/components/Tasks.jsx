@@ -502,7 +502,10 @@ export default function Tasks({
     const visible = saved.filter((c) => c.visible).map((c) => c.key);
     const widths = {};
     saved.forEach((c) => { if (c.width) widths[c.key] = c.width; });
-    setColumnOrder(order.length ? order : DEFAULT_COLUMN_ORDER);
+    // status is a reorderable column now; keep it tracked even for views saved
+    // before it was one, so its Columns-menu arrows work.
+    const order2 = order.length ? order : DEFAULT_COLUMN_ORDER;
+    setColumnOrder(order2.includes("status") ? order2 : [...order2, "status"]);
     setVisibleColumns(visible.length ? visible : DEFAULT_VISIBLE_COLUMNS);
     setColumnWidths((prev) => ({ ...prev, ...widths }));
   }
@@ -4132,6 +4135,7 @@ export default function Tasks({
                   date_done: "Date Done",
                   date_closed: "Date Closed",
                   date_updated_manual: "Date Updated",
+                  status: "Status",
                   ...Object.fromEntries(allSpaceFields.map((f) => [`field_${f.id}`, f.field_name])),
                   // Current scope's fields (incl. list-scoped) — these aren't in
                   // activeSpace.space_fields, so without this they'd render as
@@ -4141,14 +4145,17 @@ export default function Tasks({
                 // Only keep columnOrder entries valid in the current scope
                 // (built-in columns + this scope's own custom fields) so
                 // fields from other lists/folders don't leak into this panel.
+                // "status" is included so it can be repositioned here too, but
+                // it stays always-visible (its checkbox is disabled below).
                 const validKeys = new Set([
-                  "priority", "assignees", "due_date", "date_done", "date_closed", "date_updated_manual",
+                  "priority", "assignees", "due_date", "date_done", "date_closed", "date_updated_manual", "status",
                   ...fieldKeys,
                 ]);
                 const fullOrder = [
                   ...columnOrder.filter((k) => validKeys.has(k)),
                   ...fieldKeys.filter((k) => !columnOrder.includes(k)),
                 ];
+                if (!fullOrder.includes("status")) fullOrder.push("status");
                 return (
                   <div
                     style={{
@@ -4193,8 +4200,10 @@ export default function Tasks({
                       </div>
                     )}
                     {(() => {
-                      const checkedKeys = fullOrder.filter((k) => visibleColumns.includes(k));
-                      const uncheckedKeys = fullOrder.filter((k) => !visibleColumns.includes(k));
+                      // "status" is always visible (not hideable) but reorderable.
+                      const alwaysOn = (k) => k === "status";
+                      const checkedKeys = fullOrder.filter((k) => visibleColumns.includes(k) || alwaysOn(k));
+                      const uncheckedKeys = fullOrder.filter((k) => !visibleColumns.includes(k) && !alwaysOn(k));
                       const renderRow = (key, isChecked, idxInSection, sectionLen) => (
                         <div
                           key={key}
@@ -4207,6 +4216,8 @@ export default function Tasks({
                             <input
                               type="checkbox"
                               checked={isChecked}
+                              disabled={key === "status"}
+                              title={key === "status" ? "Status is always shown" : undefined}
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   // move key to end of checked section in columnOrder
