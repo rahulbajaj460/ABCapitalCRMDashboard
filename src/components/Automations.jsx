@@ -342,17 +342,21 @@ export default function Automations({ open, onClose, spaces, members, profile, a
 
             {/* Conditions */}
             <div className="form-group">
-              <label className="form-label" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                If — match
-                <select
-                  value={editing.conditions_match === "any" ? "any" : "all"}
-                  onChange={(e) => upd({ conditions_match: e.target.value })}
-                  style={{ ...sel, padding: "3px 6px", fontWeight: 700 }}
-                >
-                  <option value="all">ALL</option>
-                  <option value="any">ANY</option>
-                </select>
-                of these conditions
+              <label className="form-label" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", margin: 0 }}>
+                If (conditions)
+                {editing.conditions.length > 1 && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 400, fontSize: 12, color: "#6b7280" }}>
+                    — match
+                    <select
+                      value={editing.conditions_match === "any" ? "any" : "all"}
+                      onChange={(e) => upd({ conditions_match: e.target.value })}
+                      style={{ fontSize: 12, padding: "2px 6px", border: "1px solid #d1d5db", borderRadius: 5, background: "#fff", color: "#374151" }}
+                    >
+                      <option value="all">all</option>
+                      <option value="any">any</option>
+                    </select>
+                  </span>
+                )}
               </label>
               {editing.conditions.map((c) => (
                 <div key={c.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
