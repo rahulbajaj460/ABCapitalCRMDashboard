@@ -35,6 +35,7 @@ const blankAutomation = () => ({
   space_id: "", folder_id: "", list_id: "",
   trigger: { type: "assigned", params: {} },
   conditions: [],
+  conditions_match: "all", // "all" (AND) | "any" (OR)
   actions: [{ id: uid(), type: "notify", params: { recipients: ["assignee"], channels: ["in_app"] } }],
 });
 
@@ -162,6 +163,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
       name: editing.name.trim(), enabled: editing.enabled,
       scope_type, scope_id,
       trigger: editing.trigger, conditions: editing.conditions, actions: editing.actions,
+      conditions_match: editing.conditions_match === "any" ? "any" : "all",
       created_by: profile?.full_name || null, updated_at: new Date().toISOString(),
     };
     const q = editing.id
@@ -340,7 +342,18 @@ export default function Automations({ open, onClose, spaces, members, profile, a
 
             {/* Conditions */}
             <div className="form-group">
-              <label className="form-label">If (conditions — all must match)</label>
+              <label className="form-label" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                If — match
+                <select
+                  value={editing.conditions_match === "any" ? "any" : "all"}
+                  onChange={(e) => upd({ conditions_match: e.target.value })}
+                  style={{ ...sel, padding: "3px 6px", fontWeight: 700 }}
+                >
+                  <option value="all">ALL</option>
+                  <option value="any">ANY</option>
+                </select>
+                of these conditions
+              </label>
               {editing.conditions.map((c) => (
                 <div key={c.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
                   <select value={c.field} onChange={(e) => updCondition(c.id, { field: e.target.value, value: "" })} style={{ ...sel, flex: "1.4 1 0", minWidth: 0 }}>

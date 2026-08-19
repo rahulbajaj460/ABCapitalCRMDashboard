@@ -21,6 +21,9 @@
 
 set search_path = public;
 
+-- Match mode for an automation's conditions: 'all' (AND, default) or 'any' (OR).
+alter table automations add column if not exists conditions_match text default 'all';
+
 -- ---------------------------------------------------------------------
 -- 1. Support tables (audit trail + email outbox for Phase 4)
 -- ---------------------------------------------------------------------
@@ -183,7 +186,8 @@ begin
   return null;
 end $$;
 
-create or replace function _abcap_eval_conditions(conds jsonb, t tasks)
+-- mode 'all' = every condition must match (AND); 'any' = at least one (OR).
+create or replace function _abcap_eval_conditions(conds jsonb, t tasks, mode text default 'all')
 returns boolean language plpgsql stable security definer set search_path=public as $$
 declare c jsonb; field text; op text; val text; cur text; names text[]; ok boolean;
 begin
@@ -209,9 +213,14 @@ begin
         when 'is_empty' then cur is null or cur = ''
         else true end;
     end if;
-    if not coalesce(ok, false) then return false; end if;
+    if mode = 'any' then
+      if coalesce(ok, false) then return true; end if;   -- OR: first match wins
+    else
+      if not coalesce(ok, false) then return false; end if; -- AND: first miss fails
+    end if;
   end loop;
-  return true;
+  -- AND: nothing failed → true. OR: nothing matched → false.
+  return (mode <> 'any');
 end $$;
 
 -- Resolve an action's recipient tokens to profile ids.
@@ -483,7 +492,7 @@ begin
       end if;
     end if;
 
-    if matched and _abcap_eval_conditions(a.conditions, t) then
+    if matched and _abcap_eval_conditions(a.conditions, t, coalesce(a.conditions_match, 'all')) then
       -- Never let an automation failure roll back the user's task change:
       -- run it in a subtransaction and log any error instead of raising.
       begin
@@ -592,7 +601,7 @@ begin
       dval := _abcap_field_value(t, fld);
       if dval is null or dval = '' then continue; end if;
       begin dd := dval::date; exception when others then continue; end;
-      if dd = target and _abcap_eval_conditions(a.conditions, t) then
+      if dd = target and _abcap_eval_conditions(a.conditions, t, coalesce(a.conditions_match, 'all')) then
         perform _abcap_run(a, t, null, 'date_based');
       end if;
     end loop;
@@ -610,7 +619,7 @@ begin
            or (a.scope_type = 'folder' and folder_id = a.scope_id)
            or (a.scope_type = 'space'  and space_id  = a.scope_id))
     loop
-      if not _abcap_eval_conditions(a.conditions, t) then continue; end if;
+      if not _abcap_eval_conditions(a.conditions, t, coalesce(a.conditions_match, 'all')) then continue; end if;
       select max(ran_at) into last_run
         from automation_runs
        where automation_id = a.id and task_id = t.id and event = 'recurring';
