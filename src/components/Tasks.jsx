@@ -186,6 +186,30 @@ function fmtDate(str) {
   return fmtDMY(d);
 }
 
+// Display-only relabel for the month dropdowns in Monthly Accounting.
+// The stored value stays as-is (e.g. "25-Jan"); we only render it as
+// "Jan-2025". Values that don't match the YY-Mon shape (e.g. "Discontinued")
+// are returned unchanged. Scoped by field name so other dropdowns are safe.
+const MONTH_DROPDOWN_FIELDS = new Set([
+  "data received till",
+  "payment received till",
+  "invoice sent till",
+]);
+const MON3 = {
+  jan: "Jan", feb: "Feb", mar: "Mar", apr: "Apr", may: "May", jun: "Jun",
+  jul: "Jul", aug: "Aug", sep: "Sep", oct: "Oct", nov: "Nov", dec: "Dec",
+};
+function fmtMonthOption(fieldName, value) {
+  if (!value) return value;
+  if (!MONTH_DROPDOWN_FIELDS.has(String(fieldName || "").trim().toLowerCase()))
+    return value;
+  const m = /^(\d{2})-([A-Za-z]{3})$/.exec(String(value).trim());
+  if (!m) return value;
+  const mon = MON3[m[2].toLowerCase()];
+  if (!mon) return value;
+  return `${mon}-20${m[1]}`;
+}
+
 function parseFlexibleDate(str) {
   if (!str) return null;
   // Strip ordinal suffixes: 26th → 26, 2nd → 2, 1st → 1, 3rd → 3
@@ -3435,7 +3459,7 @@ export default function Tasks({
               fontWeight: 500,
             }}
           >
-            {fv.value}
+            {fmtMonthOption(f.field_name, fv.value)}
           </span>
         );
       if (f.field_type === "username")
@@ -5680,7 +5704,7 @@ export default function Tasks({
                               </option>
                               {field.field_options.map((opt) => (
                                 <option key={opt} value={opt}>
-                                  {opt}
+                                  {fmtMonthOption(field.field_name, opt)}
                                 </option>
                               ))}
                             </select>
@@ -7295,7 +7319,7 @@ export default function Tasks({
                           <option value="">Select {field.field_name}...</option>
                           {field.field_options.map((opt) => (
                             <option key={opt} value={opt}>
-                              {opt}
+                              {fmtMonthOption(field.field_name, opt)}
                             </option>
                           ))}
                         </select>
