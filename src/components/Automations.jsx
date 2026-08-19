@@ -8,6 +8,7 @@ const TRIGGERS = [
   { value: "field_changed", label: "Field changes" },
   { value: "comment_mention", label: "Comment or @mention" },
   { value: "date_based", label: "Date approaching / passed" },
+  { value: "recurring", label: "Recurring reminder (every N days)" },
   { value: "task_created", label: "Task is created" },
 ];
 const OPS = [
@@ -325,6 +326,13 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                     <select value={editing.trigger.params.field || "due_date"} onChange={(e) => updTrigger({ field: e.target.value })} style={sel}>
                       {dateFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                     </select>
+                  </>
+                )}
+                {editing.trigger.type === "recurring" && (
+                  <>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>every</span>
+                    <input type="number" min="1" value={editing.trigger.params.days ?? 3} onChange={(e) => updTrigger({ days: Number(e.target.value) })} style={{ ...sel, width: 70 }} />
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>days, while the conditions below hold</span>
                   </>
                 )}
               </div>

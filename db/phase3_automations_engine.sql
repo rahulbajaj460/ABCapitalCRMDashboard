@@ -274,6 +274,7 @@ begin
   elsif tt = 'assigned'        then return 'Task assigned';
   elsif tt = 'comment_mention' then return 'New comment';
   elsif tt = 'date_based'      then return 'Date reminder';
+  elsif tt = 'recurring'       then return 'Reminder';
   elsif tt = 'task_created'    then return 'New task created';
   else return 'Automation triggered';
   end if;
@@ -314,6 +315,7 @@ returns text language sql immutable as $$
     when 'field_changed'   then 'a field changed'
     when 'comment_mention' then 'a new comment'
     when 'date_based'      then 'a date rule'
+    when 'recurring'       then 'a recurring reminder'
     when 'task_created'    then 'a task was created'
     else ttype end;
 $$;
@@ -571,8 +573,9 @@ create trigger trg_abcap_task_comments
 -- ---------------------------------------------------------------------
 create or replace function run_date_based_automations()
 returns void language plpgsql security definer set search_path=public as $$
-declare a automations; t tasks; dir text; days int; fld text; target date; dval text; dd date;
+declare a automations; t tasks; dir text; days int; fld text; target date; dval text; dd date; last_run timestamptz;
 begin
+  -- Date-based rules: fire once when a date field is N days before/after today.
   for a in select * from automations where enabled and trigger->>'type' = 'date_based' loop
     dir  := coalesce(a.trigger->'params'->>'direction', 'before');
     days := coalesce((a.trigger->'params'->>'days')::int, 0);
@@ -591,6 +594,28 @@ begin
       begin dd := dval::date; exception when others then continue; end;
       if dd = target and _abcap_eval_conditions(a.conditions, t) then
         perform _abcap_run(a, t, null, 'date_based');
+      end if;
+    end loop;
+  end loop;
+
+  -- Recurring reminders: while the conditions hold, re-run every N days.
+  -- Uses automation_runs (event='recurring') to space out reminders per task.
+  for a in select * from automations where enabled and trigger->>'type' = 'recurring' loop
+    days := greatest(coalesce((a.trigger->'params'->>'days')::int, 3), 1);
+
+    for t in
+      select * from tasks
+       where deleted_at is null
+         and ((a.scope_type = 'list'   and list_id   = a.scope_id)
+           or (a.scope_type = 'folder' and folder_id = a.scope_id)
+           or (a.scope_type = 'space'  and space_id  = a.scope_id))
+    loop
+      if not _abcap_eval_conditions(a.conditions, t) then continue; end if;
+      select max(ran_at) into last_run
+        from automation_runs
+       where automation_id = a.id and task_id = t.id and event = 'recurring';
+      if last_run is null or last_run <= now() - make_interval(days => days) then
+        perform _abcap_run(a, t, null, 'recurring');
       end if;
     end loop;
   end loop;
