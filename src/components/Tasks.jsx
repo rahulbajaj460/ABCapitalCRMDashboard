@@ -170,11 +170,20 @@ const FORMULA_PRESETS = [
   { key: "custom", label: "Custom (manual text)", fn: () => null },
 ];
 
+// Format a date as dd-mm-yyyy for display (uses UTC parts to avoid TZ shifts
+// on date-only ISO strings like "2026-10-08").
+function fmtDMY(d) {
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = d.getUTCFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
 function fmtDate(str) {
   if (!str) return "—";
   const d = new Date(str);
   if (isNaN(d)) return str;
-  return d.toISOString().slice(0, 10);
+  return fmtDMY(d);
 }
 
 function parseFlexibleDate(str) {
@@ -3450,7 +3459,7 @@ export default function Tasks({
         );
       if (f.field_type === "date") {
         const parsed = parseFlexibleDate(fv.value);
-        return <span style={{ fontSize: 12, color: "#555" }}>{parsed ? parsed.toISOString().slice(0, 10) : fv.value}</span>;
+        return <span style={{ fontSize: 12, color: "#555" }}>{parsed ? fmtDMY(parsed) : fv.value}</span>;
       }
       return <span style={{ fontSize: 12, color: "#555" }}>{fv.value}</span>;
     }
