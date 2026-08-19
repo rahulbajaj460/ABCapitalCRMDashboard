@@ -343,10 +343,10 @@ export default function Automations({ open, onClose, spaces, members, profile, a
               <label className="form-label">If (conditions — all must match)</label>
               {editing.conditions.map((c) => (
                 <div key={c.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-                  <select value={c.field} onChange={(e) => updCondition(c.id, { field: e.target.value, value: "" })} style={sel}>
+                  <select value={c.field} onChange={(e) => updCondition(c.id, { field: e.target.value, value: "" })} style={{ ...sel, flex: "1.4 1 0", minWidth: 0 }}>
                     {conditionFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                   </select>
-                  <select value={c.op} onChange={(e) => updCondition(c.id, { op: e.target.value })} style={sel}>
+                  <select value={c.op} onChange={(e) => updCondition(c.id, { op: e.target.value })} style={{ ...sel, flex: "1 1 0", minWidth: 0 }}>
                     {OPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                   {c.op !== "is_set" && c.op !== "is_empty" && (
