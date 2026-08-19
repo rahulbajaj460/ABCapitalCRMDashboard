@@ -342,11 +342,11 @@ export default function Automations({ open, onClose, spaces, members, profile, a
 
             {/* Conditions */}
             <div className="form-group">
-              <label className="form-label" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", margin: 0 }}>
-                If (conditions)
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                <label className="form-label" style={{ margin: 0 }}>If (conditions)</label>
                 {editing.conditions.length > 1 && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 400, fontSize: 12, color: "#6b7280" }}>
-                    — match
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "#6b7280" }}>
+                    match
                     <select
                       value={editing.conditions_match === "any" ? "any" : "all"}
                       onChange={(e) => upd({ conditions_match: e.target.value })}
@@ -357,7 +357,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                     </select>
                   </span>
                 )}
-              </label>
+              </div>
               {editing.conditions.map((c) => (
                 <div key={c.id} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
                   <select value={c.field} onChange={(e) => updCondition(c.id, { field: e.target.value, value: "" })} style={{ ...sel, flex: "1.4 1 0", minWidth: 0 }}>
