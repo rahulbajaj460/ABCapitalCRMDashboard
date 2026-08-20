@@ -2663,7 +2663,7 @@ export default function Tasks({
       space_id: src.space_id,
       folder_id: src.folder_id || null,
       list_id: src.list_id || null,
-      parent_id: src.parent_id || null,
+      parent_task_id: src.parent_task_id || null,
       status: m.to_status || "To Do",
       priority: m.priority || src.priority || "Medium",
       assignee: m.assignees[0] || "",
