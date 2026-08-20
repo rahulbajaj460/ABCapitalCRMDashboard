@@ -274,7 +274,6 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate }) {
 }
 
 export default function Quotations({ profile }) {
-  const isAdmin = profile?.role === "admin";
   const [tab, setTab] = useState("generate");
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -315,7 +314,7 @@ export default function Quotations({ profile }) {
         <div style={{ display: "flex", gap: 22, marginTop: 16 }}>
           {[
             { key: "generate", label: "Generate" },
-            ...(isAdmin ? [{ key: "templates", label: "Templates" }] : []),
+            { key: "templates", label: "Templates" },
           ].map((t) => (
             <button
               key={t.key}
@@ -611,6 +610,7 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
 
 // ─────────────────────────── Templates (admin) ───────────────────────────
 function TemplatesTab({ templates, profile, onChanged }) {
+  const isAdmin = profile?.role === "admin";
   const [editing, setEditing] = useState(null); // template object or {} for new
 
   return (
@@ -618,13 +618,16 @@ function TemplatesTab({ templates, profile, onChanged }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: "#666" }}>
           One Word template per freezone. Placeholders use <code style={{ background: "#f1f1f0", padding: "1px 5px", borderRadius: 4 }}>{"{{ key }}"}</code> syntax.
+          {!isAdmin && " You can edit a template's fields and rate; uploading a new file or deleting is admin-only."}
         </div>
-        <button
-          onClick={() => setEditing({})}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
-        >
-          <IconPlus size={14} /> New template
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setEditing({})}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+          >
+            <IconPlus size={14} /> New template
+          </button>
+        )}
       </div>
 
       {templates.length === 0 ? (
@@ -660,6 +663,20 @@ function TemplatesTab({ templates, profile, onChanged }) {
 
 function TemplateEditor({ template, profile, onClose, onSaved }) {
   const isNew = !template.id;
+  const isAdmin = profile?.role === "admin";
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    if (isNew || !template.id) return;
+    supabase
+      .from("quotation_template_history")
+      .select("*")
+      .eq("template_id", template.id)
+      .order("changed_at", { ascending: false })
+      .limit(50)
+      .then(({ data }) => setHistory(data || []));
+  }, [isNew, template.id]);
   const [freezone, setFreezone] = useState(template.freezone || "");
   const [usdRate, setUsdRate] = useState(template.usd_rate ?? DEFAULT_USD_RATE);
   const [fields, setFields] = useState(
@@ -755,12 +772,21 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
         {/* Template file */}
         <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 5 }}>Word template (.docx)</label>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <input ref={fileRef} type="file" accept=".docx" style={{ display: "none" }}
-            onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          <button onClick={() => fileRef.current?.click()} className="btn btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <IconUpload size={14} /> {file ? "Change file" : (isNew ? "Choose .docx" : "Replace .docx")}
-          </button>
-          <span style={{ fontSize: 12.5, color: "#666" }}>{file?.name || template.file_name || "No file chosen"}</span>
+          {isAdmin ? (
+            <>
+              <input ref={fileRef} type="file" accept=".docx" style={{ display: "none" }}
+                onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <button onClick={() => fileRef.current?.click()} className="btn btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <IconUpload size={14} /> {file ? "Change file" : (isNew ? "Choose .docx" : "Replace .docx")}
+              </button>
+              <span style={{ fontSize: 12.5, color: "#666" }}>{file?.name || template.file_name || "No file chosen"}</span>
+            </>
+          ) : (
+            <span style={{ fontSize: 12.5, color: "#666" }}>
+              <IconFile size={14} /> {template.file_name || "template.docx"}
+              <span style={{ color: "#aaa", marginLeft: 8 }}>· file upload is admin-only</span>
+            </span>
+          )}
         </div>
 
         {/* USD rate */}
@@ -861,8 +887,41 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
           </div>
         )}
 
+        {/* Edit history */}
+        {!isNew && (
+          <div style={{ marginBottom: 18 }}>
+            <button
+              onClick={() => setShowHistory((s) => !s)}
+              className="btn btn-sm"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              {showHistory ? "Hide" : "Show"} edit history{history.length ? ` (${history.length})` : ""}
+            </button>
+            {showHistory && (
+              <div style={{ marginTop: 10, border: "1px solid #ececec", borderRadius: 8, overflow: "hidden" }}>
+                {history.length === 0 ? (
+                  <div style={{ padding: "10px 12px", fontSize: 12.5, color: "#9ca3af" }}>No history recorded yet.</div>
+                ) : (
+                  history.map((h) => (
+                    <div key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 12px", borderBottom: "1px solid #f2f2f2", fontSize: 12.5 }}>
+                      <span style={{ color: "#444" }}>
+                        <strong style={{ textTransform: "capitalize" }}>{h.action || "update"}</strong>
+                        {" · "}{h.changed_by || "Unknown"}
+                        <span style={{ color: "#aaa" }}>{" · "}{(h.fields || []).length} field{(h.fields || []).length === 1 ? "" : "s"} · rate {h.usd_rate ?? "—"}</span>
+                      </span>
+                      <span style={{ color: "#9ca3af", whiteSpace: "nowrap" }}>
+                        {h.changed_at ? new Date(h.changed_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {!isNew ? (
+          {!isNew && isAdmin ? (
             <button onClick={del} disabled={busy} className="btn btn-sm btn-danger" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <IconTrash size={14} /> Delete
             </button>
