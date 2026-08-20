@@ -2616,12 +2616,24 @@ export default function Tasks({
     if (rule.scope_type === "list") return rule.scope_id === task.list_id;
     return false;
   }
+  // Only fire when the task ENTERS the trigger's target status. The target is
+  // stored on the trigger ("Status changes → to X"), not as a condition, so a
+  // rule with no explicit condition must still not fire when leaving X.
+  function cloneRuleTriggerMatch(rule, newSt) {
+    const tt = rule.trigger?.type;
+    const tp = rule.trigger?.params || {};
+    if (tt === "status_changed") return tp.to ? newSt === tp.to : true;
+    if (tt === "field_changed" && tp.field === "status") return tp.to ? newSt === tp.to : true;
+    return false; // clone is status-driven in this client path
+  }
   function maybeOpenVatClone(task, oldStatus, newSt) {
     if (!task || oldStatus === newSt) return;
     if (tasks.some((t) => t.cloned_from === task.id && !t.deleted_at)) return;
-    // Evaluate conditions against the task's NEW state (the status just changed).
+    // Evaluate against the task's NEW state (the status just changed).
     const evalTask = { ...task, status: newSt };
-    const rule = cloneRules.find((r) => r.enabled && cloneRuleInScope(r, evalTask) && cloneRuleCondMatch(r, evalTask));
+    const rule = cloneRules.find(
+      (r) => r.enabled && cloneRuleInScope(r, evalTask) && cloneRuleTriggerMatch(r, newSt) && cloneRuleCondMatch(r, evalTask)
+    );
     if (!rule) return;
     const p = (rule.actions || []).find((a) => a.type === "clone_reset")?.params || {};
     const dateField = p.date_field || "due_date";
