@@ -33,6 +33,9 @@ export default function App() {
   const [pendingFolderId, setPendingFolderId] = useState(
     () => localStorage.getItem("abc_folder_id") || null,
   );
+  const [pendingListId, setPendingListId] = useState(
+    () => localStorage.getItem("abc_list_id") || null,
+  );
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     return parseInt(localStorage.getItem("abc_sidebar_width") || "240");
   });
@@ -77,9 +80,21 @@ export default function App() {
           const folder = space.folders?.find((f) => f.id === pendingFolderId);
           if (folder) setActiveFolder(folder);
         }
+        // Lists live in their own table (not the spaces tree), so fetch the
+        // remembered list by id to land back on the exact list after a refresh.
+        if (pendingListId) {
+          supabase
+            .from("lists")
+            .select("*")
+            .eq("id", pendingListId)
+            .is("deleted_at", null)
+            .single()
+            .then(({ data: list }) => { if (list) setActiveList(list); });
+        }
       }
       setPendingSpaceId(null);
       setPendingFolderId(null);
+      setPendingListId(null);
     }
   }, [spaces]);
 
@@ -259,6 +274,7 @@ export default function App() {
     localStorage.removeItem("abc_view");
     localStorage.removeItem("abc_space_id");
     localStorage.removeItem("abc_folder_id");
+    localStorage.removeItem("abc_list_id");
     setUser(null);
     setProfile(null);
     setView("dashboard");
@@ -274,6 +290,7 @@ export default function App() {
     localStorage.setItem("abc_view", "tasks");
     localStorage.setItem("abc_space_id", space.id);
     localStorage.removeItem("abc_folder_id");
+    localStorage.removeItem("abc_list_id");
   }
 
   function handleFolderSelect(space, folder) {
@@ -284,6 +301,7 @@ export default function App() {
     localStorage.setItem("abc_view", "tasks");
     localStorage.setItem("abc_space_id", space.id);
     localStorage.setItem("abc_folder_id", folder.id);
+    localStorage.removeItem("abc_list_id");
   }
 
   function handleListSelect(space, folder, list) {
@@ -294,6 +312,7 @@ export default function App() {
     localStorage.setItem("abc_view", "tasks");
     localStorage.setItem("abc_space_id", space.id);
     localStorage.setItem("abc_folder_id", folder.id);
+    localStorage.setItem("abc_list_id", list.id);
   }
 
   // Open a task from a notification: navigate to its space/folder/list, then
@@ -347,6 +366,7 @@ export default function App() {
     if (v !== "tasks") {
       localStorage.removeItem("abc_space_id");
       localStorage.removeItem("abc_folder_id");
+      localStorage.removeItem("abc_list_id");
       setActiveSpace(null);
       setActiveFolder(null);
       setActiveList(null);
