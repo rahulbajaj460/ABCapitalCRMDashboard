@@ -186,9 +186,6 @@ function fmtDate(str) {
   return fmtDMY(d);
 }
 
-const lblStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 5 };
-const inpStyle = { width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" };
-
 // VAT cycle: next due date = base date + `months` months, snapped to `day`
 // (clamped to the month length). Base is the task's current due date, or today
 // if it has none. Returns an ISO yyyy-mm-dd string. Mirrors _abcap_shift_date.
@@ -4024,79 +4021,90 @@ export default function Tasks({
       {/* Description hover popup — rendered into body via portal to escape any ancestor overflow/transform */}
       {cloneModal && createPortal(
         <div className="modal-overlay" style={{ zIndex: 100000 }} onClick={(e) => e.target === e.currentTarget && !cloneModal.busy && setCloneModal(null)}>
-          <div className="modal" style={{ maxWidth: 620, width: "100%", maxHeight: "88vh", overflowY: "auto", padding: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Create next cycle task</h2>
-              <button onClick={() => !cloneModal.busy && setCloneModal(null)} className="btn btn-sm" style={{ display: "inline-flex" }}><IconClose size={15} /></button>
-            </div>
-            <div style={{ fontSize: 12.5, color: "#666", marginBottom: 18, lineHeight: 1.6 }}>
-              "{cloneModal.source.title}" was moved to <strong>{cloneModal.trigger_status}</strong>. Review the copied details below — this creates a new <strong>{cloneModal.to_status}</strong> task for the next cycle. The current task stays in {cloneModal.trigger_status}.
-            </div>
-
-            <label style={lblStyle}>Task name</label>
-            <input value={cloneModal.title} onChange={(e) => setCloneModal((p) => ({ ...p, title: e.target.value }))} style={inpStyle} />
-
-            <div style={{ display: "flex", gap: 14, marginTop: 14 }}>
-              <div style={{ flex: 1 }}>
-                <label style={lblStyle}>Due date</label>
-                <input type="date" value={cloneModal.due_date || ""} onChange={(e) => setCloneModal((p) => ({ ...p, due_date: e.target.value }))} style={inpStyle} />
-                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Auto-set to current due date + 3 months, on the 28th.</div>
+          <div className="modal cm" style={{ maxHeight: "90vh" }}>
+            <div className="cm-head">
+              <div className="cm-title-row">
+                <h2 className="cm-title">Create next cycle task</h2>
+                <button className="cm-close" onClick={() => !cloneModal.busy && setCloneModal(null)} title="Close"><IconClose size={16} /></button>
               </div>
-              <div style={{ width: 150 }}>
-                <label style={lblStyle}>Priority</label>
-                <select value={cloneModal.priority} onChange={(e) => setCloneModal((p) => ({ ...p, priority: e.target.value }))} style={inpStyle}>
-                  {["High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
+              <div className="cm-sub">
+                Review the copied details, then create the next task for <strong>{cloneModal.source.title}</strong>. The current task stays in place.
+              </div>
+              <div className="cm-flow">
+                <span className="cm-pill"><span className="cm-dot" style={{ background: getStatusColor(cloneModal.trigger_status) }} />{cloneModal.trigger_status}</span>
+                <span className="cm-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="13 6 19 12 13 18" /></svg></span>
+                <span className="cm-pill"><span className="cm-dot" style={{ background: getStatusColor(cloneModal.to_status) }} />{cloneModal.to_status} (new task)</span>
               </div>
             </div>
 
-            <div style={{ marginTop: 14 }}>
-              <label style={lblStyle}>Assignees</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, minHeight: 24 }}>
-                {cloneModal.assignees.length === 0 ? (
-                  <span style={{ fontSize: 12, color: "#bbb" }}>None</span>
-                ) : cloneModal.assignees.map((a) => (
-                  <span key={a} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "var(--accent-weak)", color: "var(--accent)", borderRadius: 20, padding: "2px 8px", fontSize: 12, fontWeight: 500 }}>
-                    {a}
-                    <button onClick={() => setCloneModal((p) => ({ ...p, assignees: p.assignees.filter((x) => x !== a) }))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--accent)", padding: 0, display: "inline-flex" }} title="Remove"><IconClose size={12} /></button>
-                  </span>
-                ))}
+            <div className="cm-body">
+              <div>
+                <label className="cm-label">Task name</label>
+                <input value={cloneModal.title} onChange={(e) => setCloneModal((p) => ({ ...p, title: e.target.value }))} />
               </div>
-            </div>
 
-            {(() => {
-              const flds = getFields();
-              if (!flds.length) return null;
-              return (
-                <div style={{ marginTop: 16 }}>
-                  <label style={lblStyle}>Fields</label>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {flds.map((f) => {
-                      const v = cloneModal.fieldValues[f.id] ?? "";
-                      const set = (val) => setCloneModal((p) => ({ ...p, fieldValues: { ...p.fieldValues, [f.id]: val } }));
-                      return (
-                        <div key={f.id} style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 10, alignItems: "center" }}>
-                          <span style={{ fontSize: 12.5, color: "#555" }}>{f.field_name}</span>
-                          {f.field_type === "dropdown" && f.field_options?.length ? (
-                            <select value={v} onChange={(e) => set(e.target.value)} style={inpStyle}>
-                              <option value="">—</option>
-                              {f.field_options.map((o) => <option key={o} value={o}>{o}</option>)}
-                            </select>
-                          ) : (
-                            <input type={f.field_type === "date" ? "date" : f.field_type === "number" ? "number" : "text"} value={v} onChange={(e) => set(e.target.value)} style={inpStyle} />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+              <div className="cm-row">
+                <div>
+                  <label className="cm-label">Due date</label>
+                  <input type="date" value={cloneModal.due_date || ""} onChange={(e) => setCloneModal((p) => ({ ...p, due_date: e.target.value }))} />
+                  <div className="cm-help">Current due date + 3 months, on the 28th.</div>
                 </div>
-              );
-            })()}
+                <div>
+                  <label className="cm-label">Priority</label>
+                  <select value={cloneModal.priority} onChange={(e) => setCloneModal((p) => ({ ...p, priority: e.target.value }))}>
+                    {["High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 22 }}>
+              <div style={{ marginTop: 16 }}>
+                <label className="cm-label">Assignees</label>
+                <div className="cm-chips">
+                  {cloneModal.assignees.length === 0 ? (
+                    <span className="cm-none">No assignees</span>
+                  ) : cloneModal.assignees.map((a) => (
+                    <span key={a} className="cm-assignee">
+                      {a}
+                      <button onClick={() => setCloneModal((p) => ({ ...p, assignees: p.assignees.filter((x) => x !== a) }))} title="Remove"><IconClose size={12} /></button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {(() => {
+                const flds = getFields();
+                if (!flds.length) return null;
+                return (
+                  <>
+                    <div className="cm-divider" />
+                    <div className="cm-section">Fields</div>
+                    <div className="cm-grid">
+                      {flds.map((f) => {
+                        const v = cloneModal.fieldValues[f.id] ?? "";
+                        const set = (val) => setCloneModal((p) => ({ ...p, fieldValues: { ...p.fieldValues, [f.id]: val } }));
+                        return (
+                          <div key={f.id}>
+                            <label className="cm-label">{f.field_name}</label>
+                            {f.field_type === "dropdown" && f.field_options?.length ? (
+                              <select value={v} onChange={(e) => set(e.target.value)}>
+                                <option value="">—</option>
+                                {f.field_options.map((o) => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            ) : (
+                              <input type={f.field_type === "date" ? "date" : f.field_type === "number" ? "number" : "text"} value={v} onChange={(e) => set(e.target.value)} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="cm-foot">
               <button onClick={() => !cloneModal.busy && setCloneModal(null)} className="btn btn-sm" disabled={cloneModal.busy}>Cancel</button>
-              <button onClick={confirmVatClone} disabled={cloneModal.busy}
-                style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: cloneModal.busy ? "#e5e7eb" : "var(--accent)", color: cloneModal.busy ? "#aaa" : "#fff", fontSize: 13, fontWeight: 600, cursor: cloneModal.busy ? "default" : "pointer" }}>
+              <button onClick={confirmVatClone} disabled={cloneModal.busy} className="cm-btn-primary">
                 {cloneModal.busy ? "Creating…" : "Create next task"}
               </button>
             </div>
