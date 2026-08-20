@@ -2619,7 +2619,9 @@ export default function Tasks({
   function maybeOpenVatClone(task, oldStatus, newSt) {
     if (!task || oldStatus === newSt) return;
     if (tasks.some((t) => t.cloned_from === task.id && !t.deleted_at)) return;
-    const rule = cloneRules.find((r) => r.enabled && cloneRuleInScope(r, task) && cloneRuleCondMatch(r, task));
+    // Evaluate conditions against the task's NEW state (the status just changed).
+    const evalTask = { ...task, status: newSt };
+    const rule = cloneRules.find((r) => r.enabled && cloneRuleInScope(r, evalTask) && cloneRuleCondMatch(r, evalTask));
     if (!rule) return;
     const p = (rule.actions || []).find((a) => a.type === "clone_reset")?.params || {};
     const dateField = p.date_field || "due_date";
