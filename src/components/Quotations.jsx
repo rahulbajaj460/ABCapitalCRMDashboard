@@ -661,6 +661,37 @@ function TemplatesTab({ templates, profile, onChanged }) {
   );
 }
 
+// Compare two template field arrays (keyed by `key`) and return labelled chips
+// describing what changed between the previous version (`prev`) and this one
+// (`curr`). `isInitial` marks the very first snapshot (nothing to compare to).
+const DIFF_TONE = {
+  add: { bg: "#dcfce7", fg: "#15803d" },
+  remove: { bg: "#fee2e2", fg: "#b91c1c" },
+  change: { bg: "#fef9c3", fg: "#a16207" },
+  none: { bg: "#f1f5f9", fg: "#64748b" },
+};
+function diffTemplateFields(prev, curr, isInitial) {
+  const c = Array.isArray(curr) ? curr : [];
+  if (isInitial) return [{ text: `Created with ${c.length} field${c.length === 1 ? "" : "s"}`, tone: DIFF_TONE.none }];
+  const p = Array.isArray(prev) ? prev : [];
+  const byKey = (arr) => Object.fromEntries(arr.filter((f) => f && f.key).map((f) => [f.key, f]));
+  const pm = byKey(p);
+  const cm = byKey(c);
+  const label = (f) => f.label || f.key;
+  const out = [];
+  for (const k of Object.keys(cm)) if (!(k in pm)) out.push({ text: `+ ${label(cm[k])}`, tone: DIFF_TONE.add });
+  for (const k of Object.keys(pm)) if (!(k in cm)) out.push({ text: `− ${label(pm[k])}`, tone: DIFF_TONE.remove });
+  for (const k of Object.keys(cm)) {
+    if (!(k in pm)) continue;
+    const a = pm[k], b = cm[k];
+    if (a.label !== b.label || a.type !== b.type || !!a.fee !== !!b.fee || (a.remarks || "") !== (b.remarks || "")) {
+      out.push({ text: `✎ ${label(b)}`, tone: DIFF_TONE.change });
+    }
+  }
+  if (out.length === 0) out.push({ text: "No field changes", tone: DIFF_TONE.none });
+  return out;
+}
+
 function TemplateEditor({ template, profile, onClose, onSaved }) {
   const isNew = !template.id;
   const isAdmin = profile?.role === "admin";
@@ -902,18 +933,34 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
                 {history.length === 0 ? (
                   <div style={{ padding: "10px 12px", fontSize: 12.5, color: "#9ca3af" }}>No history recorded yet.</div>
                 ) : (
-                  history.map((h) => (
-                    <div key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 12px", borderBottom: "1px solid #f2f2f2", fontSize: 12.5 }}>
-                      <span style={{ color: "#444" }}>
-                        <strong style={{ textTransform: "capitalize" }}>{h.action || "update"}</strong>
-                        {" · "}{h.changed_by || "Unknown"}
-                        <span style={{ color: "#aaa" }}>{" · "}{(h.fields || []).length} field{(h.fields || []).length === 1 ? "" : "s"} · rate {h.usd_rate ?? "—"}</span>
-                      </span>
-                      <span style={{ color: "#9ca3af", whiteSpace: "nowrap" }}>
-                        {h.changed_at ? new Date(h.changed_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
-                      </span>
-                    </div>
-                  ))
+                  history.map((h, i) => {
+                    // history is newest-first, so the previous version is the next row.
+                    const prev = history[i + 1];
+                    const diff = diffTemplateFields(prev?.fields, h.fields, !prev);
+                    return (
+                      <div key={h.id} style={{ padding: "8px 12px", borderBottom: "1px solid #f2f2f2", fontSize: 12.5 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                          <span style={{ color: "#444" }}>
+                            <strong style={{ textTransform: "capitalize" }}>{h.action || "update"}</strong>
+                            {" · "}{h.changed_by || "Unknown"}
+                            <span style={{ color: "#aaa" }}>{" · "}{(h.fields || []).length} field{(h.fields || []).length === 1 ? "" : "s"} · rate {h.usd_rate ?? "—"}</span>
+                          </span>
+                          <span style={{ color: "#9ca3af", whiteSpace: "nowrap" }}>
+                            {h.changed_at ? new Date(h.changed_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                          </span>
+                        </div>
+                        {diff.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
+                            {diff.map((d, j) => (
+                              <span key={j} style={{ fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 20, background: d.tone.bg, color: d.tone.fg }}>
+                                {d.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
