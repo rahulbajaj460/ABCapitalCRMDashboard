@@ -186,6 +186,24 @@ function fmtDate(str) {
   return fmtDMY(d);
 }
 
+const lblStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 5 };
+const inpStyle = { width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, boxSizing: "border-box" };
+
+// VAT cycle: next due date = base date + `months` months, snapped to `day`
+// (clamped to the month length). Base is the task's current due date, or today
+// if it has none. Returns an ISO yyyy-mm-dd string. Mirrors _abcap_shift_date.
+function advanceDue(baseStr, months = 3, day = 28) {
+  const base = baseStr ? new Date(baseStr) : new Date();
+  if (isNaN(base)) return "";
+  let y = base.getUTCFullYear();
+  let m = base.getUTCMonth() + months;
+  y += Math.floor(m / 12);
+  m = ((m % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const d = Math.min(day, lastDay);
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
 function parseFlexibleDate(str) {
   if (!str) return null;
   // Strip ordinal suffixes: 26th → 26, 2nd → 2, 1st → 1, 3rd → 3
@@ -360,6 +378,15 @@ export default function Tasks({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [statusMenu, setStatusMenu] = useState(null); // { taskId, statuses, x, y }
   const [assignMenu, setAssignMenu] = useState(null); // { taskId, x, y, current }
+  // "Clone task for next cycle" review modal (see updateTaskStatus), driven by
+  // enabled automations that contain a clone_reset action.
+  const [cloneModal, setCloneModal] = useState(null); // { source, title, due_date, priority, assignees, fieldValues, to_status, delete_parent, trigger_status, busy }
+  const [cloneRules, setCloneRules] = useState([]);
+  useEffect(() => {
+    supabase.from("automations").select("*").eq("enabled", true).then(({ data }) => {
+      setCloneRules((data || []).filter((a) => (a.actions || []).some((x) => x.type === "clone_reset")));
+    });
+  }, []);
   const [assignSearch, setAssignSearch] = useState("");
   const [folderListCounts, setFolderListCounts] = useState({}); // listId -> exact count
   const [listStatusCounts, setListStatusCounts] = useState({}); // status -> exact count (active list)
@@ -2279,6 +2306,7 @@ export default function Tasks({
 
   async function saveDrawer() {
     if (!drawerTask) return;
+    const drawerOldStatus = drawerTask.status;
     setDrawerSaving(true);
     const titleVal = (drawerEdits.title ?? drawerTask.title)?.trim();
     if (!titleVal) {
@@ -2390,6 +2418,7 @@ export default function Tasks({
           fvMap[fv.field_id] = fv.value;
         });
         setDrawerFieldValues(fvMap);
+        maybeOpenVatClone(updated, drawerOldStatus, updated.status);
       }
     }
     setDrawerSaving(false);
@@ -2546,6 +2575,129 @@ export default function Tasks({
     }
     if (drawerTask?.id === taskId)
       setDrawerEdits((p) => ({ ...p, status: newSt }));
+    fetchTasks();
+    maybeOpenVatClone(task, oldStatus, newSt);
+  }
+
+  // Rule-driven clone-for-next-cycle. When a task changes state and matches an
+  // enabled clone_reset automation (scope + conditions), open a review dialog
+  // pre-filled from that rule's params. Skips if a clone already exists.
+  function cloneRuleFieldValue(task, field) {
+    if (field === "status") return task.status;
+    if (field === "priority") return task.priority;
+    if (field === "due_date") return task.due_date;
+    if (typeof field === "string" && field.startsWith("field_")) {
+      const fid = field.slice(6);
+      return (task.task_field_values || []).find((v) => String(v.field_id) === fid)?.value;
+    }
+    return undefined;
+  }
+  function cloneRuleCondMatch(rule, task) {
+    const cs = rule.conditions || [];
+    if (cs.length === 0) return true;
+    const evalOne = (c) => {
+      const v = cloneRuleFieldValue(task, c.field);
+      const val = c.value;
+      switch (c.op) {
+        case "is": return String(v ?? "") === String(val ?? "");
+        case "is_not": return String(v ?? "") !== String(val ?? "");
+        case "contains": return String(v ?? "").toLowerCase().includes(String(val ?? "").toLowerCase());
+        case "is_set": return v != null && v !== "";
+        case "is_empty": return v == null || v === "";
+        default: return false;
+      }
+    };
+    const results = cs.map(evalOne);
+    return rule.conditions_match === "any" ? results.some(Boolean) : results.every(Boolean);
+  }
+  function cloneRuleInScope(rule, task) {
+    if (rule.scope_type === "space") return rule.scope_id === task.space_id;
+    if (rule.scope_type === "folder") return rule.scope_id === task.folder_id;
+    if (rule.scope_type === "list") return rule.scope_id === task.list_id;
+    return false;
+  }
+  function maybeOpenVatClone(task, oldStatus, newSt) {
+    if (!task || oldStatus === newSt) return;
+    if (tasks.some((t) => t.cloned_from === task.id && !t.deleted_at)) return;
+    const rule = cloneRules.find((r) => r.enabled && cloneRuleInScope(r, task) && cloneRuleCondMatch(r, task));
+    if (!rule) return;
+    const p = (rule.actions || []).find((a) => a.type === "clone_reset")?.params || {};
+    const dateField = p.date_field || "due_date";
+    const months = Number(p.months);
+    const day = Number(p.day);
+    const base = dateField === "due_date"
+      ? task.due_date
+      : (task.task_field_values || []).find((v) => `field_${v.field_id}` === dateField)?.value;
+    const seed = advanceDue(base, Number.isFinite(months) ? months : 3, Number.isFinite(day) ? day : 28);
+    const fieldValues = {};
+    for (const fv of task.task_field_values || [])
+      if (fv?.field_id != null) fieldValues[fv.field_id] = fv.value ?? "";
+    let due = task.due_date || "";
+    if (dateField === "due_date") due = seed;
+    else fieldValues[dateField.slice(6)] = seed;
+    setCloneModal({
+      source: task,
+      title: task.title || "",
+      due_date: due,
+      priority: task.priority || "Medium",
+      assignees: Array.isArray(task.assignees) ? [...task.assignees] : [],
+      fieldValues,
+      to_status: p.to_status || "To Do",
+      delete_parent: p.delete_parent !== false,
+      trigger_status: newSt,
+      busy: false,
+    });
+  }
+
+  async function confirmVatClone() {
+    const m = cloneModal;
+    if (!m) return;
+    const src = m.source;
+    setCloneModal((p) => ({ ...p, busy: true }));
+    const now = new Date().toISOString();
+    const payload = {
+      title: (m.title || "").trim() || src.title,
+      description: src.description || "",
+      space_id: src.space_id,
+      folder_id: src.folder_id || null,
+      list_id: src.list_id || null,
+      parent_id: src.parent_id || null,
+      status: m.to_status || "To Do",
+      priority: m.priority || src.priority || "Medium",
+      assignee: m.assignees[0] || "",
+      assignee_id: null,
+      assignees: m.assignees,
+      due_date: m.due_date || null,
+      cloned_from: src.id,
+      updated_by: profile?.full_name || "Unknown",
+      updated_at: now,
+    };
+    const { data, error } = await supabase.from("tasks").insert(payload).select().single();
+    if (error || !data) {
+      alert("Could not create the clone: " + (error?.message || "unknown error"));
+      setCloneModal((p) => (p ? { ...p, busy: false } : p));
+      return;
+    }
+    for (const [fid, value] of Object.entries(m.fieldValues || {})) {
+      if (value === "" || value == null) continue;
+      await supabase.from("task_field_values").insert({ task_id: data.id, field_id: fid, value });
+    }
+    await supabase.from("task_history").insert({
+      task_id: data.id,
+      changed_by: profile?.full_name || "Unknown",
+      changed_at: now,
+      changes: { created: true, cloned_from: src.id },
+      snapshot: data,
+    });
+    // Soft-delete the task THIS source was cloned from, keeping the list to the
+    // latest filed task + its next clone (when the rule opts in).
+    if (m.delete_parent && src.cloned_from) {
+      await supabase
+        .from("tasks")
+        .update({ deleted_at: now, deleted_by: profile?.full_name || "Unknown" })
+        .eq("id", src.cloned_from);
+    }
+    setCloneModal(null);
     fetchTasks();
   }
 
@@ -3856,6 +4008,89 @@ export default function Tasks({
         document.body,
       )}
       {/* Description hover popup — rendered into body via portal to escape any ancestor overflow/transform */}
+      {cloneModal && createPortal(
+        <div className="modal-overlay" style={{ zIndex: 100000 }} onClick={(e) => e.target === e.currentTarget && !cloneModal.busy && setCloneModal(null)}>
+          <div className="modal" style={{ maxWidth: 620, width: "100%", maxHeight: "88vh", overflowY: "auto", padding: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Create next cycle task</h2>
+              <button onClick={() => !cloneModal.busy && setCloneModal(null)} className="btn btn-sm" style={{ display: "inline-flex" }}><IconClose size={15} /></button>
+            </div>
+            <div style={{ fontSize: 12.5, color: "#666", marginBottom: 18, lineHeight: 1.6 }}>
+              "{cloneModal.source.title}" was moved to <strong>{cloneModal.trigger_status}</strong>. Review the copied details below — this creates a new <strong>{cloneModal.to_status}</strong> task for the next cycle. The current task stays in {cloneModal.trigger_status}.
+            </div>
+
+            <label style={lblStyle}>Task name</label>
+            <input value={cloneModal.title} onChange={(e) => setCloneModal((p) => ({ ...p, title: e.target.value }))} style={inpStyle} />
+
+            <div style={{ display: "flex", gap: 14, marginTop: 14 }}>
+              <div style={{ flex: 1 }}>
+                <label style={lblStyle}>Due date</label>
+                <input type="date" value={cloneModal.due_date || ""} onChange={(e) => setCloneModal((p) => ({ ...p, due_date: e.target.value }))} style={inpStyle} />
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Auto-set to current due date + 3 months, on the 28th.</div>
+              </div>
+              <div style={{ width: 150 }}>
+                <label style={lblStyle}>Priority</label>
+                <select value={cloneModal.priority} onChange={(e) => setCloneModal((p) => ({ ...p, priority: e.target.value }))} style={inpStyle}>
+                  {["High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <label style={lblStyle}>Assignees</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, minHeight: 24 }}>
+                {cloneModal.assignees.length === 0 ? (
+                  <span style={{ fontSize: 12, color: "#bbb" }}>None</span>
+                ) : cloneModal.assignees.map((a) => (
+                  <span key={a} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "var(--accent-weak)", color: "var(--accent)", borderRadius: 20, padding: "2px 8px", fontSize: 12, fontWeight: 500 }}>
+                    {a}
+                    <button onClick={() => setCloneModal((p) => ({ ...p, assignees: p.assignees.filter((x) => x !== a) }))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--accent)", padding: 0, display: "inline-flex" }} title="Remove"><IconClose size={12} /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {(() => {
+              const flds = getFields();
+              if (!flds.length) return null;
+              return (
+                <div style={{ marginTop: 16 }}>
+                  <label style={lblStyle}>Fields</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {flds.map((f) => {
+                      const v = cloneModal.fieldValues[f.id] ?? "";
+                      const set = (val) => setCloneModal((p) => ({ ...p, fieldValues: { ...p.fieldValues, [f.id]: val } }));
+                      return (
+                        <div key={f.id} style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 10, alignItems: "center" }}>
+                          <span style={{ fontSize: 12.5, color: "#555" }}>{f.field_name}</span>
+                          {f.field_type === "dropdown" && f.field_options?.length ? (
+                            <select value={v} onChange={(e) => set(e.target.value)} style={inpStyle}>
+                              <option value="">—</option>
+                              {f.field_options.map((o) => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          ) : (
+                            <input type={f.field_type === "date" ? "date" : f.field_type === "number" ? "number" : "text"} value={v} onChange={(e) => set(e.target.value)} style={inpStyle} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 22 }}>
+              <button onClick={() => !cloneModal.busy && setCloneModal(null)} className="btn btn-sm" disabled={cloneModal.busy}>Cancel</button>
+              <button onClick={confirmVatClone} disabled={cloneModal.busy}
+                style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: cloneModal.busy ? "#e5e7eb" : "var(--accent)", color: cloneModal.busy ? "#aaa" : "#fff", fontSize: 13, fontWeight: 600, cursor: cloneModal.busy ? "default" : "pointer" }}>
+                {cloneModal.busy ? "Creating…" : "Create next task"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {assignMenu && createPortal(
         <>
           <div style={{ position: "fixed", inset: 0, zIndex: 99998 }} onClick={() => setAssignMenu(null)} />

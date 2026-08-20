@@ -21,6 +21,7 @@ const ACTION_TYPES = [
   { value: "assign", label: "Assign to user" },
   { value: "set_field", label: "Set a field value" },
   { value: "shift_date", label: "Advance a date field" },
+  { value: "clone_reset", label: "Clone task for next cycle (review before create)" },
 ];
 const RECIPIENT_PRESETS = [
   { value: "assignee", label: "Assignee" },
@@ -384,6 +385,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                     <select value={a.type} onChange={(e) => updAction(a.id, { type: e.target.value, params:
                       e.target.value === "notify" ? { recipients: ["assignee"], channels: ["in_app"] }
                       : e.target.value === "shift_date" ? { field: "due_date", months: 3, day: 28 }
+                      : e.target.value === "clone_reset" ? { to_status: "To Do", date_field: "due_date", months: 3, day: 28, delete_parent: true }
                       : {} })} style={sel}>
                       {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
@@ -491,6 +493,32 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 5 }}>
                         Takes the field's current date, adds the months, and snaps to that day (blank day = keep the day). Empty date → based on today.
                         E.g. Due date +3 months on day 28 turns 28 Apr into 28 Jul.
+                      </div>
+                    </div>
+                  )}
+                  {a.type === "clone_reset" && (
+                    <div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>New task status</span>
+                        <select value={a.params.to_status || "To Do"} onChange={(e) => updAction(a.id, { params: { ...a.params, to_status: e.target.value } })} style={{ ...sel, minWidth: 120 }}>
+                          {scopeStatusNames.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                        <select value={a.params.date_field || "due_date"} onChange={(e) => updAction(a.id, { params: { ...a.params, date_field: e.target.value } })} style={{ ...sel, flex: 1, minWidth: 130 }}>
+                          {dateFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>+</span>
+                        <input type="number" min="0" value={a.params.months ?? 3} onChange={(e) => updAction(a.id, { params: { ...a.params, months: e.target.value } })} style={{ ...sel, width: 60 }} />
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>months, on day</span>
+                        <input type="number" min="1" max="31" value={a.params.day ?? 28} onChange={(e) => updAction(a.id, { params: { ...a.params, day: e.target.value } })} style={{ ...sel, width: 60 }} />
+                      </div>
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "#374151", marginTop: 8 }}>
+                        <input type="checkbox" checked={a.params.delete_parent !== false} onChange={(e) => updAction(a.id, { params: { ...a.params, delete_parent: e.target.checked } })} />
+                        Soft-delete the previous task in the chain (keeps the list short)
+                      </label>
+                      <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 6, lineHeight: 1.6 }}>
+                        When the trigger + conditions above match (e.g. Status changes → status is “Return Filed”), a review dialog opens in the app pre-filled with the task’s details; on confirm it creates the clone with the status and due date set here, keeping the original where it is. Runs on in-app changes.
                       </div>
                     </div>
                   )}
