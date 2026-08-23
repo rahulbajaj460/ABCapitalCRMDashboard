@@ -5,6 +5,27 @@ import { IconClose } from "./icons";
 
 const DEFAULT_COL_WIDTHS = { member: 220, email: 240, role: 130, joined: 140, actions: 60 };
 
+function formatBytes(n) {
+  if (n == null || isNaN(n)) return "—";
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = n / 1024, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function UsageCard({ label, value, sub, tone }) {
+  return (
+    <div className="metric-card">
+      <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 800, color: tone === "warn" ? "#b45309" : "#111827", marginTop: 6, letterSpacing: "-0.5px" }}>
+        {value ?? "—"}
+      </div>
+      {sub && <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
 export default function Settings({ currentUser, profile, spaces = [], onAccessChanged }) {
   const [activeTab, setActiveTab] = useState("members");
 
@@ -22,6 +43,11 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
   const [manageModal, setManageModal] = useState(null); // {type,entityId,name,spaceName}
   const [selectedUsers, setSelectedUsers] = useState(new Set());
   const [savingRule, setSavingRule] = useState(false);
+
+  // ── Usage state ──
+  const [usage, setUsage] = useState(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageErr, setUsageErr] = useState("");
 
   // ── Column resizing ──
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
@@ -51,6 +77,16 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
 
   useEffect(() => { fetchMembers(); }, []);
   useEffect(() => { if (activeTab === "permissions") fetchPermissions(); }, [activeTab]);
+  useEffect(() => { if (activeTab === "usage") fetchUsage(); }, [activeTab]);
+
+  async function fetchUsage() {
+    setUsageLoading(true);
+    setUsageErr("");
+    const { data, error } = await supabase.rpc("admin_usage_stats");
+    if (error) setUsageErr(error.message);
+    else setUsage(data);
+    setUsageLoading(false);
+  }
 
   async function fetchMembers() {
     const { data } = await supabase.from("profiles").select("*").order("created_at");
@@ -207,6 +243,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
           {[
             { key: "members", label: "👥 Members" },
             { key: "permissions", label: "🔒 Permissions" },
+            ...(profile?.role === "admin" ? [{ key: "usage", label: "📊 Usage" }] : []),
           ].map((tab) => (
             <button
               key={tab.key}
@@ -453,6 +490,45 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
                 )
               )}
             </div>
+          </>
+        )}
+
+        {/* ── USAGE TAB (admin only) ── */}
+        {activeTab === "usage" && profile?.role === "admin" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: "#6b7280" }}>Live usage from the database — use it to decide when email or storage needs upgrading.</div>
+              <button className="btn btn-sm" onClick={fetchUsage} disabled={usageLoading}>{usageLoading ? "Refreshing…" : "Refresh"}</button>
+            </div>
+
+            {usageErr ? (
+              <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#b91c1c", borderRadius: 8, padding: "10px 12px", fontSize: 12.5 }}>
+                {usageErr.includes("function") ? "Usage stats aren't available yet — run db/admin_usage_stats.sql in Supabase." : usageErr}
+              </div>
+            ) : usageLoading && !usage ? (
+              <div style={{ color: "#9ca3af", fontSize: 13 }}>Loading…</div>
+            ) : usage ? (
+              <>
+                <div className="metrics-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+                  <UsageCard label="Automation emails sent" value={(usage.emails_sent_total ?? 0).toLocaleString()} sub={`${(usage.emails_sent_30d ?? 0).toLocaleString()} in the last 30 days`} />
+                  <UsageCard label="Database storage used" value={formatBytes(usage.db_size_bytes)} sub="Postgres data + indexes" />
+                  <UsageCard label="File storage used" value={formatBytes(usage.storage_size_bytes)} sub="Uploaded files (templates, attachments)" />
+                </div>
+                <div className="metrics-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginTop: 14 }}>
+                  <UsageCard label="Emails pending" value={(usage.emails_pending ?? 0).toLocaleString()} sub="Waiting in the send queue" />
+                  <UsageCard label="Emails failed" value={(usage.emails_failed ?? 0).toLocaleString()} sub="Errored in the queue" tone={usage.emails_failed > 0 ? "warn" : undefined} />
+                  <UsageCard
+                    label="Last email sent"
+                    value={usage.last_email_sent_at ? new Date(usage.last_email_sent_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    sub="Most recent successful send"
+                  />
+                </div>
+                <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 16, lineHeight: 1.7 }}>
+                  For reference, Supabase's Free plan includes ~500 MB database and 1 GB file storage; Pro includes 8 GB database and 100 GB storage. Emails are sent via Resend — check its dashboard for your plan's monthly send limit.
+                  {usage.generated_at && <> Snapshot taken {new Date(usage.generated_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}.</>}
+                </div>
+              </>
+            ) : null}
           </>
         )}
       </div>
