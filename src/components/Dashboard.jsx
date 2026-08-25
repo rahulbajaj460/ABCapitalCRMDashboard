@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import { fmtDate } from "../dateFormat";
 
 function StatCard({ label, value, sub, icon, accent, tint, valueColor }) {
   return (
@@ -180,11 +181,14 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect }) {
                         >
                           {task.priority}
                         </span>
-                        {task.due_date && (
-                          <span style={{ fontSize: 11, color: "#aaa" }}>
-                            {task.due_date}
-                          </span>
-                        )}
+                        {task.due_date && (() => {
+                          const od = new Date(task.due_date) < new Date() && task.status !== "Done";
+                          return (
+                            <span style={{ fontSize: 11, color: od ? "#b91c1c" : "#aaa", fontWeight: od ? 600 : 400 }}>
+                              {od ? "⚠️ " : ""}{fmtDate(task.due_date)}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   ))}
