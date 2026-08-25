@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
+import { fmtDate, fmtDMY } from "../dateFormat";
 import ImportTasks from "./ImportTasks";
 import Automations from "./Automations";
 import { IconList, IconBoard, IconBolt, IconUpload, IconDownload, IconSearch, IconColumns, IconTrash, IconClose, IconCheck, IconEdit } from "./icons";
@@ -170,21 +171,7 @@ const FORMULA_PRESETS = [
   { key: "custom", label: "Custom (manual text)", fn: () => null },
 ];
 
-// Format a date as dd-mm-yyyy for display (uses UTC parts to avoid TZ shifts
-// on date-only ISO strings like "2026-10-08").
-function fmtDMY(d) {
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${dd}-${mm}-${yyyy}`;
-}
-
-function fmtDate(str) {
-  if (!str) return "—";
-  const d = new Date(str);
-  if (isNaN(d)) return str;
-  return fmtDMY(d);
-}
+// fmtDate / fmtDMY now live in ../dateFormat so every view stays consistent.
 
 // VAT cycle: next due date = base date + `months` months, snapped to `day`
 // (clamped to the month length). Base is the task's current due date, or today
@@ -3539,7 +3526,7 @@ export default function Tasks({
             padding: isOverdue || isSoon ? "2px 7px" : 0,
           }}
         >
-          {isOverdue ? `⚠️ ${task.due_date}` : task.due_date}
+          {isOverdue ? `⚠️ ${fmtDate(task.due_date)}` : fmtDate(task.due_date)}
         </span>
       );
     }
@@ -3948,7 +3935,7 @@ export default function Tasks({
       return "Assignees: " + (parts.join("; ") || "changed");
     }
     if (field === "due_date")
-      return `Due date: ${change.from || "none"} → ${change.to || "none"}`;
+      return `Due date: ${change.from ? fmtDate(change.from) : "none"} → ${change.to ? fmtDate(change.to) : "none"}`;
     if (field === "description") return "Description updated";
     return `${field} changed`;
   }
@@ -5288,11 +5275,14 @@ export default function Tasks({
                           >
                             {task.priority}
                           </span>
-                          {task.due_date && (
-                            <span style={{ fontSize: 11, color: "#aaa" }}>
-                              {task.due_date}
-                            </span>
-                          )}
+                          {task.due_date && (() => {
+                            const od = dueUrgency(task) === "overdue";
+                            return (
+                              <span style={{ fontSize: 11, color: od ? "#b91c1c" : "#aaa", fontWeight: od ? 600 : 400 }}>
+                                {od ? "⚠️ " : ""}{fmtDate(task.due_date)}
+                              </span>
+                            );
+                          })()}
                         </div>
                         {task.updated_by && (
                           <div
@@ -6137,7 +6127,7 @@ export default function Tasks({
                                 <span style={{ fontSize: 11, color: "#c0c0c0" }}>Unassigned</span>
                               )}
                               {child.due_date && (
-                                <span style={{ fontSize: 11, color: "#9ca3af" }}>· due {child.due_date}</span>
+                                <span style={{ fontSize: 11, color: dueUrgency(child) === "overdue" ? "#b91c1c" : "#9ca3af", fontWeight: dueUrgency(child) === "overdue" ? 600 : 400 }}>· due {fmtDate(child.due_date)}</span>
                               )}
                             </div>
                           </div>

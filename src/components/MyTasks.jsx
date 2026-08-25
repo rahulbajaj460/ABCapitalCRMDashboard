@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import { fmtDate } from "../dateFormat";
 
 export default function MyTasks({ profile }) {
   const [tasks, setTasks] = useState([]);
@@ -178,8 +179,8 @@ export default function MyTasks({ profile }) {
                     >
                       {task.due_date
                         ? isOverdue
-                          ? `⚠️ ${task.due_date}`
-                          : task.due_date
+                          ? `⚠️ ${fmtDate(task.due_date)}`
+                          : fmtDate(task.due_date)
                         : "—"}
                     </td>
                     <td style={tdStyle}>
