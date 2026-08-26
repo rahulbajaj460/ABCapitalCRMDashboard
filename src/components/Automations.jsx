@@ -10,6 +10,7 @@ const TRIGGERS = [
   { value: "date_based", label: "Date approaching / passed" },
   { value: "recurring", label: "Recurring reminder (every N days)" },
   { value: "task_created", label: "Task is created" },
+  { value: "any_change", label: "Any change (create, status, or field)" },
 ];
 const OPS = [
   ["is", "is"], ["is_not", "is not"], ["contains", "contains"],
@@ -22,6 +23,7 @@ const ACTION_TYPES = [
   { value: "set_field", label: "Set a field value" },
   { value: "shift_date", label: "Advance a date field" },
   { value: "clone_reset", label: "Clone task for next cycle (review before create)" },
+  { value: "mirror_to_list", label: "Mirror task to another list" },
 ];
 const RECIPIENT_PRESETS = [
   { value: "assignee", label: "Assignee" },
@@ -386,6 +388,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       e.target.value === "notify" ? { recipients: ["assignee"], channels: ["in_app"] }
                       : e.target.value === "shift_date" ? { field: "due_date", months: 3, day: 28 }
                       : e.target.value === "clone_reset" ? { to_status: "To Do", date_field: "due_date", months: 3, day: 28, delete_parent: true }
+                      : e.target.value === "mirror_to_list" ? { list_id: "", sync: "all" }
                       : {} })} style={sel}>
                       {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
@@ -519,6 +522,32 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       </label>
                       <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 6, lineHeight: 1.6 }}>
                         When the trigger + conditions above match (e.g. Status changes → status is “Return Filed”), a review dialog opens in the app pre-filled with the task’s details; on confirm it creates the clone with the status and due date set here, keeping the original where it is. Runs on in-app changes.
+                      </div>
+                    </div>
+                  )}
+                  {a.type === "mirror_to_list" && (
+                    <div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>Copy to list</span>
+                        <select value={a.params.list_id || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, list_id: e.target.value } })} style={{ ...sel, flex: 1, minWidth: 200 }}>
+                          <option value="">Select target list…</option>
+                          {allLists.map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {[spaceName(l.space_id), folderById(l.folder_id)?.name, l.name].filter(Boolean).join(" / ")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>Keep in sync</span>
+                        <select value={a.params.sync || "all"} onChange={(e) => updAction(a.id, { params: { ...a.params, sync: e.target.value } })} style={{ ...sel, minWidth: 160 }}>
+                          <option value="all">All fields</option>
+                          <option value="status">Status only</option>
+                          <option value="status_due">Status + due date</option>
+                        </select>
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 6, lineHeight: 1.6 }}>
+                        When the trigger + conditions match, a linked copy is created in the target list (once), then kept updated one-way from this task. Use the <strong>Any change</strong> trigger so it syncs on every edit. Custom fields map by column name between the two lists. Editing the copy never affects the original; if the condition later stops matching, the copy stays but stops updating.
                       </div>
                     </div>
                   )}
