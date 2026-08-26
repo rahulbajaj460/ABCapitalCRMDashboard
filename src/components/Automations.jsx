@@ -567,7 +567,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                         </select>
                       </div>
                       <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 6, lineHeight: 1.6 }}>
-                        When the trigger + conditions match, a linked copy is created in the target list (once), then kept updated one-way from this task. Use the <strong>Any change</strong> trigger so it syncs on every edit. Custom fields map by column name between the two lists. Editing the copy never affects the original; if the condition later stops matching, the copy stays but stops updating.
+                        When the trigger + conditions match, a linked copy is created in the target list (once), then kept updated one-way from this task. Use the <strong>Any change</strong> trigger so it syncs on every edit. Custom fields map by column name between the two lists; a matching column is auto-created on the target list if it doesn't exist. Editing the copy never affects the original; if the condition later stops matching, the copy stays but stops updating.
                       </div>
                     </div>
                     );
