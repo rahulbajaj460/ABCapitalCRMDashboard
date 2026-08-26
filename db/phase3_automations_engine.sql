@@ -23,6 +23,9 @@ set search_path = public;
 
 -- Match mode for an automation's conditions: 'all' (AND, default) or 'any' (OR).
 alter table automations add column if not exists conditions_match text default 'all';
+-- Links a task created by the mirror_to_list action back to its source task.
+alter table tasks add column if not exists mirror_of uuid references tasks(id) on delete set null;
+create index if not exists tasks_mirror_of_idx on tasks (mirror_of) where deleted_at is null;
 
 -- ---------------------------------------------------------------------
 -- 1. Support tables (audit trail + email outbox for Phase 4)
@@ -326,6 +329,7 @@ returns text language sql immutable as $$
     when 'date_based'      then 'a date rule'
     when 'recurring'       then 'a recurring reminder'
     when 'task_created'    then 'a task was created'
+    when 'any_change'      then 'a change'
     else ttype end;
 $$;
 
@@ -377,6 +381,76 @@ begin
                           least(day, last_day));
   end if;
   perform _abcap_set_field(t, field, to_char(new_date, 'YYYY-MM-DD'));
+end $$;
+
+-- Mirror a task into another list: create a linked copy the first time, then
+-- keep it in sync one-way (source -> copy). Custom fields are mapped by NAME
+-- between the two lists (their field ids differ). Never mirrors a task that is
+-- itself a mirror, so copies don't spawn copies.
+--   params: { list_id: <target list uuid>, sync: 'all' | 'status' | 'status_due' }
+create or replace function _abcap_mirror_to_list(t tasks, params jsonb)
+returns void language plpgsql security definer set search_path=public as $$
+declare
+  tgt_list uuid; tgt_folder uuid; tgt_space uuid;
+  sync_mode text; mid uuid; is_new boolean := false;
+  fv record; tgt_fid uuid;
+begin
+  if t.mirror_of is not null then return; end if;             -- don't mirror a mirror
+  tgt_list := nullif(params->>'list_id','')::uuid;
+  if tgt_list is null then return; end if;
+  sync_mode := coalesce(nullif(params->>'sync',''), 'all');
+
+  select folder_id, space_id into tgt_folder, tgt_space from lists where id = tgt_list;
+  if not found then return; end if;
+
+  perform set_config('abcap.in_automation','1', true);        -- suppress cascade
+
+  select id into mid from tasks
+   where mirror_of = t.id and list_id = tgt_list and deleted_at is null
+   limit 1;
+
+  if mid is null then
+    insert into tasks (title, description, status, priority, assignee, assignee_id,
+                       assignees, due_date, space_id, folder_id, list_id, mirror_of,
+                       updated_by, updated_at)
+    values (t.title, t.description, t.status, t.priority, t.assignee, t.assignee_id,
+            t.assignees, t.due_date, tgt_space, tgt_folder, tgt_list, t.id,
+            t.updated_by, now())
+    returning id into mid;
+    is_new := true;
+  else
+    if sync_mode = 'status' then
+      update tasks set status = t.status, updated_at = now() where id = mid;
+    elsif sync_mode = 'status_due' then
+      update tasks set status = t.status, due_date = t.due_date, updated_at = now() where id = mid;
+    else
+      update tasks set title = t.title, description = t.description, status = t.status,
+             priority = t.priority, assignee = t.assignee, assignee_id = t.assignee_id,
+             assignees = t.assignees, due_date = t.due_date, updated_at = now()
+       where id = mid;
+    end if;
+  end if;
+
+  -- Custom fields: full snapshot on create; on later syncs only when sync = 'all'.
+  -- Matched by field name so values land on the target list's own fields.
+  if is_new or sync_mode = 'all' then
+    for fv in
+      select tfv.value, sf.field_name
+        from task_field_values tfv
+        join space_fields sf on sf.id = tfv.field_id
+       where tfv.task_id = t.id
+    loop
+      select id into tgt_fid from space_fields
+       where list_id = tgt_list and field_name = fv.field_name
+       limit 1;
+      if tgt_fid is not null then
+        update task_field_values set value = fv.value where task_id = mid and field_id = tgt_fid;
+        if not found then
+          insert into task_field_values(task_id, field_id, value) values (mid, tgt_fid, fv.value);
+        end if;
+      end if;
+    end loop;
+  end if;
 end $$;
 
 -- ---------------------------------------------------------------------
@@ -448,6 +522,9 @@ begin
           nullif(act->'params'->>'day','')::int
         );
       end if;
+
+    elsif atype = 'mirror_to_list' then
+      perform _abcap_mirror_to_list(t, act->'params');
     end if;
   end loop;
 
@@ -472,7 +549,11 @@ begin
     ttype := a.trigger->>'type';
     matched := false;
 
-    if    event = 'task_created'    and ttype = 'task_created'    then matched := true;
+    -- "Any change" fires on every task event (create / status / field / assign).
+    -- Used by mirror rules that must sync whenever anything changes; the rule's
+    -- conditions still gate whether the action runs.
+    if ttype = 'any_change' then matched := true;
+    elsif event = 'task_created'    and ttype = 'task_created'    then matched := true;
     elsif event = 'assigned'        and ttype = 'assigned'        then matched := true;
     elsif event = 'comment_mention' and ttype = 'comment_mention' then matched := true;
     elsif event = 'status_changed'  and ttype = 'status_changed'  then
