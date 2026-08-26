@@ -432,10 +432,12 @@ begin
   end if;
 
   -- Custom fields: full snapshot on create; on later syncs only when sync = 'all'.
-  -- Matched by field name so values land on the target list's own fields.
+  -- Matched by field name so values land on the target list's own fields. If the
+  -- target list has no field of that name, auto-create one (same type/options)
+  -- so nothing is silently dropped.
   if is_new or sync_mode = 'all' then
     for fv in
-      select tfv.value, sf.field_name
+      select tfv.value, sf.field_name, sf.field_type, sf.field_options
         from task_field_values tfv
         join space_fields sf on sf.id = tfv.field_id
        where tfv.task_id = t.id
@@ -443,11 +445,15 @@ begin
       select id into tgt_fid from space_fields
        where list_id = tgt_list and field_name = fv.field_name
        limit 1;
-      if tgt_fid is not null then
-        update task_field_values set value = fv.value where task_id = mid and field_id = tgt_fid;
-        if not found then
-          insert into task_field_values(task_id, field_id, value) values (mid, tgt_fid, fv.value);
-        end if;
+      if tgt_fid is null then
+        insert into space_fields (space_id, folder_id, list_id, field_name, field_type, field_options, field_order)
+        values (tgt_space, tgt_folder, tgt_list, fv.field_name, fv.field_type, fv.field_options,
+                coalesce((select max(field_order) from space_fields where list_id = tgt_list), 0) + 1)
+        returning id into tgt_fid;
+      end if;
+      update task_field_values set value = fv.value where task_id = mid and field_id = tgt_fid;
+      if not found then
+        insert into task_field_values(task_id, field_id, value) values (mid, tgt_fid, fv.value);
       end if;
     end loop;
   end if;
