@@ -525,20 +525,40 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       </div>
                     </div>
                   )}
-                  {a.type === "mirror_to_list" && (
+                  {a.type === "mirror_to_list" && (() => {
+                    // Cascading Space -> Folder -> List picker (like "Applies to").
+                    // Derive the space/folder from a saved list_id so existing
+                    // rules pre-fill even though only list_id is stored.
+                    const savedList = allLists.find((l) => l.id === a.params.list_id);
+                    const tSpace = a.params.target_space_id || savedList?.space_id || "";
+                    const tFolder = a.params.target_folder_id || savedList?.folder_id || "";
+                    return (
                     <div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>Copy to list</span>
-                        <select value={a.params.list_id || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, list_id: e.target.value } })} style={{ ...sel, flex: 1, minWidth: 200 }}>
-                          <option value="">Select target list…</option>
-                          {allLists.map((l) => (
-                            <option key={l.id} value={l.id}>
-                              {[spaceName(l.space_id), folderById(l.folder_id)?.name, l.name].filter(Boolean).join(" / ")}
-                            </option>
-                          ))}
+                      <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 6 }}>Copy to</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <select value={tSpace} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: e.target.value, target_folder_id: "", list_id: "" } })} style={sel}>
+                          <option value="">Select space…</option>
+                          {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
+                        {tSpace && (
+                          <select value={tFolder} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: e.target.value, list_id: "" } })} style={sel}>
+                            <option value="">Select folder…</option>
+                            {foldersOf(tSpace).map((f) => <option key={f.id} value={f.id}>↳ {f.name}</option>)}
+                          </select>
+                        )}
+                        {tFolder && (
+                          <select value={a.params.list_id || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: tFolder, list_id: e.target.value } })} style={sel}>
+                            <option value="">Select list…</option>
+                            {allLists.filter((l) => l.folder_id === tFolder).map((l) => <option key={l.id} value={l.id}>↳↳ {l.name}</option>)}
+                          </select>
+                        )}
                       </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                      {a.params.list_id && (
+                        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 6 }}>
+                          Target: {[spaceName(tSpace), folderById(tFolder)?.name, allLists.find((l) => l.id === a.params.list_id)?.name].filter(Boolean).join(" / ")}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
                         <span style={{ fontSize: 12.5, color: "#6b7280" }}>Keep in sync</span>
                         <select value={a.params.sync || "all"} onChange={(e) => updAction(a.id, { params: { ...a.params, sync: e.target.value } })} style={{ ...sel, minWidth: 160 }}>
                           <option value="all">All fields</option>
@@ -550,7 +570,8 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                         When the trigger + conditions match, a linked copy is created in the target list (once), then kept updated one-way from this task. Use the <strong>Any change</strong> trigger so it syncs on every edit. Custom fields map by column name between the two lists. Editing the copy never affects the original; if the condition later stops matching, the copy stays but stops updating.
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ))}
               <button onClick={addAction} style={{ background: "none", border: "none", color: "var(--accent)", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0 }}>+ Add action</button>
