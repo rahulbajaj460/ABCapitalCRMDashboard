@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase";
-import { Kpi, Card, Donut, HBars, TrendBars, ProgressBar, DeltaBadge, SegmentBar } from "./charts";
+import { Kpi, Card, Donut, HBars, ProgressBar, DeltaBadge, SegmentBar } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
 
 function AttentionRows({ items, kind, onOpenScope, empty }) {
@@ -10,12 +10,12 @@ function AttentionRows({ items, kind, onOpenScope, empty }) {
       {items.map((t) => (
         <div key={t.id} onClick={() => onOpenScope?.({ space_id: t.space_id, list_id: t.list_id }, t.id)}
           style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f4f4f4", fontSize: 12.5, cursor: "pointer" }}>
-          <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title || "Untitled"}</span>
-          <span style={{ flexShrink: 0, fontWeight: 600, color: kind === "overdue" ? "#dc2626" : kind === "stuck" ? "#b45309" : "#6b7280" }}>
-            {kind === "overdue" && `${t.days}d overdue`}
-            {kind === "stuck" && `${t.days}d idle`}
-            {kind === "unassigned" && "unassigned"}
-          </span>
+          <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled"}</span>
+          {kind !== "unassigned" && (
+            <span style={{ flexShrink: 0, fontWeight: 600, color: kind === "overdue" ? "#dc2626" : "#b45309" }}>
+              {kind === "overdue" ? `${t.days}d overdue` : `${t.days}d idle`}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -153,40 +153,13 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
               </Card>
             </div>
 
-            {/* Charts row */}
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(320px, 1.3fr)", gap: 16, marginBottom: 16 }}>
+            {/* Status distribution + assignee workload */}
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(280px, 1fr)", gap: 16, marginBottom: 16 }}>
               <Card title="Status distribution">
                 <Donut
                   centerLabel={total.toLocaleString()} centerSub="tasks"
                   data={(data.by_status || []).slice(0, 8).map((s) => ({ label: s.status, value: s.count, color: statusColor(s.status) }))}
                 />
-              </Card>
-              <Card title="Created vs completed (last 6 months)">
-                <TrendBars data={data.trend || []} />
-              </Card>
-            </div>
-
-            {/* Space health + assignee workload */}
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 1.4fr) minmax(280px, 1fr)", gap: 16, marginBottom: 16 }}>
-              <Card title="Space health">
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {(data.by_space || []).map((sp) => {
-                    const p = sp.total > 0 ? Math.round(((sp.completed ?? sp.done) / sp.total) * 100) : 0;
-                    const sObj = spaceById[sp.space_id];
-                    return (
-                      <div key={sp.space_id} style={{ cursor: sObj ? "pointer" : "default" }} onClick={() => sObj && onSpaceSelect(sObj)}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, fontSize: 12.5 }}>
-                          <span style={{ fontWeight: 600, color: "#111827" }}>{sp.name}</span>
-                          <span style={{ color: "#6b7280" }}>
-                            {sp.total} tasks · {p}% done
-                            {sp.overdue > 0 && <span style={{ color: "#b91c1c", fontWeight: 600 }}> · {sp.overdue} overdue</span>}
-                          </span>
-                        </div>
-                        <ProgressBar pct={p} color={sObj?.color || "var(--accent)"} />
-                      </div>
-                    );
-                  })}
-                </div>
               </Card>
               <Card title="Workload by assignee">
                 {(() => {
@@ -211,6 +184,30 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
                     />
                   );
                 })()}
+              </Card>
+            </div>
+
+            {/* Space health (full width) */}
+            <div style={{ marginBottom: 16 }}>
+              <Card title="Space health">
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {(data.by_space || []).map((sp) => {
+                    const p = sp.total > 0 ? Math.round(((sp.completed ?? sp.done) / sp.total) * 100) : 0;
+                    const sObj = spaceById[sp.space_id];
+                    return (
+                      <div key={sp.space_id} style={{ cursor: sObj ? "pointer" : "default" }} onClick={() => sObj && onSpaceSelect(sObj)}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, fontSize: 12.5 }}>
+                          <span style={{ fontWeight: 600, color: "#111827" }}>{sp.name}</span>
+                          <span style={{ color: "#6b7280" }}>
+                            {sp.total} tasks · {p}% done
+                            {sp.overdue > 0 && <span style={{ color: "#b91c1c", fontWeight: 600 }}> · {sp.overdue} overdue</span>}
+                          </span>
+                        </div>
+                        <ProgressBar pct={p} color={sObj?.color || "var(--accent)"} />
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
             </div>
           </>
