@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import { Kpi, Card, Donut, HBars, ProgressBar, DeltaBadge, SegmentBar } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
 
-function AttentionRows({ items, kind, onOpenScope, empty }) {
+function AttentionRows({ items, kind, onOpenScope, empty, spaceName }) {
   if (!items || items.length === 0) return <div style={{ fontSize: 12, color: "#9ca3af" }}>{empty}</div>;
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
@@ -11,11 +11,9 @@ function AttentionRows({ items, kind, onOpenScope, empty }) {
         <div key={t.id} onClick={() => onOpenScope?.({ space_id: t.space_id, list_id: t.list_id }, t.id)}
           style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f4f4f4", fontSize: 12.5, cursor: "pointer" }}>
           <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled"}</span>
-          {kind !== "unassigned" && (
-            <span style={{ flexShrink: 0, fontWeight: 600, color: kind === "overdue" ? "#dc2626" : "#b45309" }}>
-              {kind === "overdue" ? `${t.days}d overdue` : `${t.days}d idle`}
-            </span>
-          )}
+          <span style={{ flexShrink: 0, fontWeight: kind === "unassigned" ? 400 : 600, color: kind === "overdue" ? "#dc2626" : kind === "stuck" ? "#b45309" : "#9ca3af" }}>
+            {kind === "overdue" ? `${t.days}d overdue` : kind === "stuck" ? `${t.days}d idle` : (spaceName?.(t.space_id) || "")}
+          </span>
         </div>
       ))}
     </div>
@@ -64,17 +62,17 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
           <>
             {/* KPI row */}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
-              <Kpi label="Total tasks" value={total.toLocaleString()} sub="across all spaces" />
-              <Kpi label="In progress" value={data.in_progress.toLocaleString()} sub={`${pct(data.in_progress)}% of all`} tone="warn" />
-              <Kpi label="Completed" value={(data.completed ?? data.done).toLocaleString()} sub={`${pct(data.completed ?? data.done)}% completion`} tone="good" />
-              <Kpi label="Urgent open" value={data.urgent.toLocaleString()} sub="high priority, not done" tone="danger" />
-              <Kpi label="Overdue" value={data.overdue.toLocaleString()} sub="past due & still open" tone="danger" />
-              <Kpi label="Due in 30 days" value={data.due_30d.toLocaleString()} sub={`${data.due_7d} within 7 days`} />
+              <Kpi label="Total tasks" value={total.toLocaleString()} sub="across all spaces" tip="Every non-deleted task across all spaces (excludes trashed tasks)." />
+              <Kpi label="In progress" value={data.in_progress.toLocaleString()} sub={`${pct(data.in_progress)}% of all`} tone="warn" tip="Tasks whose status is exactly 'In Progress'." />
+              <Kpi label="Completed" value={(data.completed ?? data.done).toLocaleString()} sub={`${pct(data.completed ?? data.done)}% completion`} tone="good" tip="Tasks in a status marked as 'complete' for their space (set per status in Manage statuses; unset statuses auto-count done/complete/closed). Completion % = completed ÷ total." />
+              <Kpi label="Urgent open" value={data.urgent.toLocaleString()} sub="high priority, not done" tone="danger" tip="High-priority tasks that are still open (not in a done/closed/cancelled status)." />
+              <Kpi label="Overdue" value={data.overdue.toLocaleString()} sub="past due & still open" tone="danger" tip="Open tasks whose due date is before today." />
+              <Kpi label="Due in 30 days" value={data.due_30d.toLocaleString()} sub={`${data.due_7d} within 7 days`} tip="Open tasks due within the next 30 days (the sub-line shows how many fall within 7 days)." />
             </div>
 
             {/* Executive row: velocity · aging · cycle */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 16, marginBottom: 16 }}>
-              <Card title="Velocity (last 30 days)">
+              <Card title="Velocity (last 30 days)" tip="Created = tasks added in the last 30 days. Completed = tasks marked complete in the last 30 days. '▲/▼ vs prior 30d' compares to the previous 30-day window. Backlog change = created − completed (a growing backlog means work is coming in faster than it's cleared).">
                 <div style={{ display: "flex", gap: 24 }}>
                   <div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: "#111827" }}>{data.created_30d}</div>
@@ -96,7 +94,7 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
                   );
                 })()}
               </Card>
-              <Card title="Overdue aging">
+              <Card title="Overdue aging" tip="How long overdue tasks have been past their due date: 0–7 days, 8–30 days, and 30+ days. Bigger 30+ bars mean chronic, long-ignored work. 'Oldest overdue' is the single most overdue task.">
                 <SegmentBar segs={[
                   { label: "0–7d", value: data.overdue_0_7 || 0, color: "#f59e0b" },
                   { label: "8–30d", value: data.overdue_8_30 || 0, color: "#f97316" },
@@ -106,7 +104,7 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
                   Oldest overdue: <strong style={{ color: "#dc2626" }}>{data.oldest_overdue_days || 0} days</strong>
                 </div>
               </Card>
-              <Card title="Delivery quality (90 days)">
+              <Card title="Delivery quality (90 days)" tip="Based on tasks completed in the last 90 days. 'Avg days to complete' = average time from creation to completion (cycle time — lower is faster). 'Completed on time' = share of those completions that were done on or before their due date.">
                 <div style={{ display: "flex", gap: 24 }}>
                   <div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: "#111827" }}>{data.cycle_time_avg ?? "—"}</div>
@@ -122,7 +120,7 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
 
             {/* Attention + deadlines */}
             <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 1.6fr) minmax(220px, 1fr)", gap: 16, marginBottom: 16 }}>
-              <Card title="Needs attention">
+              <Card title="Needs attention" tip="Tasks worth acting on now. Most overdue = furthest past due. Stuck = open with no update in 30+ days. Unassigned high-priority = High priority with no assignee (shows which space it's in). Click any row to open it.">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 18 }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Most overdue</div>
@@ -134,11 +132,11 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
                   </div>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Unassigned high-priority</div>
-                    <AttentionRows items={data.attention?.unassigned_high} kind="unassigned" onOpenScope={onOpenScope} empty="All assigned" />
+                    <AttentionRows items={data.attention?.unassigned_high} kind="unassigned" onOpenScope={onOpenScope} empty="All assigned" spaceName={(id) => spaceById[id]?.name} />
                   </div>
                 </div>
               </Card>
-              <Card title="Deadline calendar">
+              <Card title="Deadline calendar" tip="Count of open tasks whose due date falls within each window (cumulative). Since your due dates are statutory/filing deadlines, this is your upcoming compliance load. Open a space's Overview tab for the actual list.">
                 {[
                   { label: "Next 7 days", value: data.due_7d, color: "#dc2626" },
                   { label: "Next 30 days", value: data.due_30d, color: "#f59e0b" },
@@ -161,7 +159,7 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
                   data={(data.by_status || []).slice(0, 8).map((s) => ({ label: s.status, value: s.count, color: statusColor(s.status) }))}
                 />
               </Card>
-              <Card title="Workload by assignee">
+              <Card title="Workload by assignee" tip="Open (not-done) tasks per person, with overdue counts. Anyone marked '⚠ likely bulk/system' has an abnormally high load (5×+ the median, 100+) — usually a catch-all/import account, not a real person; it's greyed so it doesn't distort the view.">
                 {(() => {
                   const rows = data.by_assignee || [];
                   const opens = rows.map((r) => r.open).sort((a, b) => a - b);
@@ -189,7 +187,8 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
 
             {/* Space health (full width) */}
             <div style={{ marginBottom: 16 }}>
-              <Card title="Space health">
+              <Card title="Space health" tip="Per-space snapshot: total tasks, completion % (using that space's completed-statuses config), and overdue count. Click a space to open it. Bar colour is the space's colour.">
+
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {(data.by_space || []).map((sp) => {
                     const p = sp.total > 0 ? Math.round(((sp.completed ?? sp.done) / sp.total) * 100) : 0;

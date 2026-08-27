@@ -58,14 +58,14 @@ export default function SpaceOverview({ space, onOpenScope }) {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1.3fr) minmax(200px, 1fr)", gap: 16, marginBottom: 16 }}>
-            <Card title="Overdue aging">
+            <Card title="Overdue aging" tip="How long this space's overdue tasks have been past due: 0–7 / 8–30 / 30+ days. A large 30+ segment signals chronic backlog.">
               <SegmentBar segs={[
                 { label: "0–7d", value: data.overdue_0_7 || 0, color: "#f59e0b" },
                 { label: "8–30d", value: data.overdue_8_30 || 0, color: "#f97316" },
                 { label: "30d+", value: data.overdue_30p || 0, color: "#dc2626" },
               ]} />
             </Card>
-            <Card title="Delivery quality (90d)">
+            <Card title="Delivery quality (90d)" tip="From tasks completed in the last 90 days in this space. 'avg days' = average creation-to-completion time. 'on time' = share completed on or before their due date.">
               <div style={{ display: "flex", gap: 20 }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: "#111827" }}>{data.cycle_time_avg ?? "—"}</div>

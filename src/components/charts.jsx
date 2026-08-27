@@ -2,12 +2,19 @@
 // Used by the Dashboard and Space Overview. Palette/statusColor live in
 // ../chartUtils so this file exports only components.
 
-export function Card({ title, action, children, style }) {
+// Small circled "i" with a native hover tooltip explaining a metric.
+export function InfoDot({ tip }) {
+  return (
+    <span title={tip} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 15, height: 15, borderRadius: "50%", border: "1px solid #cbd5e1", color: "#94a3b8", fontSize: 10, fontWeight: 700, cursor: "help", marginLeft: 6, flexShrink: 0, fontStyle: "italic" }}>i</span>
+  );
+}
+
+export function Card({ title, action, children, style, tip }) {
   return (
     <div style={{ background: "#fff", border: "1px solid #ececec", borderRadius: 14, padding: 18, ...style }}>
       {(title || action) && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827" }}>{title}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center" }}>{title}{tip && <InfoDot tip={tip} />}</div>
           {action}
         </div>
       )}
@@ -16,12 +23,12 @@ export function Card({ title, action, children, style }) {
   );
 }
 
-export function Kpi({ label, value, sub, tone, icon }) {
+export function Kpi({ label, value, sub, tone, icon, tip }) {
   const color = tone === "danger" ? "#dc2626" : tone === "warn" ? "#b45309" : tone === "good" ? "#15803d" : "#111827";
   return (
     <div style={{ background: "#fff", border: "1px solid #ececec", borderRadius: 14, padding: "16px 18px", flex: 1, minWidth: 150 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 12.5, color: "#6b7280", fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 12.5, color: "#6b7280", fontWeight: 600, display: "flex", alignItems: "center" }}>{label}{tip && <InfoDot tip={tip} />}</div>
         {icon}
       </div>
       <div style={{ fontSize: 28, fontWeight: 800, color, marginTop: 8, letterSpacing: "-0.5px" }}>{value}</div>
