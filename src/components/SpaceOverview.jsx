@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase";
 import { fmtDate } from "../dateFormat";
-import { Kpi, Card, Donut, HBars, ProgressBar } from "./charts";
+import { Kpi, Card, Donut, HBars, ProgressBar, SegmentBar } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
 
 // Per-space analytics shown in the Overview tab. Refetches whenever it mounts
@@ -54,6 +54,28 @@ export default function SpaceOverview({ space, onOpenScope }) {
             <Kpi label="Completed" value={(data.done || 0).toLocaleString()} sub={`${donePct}% completion`} tone="good" />
             <Kpi label="Overdue" value={(data.overdue || 0).toLocaleString()} sub="past due & open" tone="danger" />
             <Kpi label="Due in 30 days" value={(data.due_30d || 0).toLocaleString()} sub="upcoming & open" tone="warn" />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1.3fr) minmax(200px, 1fr)", gap: 16, marginBottom: 16 }}>
+            <Card title="Overdue aging">
+              <SegmentBar segs={[
+                { label: "0–7d", value: data.overdue_0_7 || 0, color: "#f59e0b" },
+                { label: "8–30d", value: data.overdue_8_30 || 0, color: "#f97316" },
+                { label: "30d+", value: data.overdue_30p || 0, color: "#dc2626" },
+              ]} />
+            </Card>
+            <Card title="Delivery quality (90d)">
+              <div style={{ display: "flex", gap: 20 }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#111827" }}>{data.cycle_time_avg ?? "—"}</div>
+                  <div style={{ fontSize: 11, color: "#6b7280" }}>avg days</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: (data.on_time_pct ?? 100) >= 80 ? "#15803d" : "#b45309" }}>{data.on_time_pct ?? "—"}{data.on_time_pct != null ? "%" : ""}</div>
+                  <div style={{ fontSize: 11, color: "#6b7280" }}>on time</div>
+                </div>
+              </div>
+            </Card>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(280px, 1fr)", gap: 16, marginBottom: 16 }}>
