@@ -460,6 +460,7 @@ export default function App() {
             onRefreshSpaces={fetchSpaces}
             openTaskId={openTaskId}
             onTaskOpened={() => setOpenTaskId(null)}
+            onOpenScope={(scope, taskId) => handleOpenTaskFromNotification({ link_scope: scope, task_id: taskId || null })}
           />
         )}
         {view === "wiki" && (
