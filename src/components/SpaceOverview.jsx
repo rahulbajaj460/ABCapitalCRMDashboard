@@ -51,10 +51,10 @@ export default function SpaceOverview({ space, onOpenScope }) {
       ) : data ? (
         <>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
-            <Kpi label="Total tasks" value={total.toLocaleString()} sub="in this space" />
-            <Kpi label="Completed" value={completedCount.toLocaleString()} sub={`${donePct}% completion`} tone="good" />
-            <Kpi label="Overdue" value={(data.overdue || 0).toLocaleString()} sub="past due & open" tone="danger" />
-            <Kpi label="Due in 30 days" value={(data.due_30d || 0).toLocaleString()} sub="upcoming & open" tone="warn" />
+            <Kpi label="Total tasks" value={total.toLocaleString()} sub="in this space" tip="Every non-deleted task in this space (excludes trashed)." />
+            <Kpi label="Completed" value={completedCount.toLocaleString()} sub={`${donePct}% completion`} tone="good" tip="Tasks in a status marked 'complete' for this space (set per status in Manage statuses; unset statuses auto-count done/complete/closed). Completion % = completed ÷ total." />
+            <Kpi label="Overdue" value={(data.overdue || 0).toLocaleString()} sub="past due & open" tone="danger" tip="Open tasks in this space whose due date is before today." />
+            <Kpi label="Due in 30 days" value={(data.due_30d || 0).toLocaleString()} sub="upcoming & open" tone="warn" tip="Open tasks in this space due within the next 30 days." />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1.3fr) minmax(200px, 1fr)", gap: 16, marginBottom: 16 }}>
