@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import { fmtDate, fmtDMY } from "../dateFormat";
 import ImportTasks from "./ImportTasks";
 import Automations from "./Automations";
+import SpaceOverview from "./SpaceOverview";
 import { IconList, IconBoard, IconBolt, IconUpload, IconDownload, IconSearch, IconColumns, IconTrash, IconClose, IconCheck, IconEdit } from "./icons";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -347,12 +348,20 @@ export default function Tasks({
   onRefreshSpaces,
   openTaskId,
   onTaskOpened,
+  onOpenScope,
 }) {
   const [tasks, setTasks] = useState([]);
   const [newTaskIds, setNewTaskIds] = useState(() => new Set()); // recently-arrived tasks, for the "new" highlight
   const [taskMeta, setTaskMeta] = useState({}); // { [taskId]: { attachmentCount, checklistChecked, checklistTotal } }
   const [descPopup, setDescPopup] = useState(null); // { taskId, x, y }
   const [viewMode, setViewMode] = useState("list");
+  // Selecting a bare space defaults to the Overview tab; drilling into a folder
+  // or list leaves Overview for the List view.
+  useEffect(() => {
+    if (activeSpace && !activeFolder && !activeList) setViewMode("overview");
+    else setViewMode((v) => (v === "overview" ? "list" : v));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSpace?.id, activeFolder?.id, activeList?.id]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showFieldModal, setShowFieldModal] = useState(false);
@@ -4341,6 +4350,15 @@ export default function Tasks({
         {/* Toolbar */}
         <div className="toolbar-row">
           <div className="tabs" style={{ border: "none", padding: 0 }}>
+            {activeSpace && (
+              <div
+                className={`tab ${viewMode === "overview" ? "active" : ""}`}
+                onClick={() => setViewMode("overview")}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                <IconBoard size={15} /> Overview
+              </div>
+            )}
             <div
               className={`tab ${viewMode === "list" ? "active" : ""}`}
               onClick={() => setViewMode("list")}
@@ -4356,6 +4374,7 @@ export default function Tasks({
               <IconBoard size={15} /> Board
             </div>
           </div>
+          {viewMode !== "overview" && (
           <div className="toolbar-right">
             <div className="toolbar-search">
               <span style={{ color: "#9aacad", display: "inline-flex" }}><IconSearch size={15} /></span>
@@ -4678,9 +4697,13 @@ export default function Tasks({
               </button>
             )}
           </div>
+          )}
         </div>
 
         <div className="content-area">
+          {viewMode === "overview" && activeSpace && (
+            <SpaceOverview key={activeSpace.id} space={activeSpace} onOpenScope={onOpenScope} />
+          )}
           {viewMode === "list" && (
             <div className={activeFolder ? undefined : "task-table-scroll"}>
               <div style={activeFolder ? undefined : { width: "max-content", minWidth: "100%" }}>

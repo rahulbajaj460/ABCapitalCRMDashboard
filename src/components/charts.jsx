@@ -1,0 +1,130 @@
+// Lightweight, dependency-free charts (SVG + CSS) styled to the app's palette.
+// Used by the Dashboard and Space Overview. Palette/statusColor live in
+// ../chartUtils so this file exports only components.
+
+export function Card({ title, action, children, style }) {
+  return (
+    <div style={{ background: "#fff", border: "1px solid #ececec", borderRadius: 14, padding: 18, ...style }}>
+      {(title || action) && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827" }}>{title}</div>
+          {action}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+export function Kpi({ label, value, sub, tone, icon }) {
+  const color = tone === "danger" ? "#dc2626" : tone === "warn" ? "#b45309" : tone === "good" ? "#15803d" : "#111827";
+  return (
+    <div style={{ background: "#fff", border: "1px solid #ececec", borderRadius: 14, padding: "16px 18px", flex: 1, minWidth: 150 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 12.5, color: "#6b7280", fontWeight: 600 }}>{label}</div>
+        {icon}
+      </div>
+      <div style={{ fontSize: 28, fontWeight: 800, color, marginTop: 8, letterSpacing: "-0.5px" }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: "#9ca3af", marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// Donut with legend. data = [{ label, value, color }]
+export function Donut({ data, size = 150, thickness = 22, centerLabel, centerSub }) {
+  const total = data.reduce((s, d) => s + d.value, 0) || 1;
+  const r = (size - thickness) / 2;
+  const c = 2 * Math.PI * r;
+  // Precompute each segment's dash length and start offset (no mutation during render).
+  const segs = [];
+  data.reduce((offset, d) => {
+    const dash = (d.value / total) * c;
+    segs.push({ color: d.color, dash, offset });
+    return offset + dash;
+  }, 0);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f2f2" strokeWidth={thickness} />
+          {segs.map((s, i) => (
+            <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
+              stroke={s.color} strokeWidth={thickness}
+              strokeDasharray={`${s.dash} ${c - s.dash}`} strokeDashoffset={-s.offset} />
+          ))}
+        </g>
+        {centerLabel != null && (
+          <text x="50%" y="47%" textAnchor="middle" style={{ fontSize: 22, fontWeight: 800, fill: "#111827" }}>{centerLabel}</text>
+        )}
+        {centerSub && (
+          <text x="50%" y="62%" textAnchor="middle" style={{ fontSize: 10, fill: "#9ca3af" }}>{centerSub}</text>
+        )}
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+        {data.map((d, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+            <span style={{ color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150 }}>{d.label}</span>
+            <span style={{ color: "#9ca3af", marginLeft: "auto", fontWeight: 600 }}>{d.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Horizontal bars. data = [{ label, value, sub, color }]
+export function HBars({ data, max, emptyText = "No data" }) {
+  if (!data || data.length === 0) return <div style={{ fontSize: 12.5, color: "#9ca3af" }}>{emptyText}</div>;
+  const m = max || Math.max(...data.map((d) => d.value), 1);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {data.map((d, i) => (
+        <div key={i}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+            <span style={{ color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "72%" }}>{d.label}</span>
+            <span style={{ color: "#6b7280", fontWeight: 600 }}>{d.sub != null ? d.sub : d.value}</span>
+          </div>
+          <div style={{ height: 8, background: "#f1f2f2", borderRadius: 5, overflow: "hidden" }}>
+            <div style={{ width: `${(d.value / m) * 100}%`, height: "100%", background: d.color || "var(--accent)", borderRadius: 5 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Grouped vertical bars for two series. data = [{ month, created, completed }]
+export function TrendBars({ data }) {
+  if (!data || data.length === 0) return <div style={{ fontSize: 12.5, color: "#9ca3af" }}>No data</div>;
+  const max = Math.max(...data.flatMap((d) => [d.created, d.completed]), 1);
+  const H = 130;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height: H, padding: "0 4px" }}>
+        {data.map((d, i) => (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: H, width: "100%", justifyContent: "center" }}>
+              <div title={`Created: ${d.created}`} style={{ width: 12, height: `${(d.created / max) * H}px`, background: "var(--accent)", borderRadius: "3px 3px 0 0", minHeight: d.created ? 2 : 0 }} />
+              <div title={`Completed: ${d.completed}`} style={{ width: 12, height: `${(d.completed / max) * H}px`, background: "#22c55e", borderRadius: "3px 3px 0 0", minHeight: d.completed ? 2 : 0 }} />
+            </div>
+            <div style={{ fontSize: 10, color: "#9ca3af" }}>{(d.month || "").slice(5)}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11.5, color: "#6b7280" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--accent)" }} /> Created</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "#22c55e" }} /> Completed</span>
+      </div>
+    </div>
+  );
+}
+
+export function ProgressBar({ pct, color = "var(--accent)", height = 8 }) {
+  const p = Math.max(0, Math.min(100, pct || 0));
+  return (
+    <div style={{ height, background: "#f1f2f2", borderRadius: 5, overflow: "hidden" }}>
+      <div style={{ width: `${p}%`, height: "100%", background: color, borderRadius: 5 }} />
+    </div>
+  );
+}
