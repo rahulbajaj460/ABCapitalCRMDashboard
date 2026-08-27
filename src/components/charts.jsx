@@ -120,6 +120,41 @@ export function TrendBars({ data }) {
   );
 }
 
+// Delta vs a previous value. goodWhenUp flips the color meaning (e.g. "completed"
+// up is good/green; "overdue" up is bad/red).
+export function DeltaBadge({ curr, prev, goodWhenUp = true, suffix = "" }) {
+  const d = (curr ?? 0) - (prev ?? 0);
+  if (d === 0) return <span style={{ fontSize: 11, color: "#9ca3af" }}>no change vs prior 30d</span>;
+  const up = d > 0;
+  const good = up === goodWhenUp;
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, color: good ? "#15803d" : "#dc2626" }}>
+      {up ? "▲" : "▼"} {Math.abs(d)}{suffix} vs prior 30d
+    </span>
+  );
+}
+
+// Segmented horizontal bar. segs = [{ label, value, color }]
+export function SegmentBar({ segs }) {
+  const total = segs.reduce((s, x) => s + x.value, 0) || 1;
+  return (
+    <div>
+      <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", background: "#f1f2f2" }}>
+        {segs.map((s, i) => s.value > 0 && (
+          <div key={i} title={`${s.label}: ${s.value}`} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} />
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
+        {segs.map((s, i) => (
+          <span key={i} style={{ fontSize: 11.5, color: "#6b7280", display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: s.color }} /> {s.label} <strong style={{ color: "#374151" }}>{s.value}</strong>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ProgressBar({ pct, color = "var(--accent)", height = 8 }) {
   const p = Math.max(0, Math.min(100, pct || 0));
   return (
