@@ -635,6 +635,18 @@ textarea:focus {
   }
 }
 
+/* ─── Dashboard "needs attention" rows ─── */
+.attn-row {
+  border-radius: 9px;
+  transition: background 0.12s ease;
+}
+.attn-row:hover {
+  background: #f7f9fb;
+}
+.attn-panel + .attn-panel {
+  border-left: 1px solid #f0f1f2;
+}
+
 /* ─── Content area ─── */
 .content-area {
   padding: 20px 24px;

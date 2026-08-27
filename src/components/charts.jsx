@@ -11,7 +11,7 @@ export function InfoDot({ tip }) {
 
 export function Card({ title, action, children, style, tip }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #ececec", borderRadius: 14, padding: 18, ...style }}>
+    <div style={{ background: "#fff", border: "1px solid #eef0f0", borderRadius: 14, padding: 18, boxShadow: "0 1px 2px rgba(16,24,40,0.04)", ...style }}>
       {(title || action) && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center" }}>{title}{tip && <InfoDot tip={tip} />}</div>
@@ -25,8 +25,9 @@ export function Card({ title, action, children, style, tip }) {
 
 export function Kpi({ label, value, sub, tone, icon, tip }) {
   const color = tone === "danger" ? "#dc2626" : tone === "warn" ? "#b45309" : tone === "good" ? "#15803d" : "#111827";
+  const accent = tone === "danger" ? "#ef4444" : tone === "warn" ? "#f59e0b" : tone === "good" ? "#22c55e" : "#cbd5e1";
   return (
-    <div style={{ background: "#fff", border: "1px solid #ececec", borderRadius: 14, padding: "16px 18px", flex: 1, minWidth: 150 }}>
+    <div style={{ background: "#fff", border: "1px solid #eef0f0", borderLeft: `3px solid ${accent}`, borderRadius: 14, padding: "16px 18px", flex: 1, minWidth: 150, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 12.5, color: "#6b7280", fontWeight: 600, display: "flex", alignItems: "center" }}>{label}{tip && <InfoDot tip={tip} />}</div>
         {icon}
