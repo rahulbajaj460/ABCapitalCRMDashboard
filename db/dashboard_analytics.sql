@@ -18,6 +18,27 @@ returns date language sql immutable as $$
   select case when s ~ '^\d{4}-\d{2}-\d{2}' then substring(s, 1, 10)::date else null end;
 $$;
 
+-- Per-space "completed statuses" config. is_complete on space_statuses:
+--   true  = this status counts as complete
+--   false = explicitly does NOT count
+--   null  = auto (detect by name: done/complete/closed)
+alter table space_statuses add column if not exists is_complete boolean;
+
+-- Whether a task counts as completed for its space, honoring the config above.
+-- Falls back to a name heuristic when the status isn't defined in the space.
+create or replace function _abcap_task_complete(p_status text, p_space uuid)
+returns boolean language sql stable as $$
+  select coalesce(
+    (select case when ss.is_complete is not null then ss.is_complete
+                 else lower(ss.name) ~ 'done|complete|closed' end
+       from space_statuses ss
+      where ss.space_id = p_space and ss.name = p_status
+      order by ss.is_complete desc nulls last
+      limit 1),
+    (p_status is not null and lower(p_status) ~ 'done|complete|closed')
+  );
+$$;
+
 -- ── CRM-wide dashboard ──
 create or replace function dashboard_overview()
 returns jsonb language sql stable as $$
@@ -25,6 +46,7 @@ returns jsonb language sql stable as $$
   select jsonb_build_object(
     'total',       (select count(*) from t),
     'done',        (select count(*) filter (where status = 'Done') from t),
+    'completed',   (select count(*) filter (where _abcap_task_complete(status, space_id)) from t),
     'closed',      (select count(*) filter (where not _abcap_status_open(status)) from t),
     'in_progress', (select count(*) filter (where status = 'In Progress') from t),
     'open',        (select count(*) filter (where _abcap_status_open(status)) from t),
@@ -57,6 +79,7 @@ returns jsonb language sql stable as $$
                         'total',   count(tt.id),
                         'open',    count(tt.id) filter (where _abcap_status_open(tt.status)),
                         'done',    count(tt.id) filter (where tt.status = 'Done'),
+                        'completed', count(tt.id) filter (where _abcap_task_complete(tt.status, sp.id)),
                         'overdue', count(tt.id) filter (where tt.due_date < current_date and _abcap_status_open(tt.status))
                       ) as row
                       from spaces sp left join t tt on tt.space_id = sp.id
@@ -91,6 +114,7 @@ returns jsonb language sql stable as $$
     'total',   (select count(*) from t),
     'open',    (select count(*) filter (where _abcap_status_open(status)) from t),
     'done',    (select count(*) filter (where status = 'Done') from t),
+    'completed', (select count(*) filter (where _abcap_task_complete(status, p_space_id)) from t),
     'overdue', (select count(*) filter (where due_date < current_date and _abcap_status_open(status)) from t),
     'due_30d', (select count(*) filter (where due_date >= current_date and due_date < current_date + 30 and _abcap_status_open(status)) from t),
     'due_90d', (select count(*) filter (where due_date >= current_date and due_date < current_date + 90 and _abcap_status_open(status)) from t),

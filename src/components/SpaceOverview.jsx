@@ -22,7 +22,8 @@ export default function SpaceOverview({ space, onOpenScope }) {
   useEffect(() => { load(); }, [load]);
 
   const total = data?.total ?? 0;
-  const donePct = total > 0 ? Math.round((data.done / total) * 100) : 0;
+  const completedCount = data?.completed ?? data?.done ?? 0;
+  const donePct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
   // Group the flat list rows by folder for the health table.
   const folders = [];
@@ -51,7 +52,7 @@ export default function SpaceOverview({ space, onOpenScope }) {
         <>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
             <Kpi label="Total tasks" value={total.toLocaleString()} sub="in this space" />
-            <Kpi label="Completed" value={(data.done || 0).toLocaleString()} sub={`${donePct}% completion`} tone="good" />
+            <Kpi label="Completed" value={completedCount.toLocaleString()} sub={`${donePct}% completion`} tone="good" />
             <Kpi label="Overdue" value={(data.overdue || 0).toLocaleString()} sub="past due & open" tone="danger" />
             <Kpi label="Due in 30 days" value={(data.due_30d || 0).toLocaleString()} sub="upcoming & open" tone="warn" />
           </div>
