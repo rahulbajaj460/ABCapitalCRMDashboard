@@ -7,15 +7,24 @@ function AttentionRows({ items, kind, onOpenScope, empty, spaceName }) {
   if (!items || items.length === 0) return <div style={{ fontSize: 12, color: "#9ca3af" }}>{empty}</div>;
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {items.map((t) => (
-        <div key={t.id} onClick={() => onOpenScope?.({ space_id: t.space_id, list_id: t.list_id }, t.id)}
-          style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: "1px solid #f4f4f4", fontSize: 12.5, cursor: "pointer" }}>
-          <span style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled"}</span>
-          <span style={{ flexShrink: 0, fontWeight: kind === "unassigned" ? 400 : 600, color: kind === "overdue" ? "#dc2626" : kind === "stuck" ? "#b45309" : "#9ca3af" }}>
-            {kind === "overdue" ? `${t.days}d overdue` : kind === "stuck" ? `${t.days}d idle` : (spaceName?.(t.space_id) || "")}
-          </span>
-        </div>
-      ))}
+      {items.map((t) => {
+        const isUn = kind === "unassigned";
+        const sName = isUn ? (spaceName?.(t.space_id) || "") : "";
+        return (
+          <div key={t.id} onClick={() => onOpenScope?.({ space_id: t.space_id, list_id: t.list_id }, t.id)}
+            style={{ padding: "7px 0", borderBottom: "1px solid #f4f4f4", fontSize: 12.5, cursor: "pointer" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <span title={t.title || "Untitled"} style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled"}</span>
+              {!isUn && (
+                <span style={{ flexShrink: 0, fontWeight: 600, color: kind === "overdue" ? "#dc2626" : "#b45309" }}>
+                  {kind === "overdue" ? `${t.days}d overdue` : `${t.days}d idle`}
+                </span>
+              )}
+            </div>
+            {sName && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sName}</div>}
+          </div>
+        );
+      })}
     </div>
   );
 }
