@@ -3049,6 +3049,17 @@ export default function Tasks({
     setStatusLoading(false);
   }
 
+  // Cycle a status's completion setting: Auto (null) → Complete (true) →
+  // Not complete (false) → Auto. Drives the completion rate on the dashboards.
+  async function cycleStatusComplete(statusId, current) {
+    const next = current === true ? false : current === false ? null : true;
+    setStatusLoading(true);
+    await supabase.from("space_statuses").update({ is_complete: next }).eq("id", statusId);
+    await fetchModalStatuses();
+    await onRefreshSpaces();
+    setStatusLoading(false);
+  }
+
   async function saveEditStatus() {
     if (!editingStatusId || !editingStatusData.name.trim()) return;
     setStatusLoading(true);
@@ -8505,7 +8516,23 @@ export default function Tasks({
                           <span style={{ width: 12, height: 12, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
                           <span style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</span>
                         </div>
-                        <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {(() => {
+                            const v = s.is_complete;
+                            const label = v === true ? "✓ Complete" : v === false ? "Not complete" : "Auto";
+                            const bg = v === true ? "#dcfce7" : v === false ? "#f1f2f2" : "#e0f2f1";
+                            const fg = v === true ? "#15803d" : v === false ? "#6b7280" : "#0d7d82";
+                            return (
+                              <button
+                                title="Does this status count as complete for the completion rate? Click to cycle: Auto (detect by name) → Complete → Not complete"
+                                onClick={() => cycleStatusComplete(s.id, v)}
+                                disabled={statusLoading}
+                                style={{ padding: "2px 10px", fontSize: 11, borderRadius: 20, border: "none", cursor: statusLoading ? "default" : "pointer", background: bg, color: fg, fontWeight: 600 }}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })()}
                           <button
                             className="btn btn-sm"
                             style={{ padding: "2px 10px", fontSize: 11 }}

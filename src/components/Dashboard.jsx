@@ -66,7 +66,7 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
               <Kpi label="Total tasks" value={total.toLocaleString()} sub="across all spaces" />
               <Kpi label="In progress" value={data.in_progress.toLocaleString()} sub={`${pct(data.in_progress)}% of all`} tone="warn" />
-              <Kpi label="Completed" value={data.done.toLocaleString()} sub={`${pct(data.done)}% completion`} tone="good" />
+              <Kpi label="Completed" value={(data.completed ?? data.done).toLocaleString()} sub={`${pct(data.completed ?? data.done)}% completion`} tone="good" />
               <Kpi label="Urgent open" value={data.urgent.toLocaleString()} sub="high priority, not done" tone="danger" />
               <Kpi label="Overdue" value={data.overdue.toLocaleString()} sub="past due & still open" tone="danger" />
               <Kpi label="Due in 30 days" value={data.due_30d.toLocaleString()} sub={`${data.due_7d} within 7 days`} />
@@ -171,7 +171,7 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
               <Card title="Space health">
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {(data.by_space || []).map((sp) => {
-                    const p = sp.total > 0 ? Math.round((sp.done / sp.total) * 100) : 0;
+                    const p = sp.total > 0 ? Math.round(((sp.completed ?? sp.done) / sp.total) * 100) : 0;
                     const sObj = spaceById[sp.space_id];
                     return (
                       <div key={sp.space_id} style={{ cursor: sObj ? "pointer" : "default" }} onClick={() => sObj && onSpaceSelect(sObj)}>
