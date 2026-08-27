@@ -68,6 +68,39 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // ── AI executive summary (cached per day in this browser) ──
+  const [ai, setAi] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiErr, setAiErr] = useState("");
+  const todayKey = `abc_ai_summary_${new Date().toISOString().slice(0, 10)}`;
+
+  useEffect(() => {
+    try { const raw = localStorage.getItem(todayKey); if (raw) setAi(JSON.parse(raw)); } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const generateAi = useCallback(async () => {
+    if (!data) return;
+    setAiLoading(true); setAiErr("");
+    try {
+      const { data: res, error } = await supabase.functions.invoke("dashboard-ai-summary", { body: { overview: data } });
+      if (error) throw error;
+      if (res?.error) throw new Error(res.error);
+      setAi(res);
+      try { localStorage.setItem(todayKey, JSON.stringify(res)); } catch { /* ignore */ }
+    } catch (e) {
+      setAiErr(e?.message || String(e));
+    } finally {
+      setAiLoading(false);
+    }
+  }, [data, todayKey]);
+
+  // Auto-generate once per day when data is ready and nothing is cached.
+  useEffect(() => {
+    if (data && !ai && !aiLoading && !aiErr) generateAi();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
   const total = data?.total ?? 0;
   const pct = (n) => (total > 0 ? Math.round((n / total) * 100) : 0);
   const spaceById = Object.fromEntries((spaces || []).map((s) => [s.id, s]));
@@ -94,6 +127,40 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
           <EmptyState />
         ) : data ? (
           <>
+            {/* AI executive summary */}
+            <div style={{ background: "linear-gradient(180deg,#f6fbfb,#ffffff)", border: "1px solid #d7ecec", borderRadius: 14, padding: 18, marginBottom: 16, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
+                <span style={{ width: 24, height: 24, borderRadius: 8, background: "var(--accent-weak)", color: "var(--accent)", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15l.7 1.8L21.5 17.5 19.7 18.2 19 20l-.7-1.8L16.5 17.5l1.8-.7z" /></svg>
+                </span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f5b5e" }}>AI summary</span>
+                {ai?.generated_at && <span style={{ fontSize: 11, color: "#9ca3af" }}>· {new Date(ai.generated_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
+                <button onClick={generateAi} disabled={aiLoading} className="btn btn-sm" style={{ marginLeft: "auto" }}>{aiLoading ? "Analysing…" : ai ? "Regenerate" : "Generate"}</button>
+              </div>
+              {aiErr ? (
+                <div style={{ fontSize: 12.5, color: "#b91c1c" }}>
+                  {/Function not found|404|Failed to send/.test(aiErr) ? "AI summary isn't deployed yet — deploy db/edge-function-dashboard-ai-summary.ts (see the file header)." : `Couldn't generate summary: ${aiErr}`}
+                </div>
+              ) : aiLoading && !ai ? (
+                <div style={{ fontSize: 12.5, color: "#6b7280" }}>Reading the numbers and writing your brief…</div>
+              ) : ai ? (
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", marginBottom: 10, lineHeight: 1.5 }}>{ai.headline}</div>
+                  <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 7 }}>
+                    {(ai.bullets || []).map((b, i) => (
+                      <li key={i} style={{ display: "flex", gap: 9, fontSize: 12.5, color: "#374151", lineHeight: 1.5 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0, marginTop: 6 }} />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div style={{ fontSize: 10.5, color: "#b6bcbc", marginTop: 10 }}>AI-generated from current metrics — verify before acting.</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 12.5, color: "#6b7280" }}>Click Generate for a plain-English executive brief of the numbers below.</div>
+              )}
+            </div>
+
             {/* KPI row */}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
               <Kpi label="Total tasks" value={total.toLocaleString()} sub="across all spaces" tip="Every non-deleted task across all spaces (excludes trashed tasks)." />
