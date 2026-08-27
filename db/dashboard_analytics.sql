@@ -78,7 +78,7 @@ returns jsonb language sql stable as $$
       'stuck',       (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'title', title, 'status', status, 'list_id', list_id, 'space_id', space_id, 'days', (current_date - updated_at::date)) order by updated_at), '[]'::jsonb)
                         from (select id, title, status, list_id, space_id, updated_at from t where _abcap_status_open(status) and updated_at < now() - interval '30 days' order by updated_at limit 6) r),
       'unassigned_high', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'title', title, 'list_id', list_id, 'space_id', space_id) order by created_at), '[]'::jsonb)
-                        from (select id, title, list_id, space_id from t where priority = 'High' and _abcap_status_open(status) and coalesce(cardinality(assignees), 0) = 0 order by created_at limit 6) r)
+                        from (select id, title, list_id, space_id, created_at from t where priority = 'High' and _abcap_status_open(status) and coalesce(cardinality(assignees), 0) = 0 order by created_at limit 6) r)
     )
   );
 $$;
