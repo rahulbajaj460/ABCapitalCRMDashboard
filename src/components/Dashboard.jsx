@@ -3,28 +3,53 @@ import { supabase } from "../supabase";
 import { Kpi, Card, Donut, HBars, ProgressBar, DeltaBadge, SegmentBar } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
 
-function AttentionRows({ items, kind, onOpenScope, empty, spaceName }) {
-  if (!items || items.length === 0) return <div style={{ fontSize: 12, color: "#9ca3af" }}>{empty}</div>;
+const ATTN_META = {
+  overdue: {
+    title: "Most overdue", accent: "#dc2626", tint: "#fef2f2",
+    icon: <><path d="M12 3l9 16H3z" /><path d="M12 10v4M12 17h.01" /></>,
+    badge: (t) => `${t.days}d`,
+  },
+  stuck: {
+    title: "Stuck", accent: "#b45309", tint: "#fffbeb",
+    icon: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    badge: (t) => `${t.days}d idle`,
+  },
+  unassigned: {
+    title: "Unassigned · high", accent: "#6b7280", tint: "#f3f4f6",
+    icon: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></>,
+    badge: () => "No owner",
+  },
+};
+
+function AttentionPanel({ items, kind, onOpenScope, spaceName, empty }) {
+  const m = ATTN_META[kind];
+  const list = items || [];
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      {items.map((t) => {
-        const isUn = kind === "unassigned";
-        const sName = isUn ? (spaceName?.(t.space_id) || "") : "";
-        return (
-          <div key={t.id} onClick={() => onOpenScope?.({ space_id: t.space_id, list_id: t.list_id }, t.id)}
-            style={{ padding: "7px 0", borderBottom: "1px solid #f4f4f4", fontSize: 12.5, cursor: "pointer" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <span title={t.title || "Untitled"} style={{ color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled"}</span>
-              {!isUn && (
-                <span style={{ flexShrink: 0, fontWeight: 600, color: kind === "overdue" ? "#dc2626" : "#b45309" }}>
-                  {kind === "overdue" ? `${t.days}d overdue` : `${t.days}d idle`}
-                </span>
-              )}
+    <div className="attn-panel" style={{ padding: kind === "overdue" ? "0 16px 0 0" : "0 16px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ width: 22, height: 22, borderRadius: 7, background: m.tint, color: m.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{m.icon}</svg>
+        </span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: ".03em" }}>{m.title}</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: m.accent, background: m.tint, borderRadius: 20, padding: "1px 8px" }}>{list.length}</span>
+      </div>
+      {list.length === 0 ? (
+        <div style={{ fontSize: 12, color: "#9ca3af", padding: "6px 2px" }}>{empty}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {list.map((t) => (
+            <div key={t.id} className="attn-row" onClick={() => onOpenScope?.({ space_id: t.space_id, list_id: t.list_id }, t.id)}
+              style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", cursor: "pointer" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: m.accent, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div title={t.title || "Untitled"} style={{ fontSize: 12.5, color: "#374151", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title || "Untitled"}</div>
+                <div style={{ fontSize: 10.5, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{spaceName?.(t.space_id) || ""}</div>
+              </div>
+              <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: m.accent, background: m.tint, borderRadius: 20, padding: "2px 8px" }}>{m.badge(t)}</span>
             </div>
-            {sName && <div style={{ fontSize: 11, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sName}</div>}
-          </div>
-        );
-      })}
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -129,20 +154,11 @@ export default function Dashboard({ spaces, onNavigate, onSpaceSelect, onOpenSco
 
             {/* Attention + deadlines */}
             <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 1.6fr) minmax(220px, 1fr)", gap: 16, marginBottom: 16 }}>
-              <Card title="Needs attention" tip="Tasks worth acting on now. Most overdue = furthest past due. Stuck = open with no update in 30+ days. Unassigned high-priority = High priority with no assignee (shows which space it's in). Click any row to open it.">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 18 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Most overdue</div>
-                    <AttentionRows items={data.attention?.top_overdue} kind="overdue" onOpenScope={onOpenScope} empty="None overdue" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#b45309", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Stuck (30d+ idle)</div>
-                    <AttentionRows items={data.attention?.stuck} kind="stuck" onOpenScope={onOpenScope} empty="Nothing stuck" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Unassigned high-priority</div>
-                    <AttentionRows items={data.attention?.unassigned_high} kind="unassigned" onOpenScope={onOpenScope} empty="All assigned" spaceName={(id) => spaceById[id]?.name} />
-                  </div>
+              <Card title="Needs attention" tip="Tasks worth acting on now. Most overdue = furthest past due. Stuck = open with no update in 30+ days. Unassigned · high = High priority with no assignee (with its space). Click any row to open it.">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
+                  <AttentionPanel items={data.attention?.top_overdue} kind="overdue" onOpenScope={onOpenScope} empty="None overdue 🎉" spaceName={(id) => spaceById[id]?.name} />
+                  <AttentionPanel items={data.attention?.stuck} kind="stuck" onOpenScope={onOpenScope} empty="Nothing stuck" spaceName={(id) => spaceById[id]?.name} />
+                  <AttentionPanel items={data.attention?.unassigned_high} kind="unassigned" onOpenScope={onOpenScope} empty="All assigned" spaceName={(id) => spaceById[id]?.name} />
                 </div>
               </Card>
               <Card title="Deadline calendar" tip="Count of open tasks whose due date falls within each window (cumulative). Since your due dates are statutory/filing deadlines, this is your upcoming compliance load. Open a space's Overview tab for the actual list.">
