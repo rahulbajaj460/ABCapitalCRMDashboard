@@ -25,13 +25,13 @@ function AttentionPanel({ items, kind, onOpenScope, spaceName, empty }) {
   const m = ATTN_META[kind];
   const list = items || [];
   return (
-    <div className="attn-panel" style={{ padding: kind === "overdue" ? "0 16px 0 0" : "0 16px" }}>
+    <div className="attn-panel" style={{ minWidth: 0, padding: kind === "overdue" ? "0 16px 0 0" : "0 16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{ width: 22, height: 22, borderRadius: 7, background: m.tint, color: m.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{m.icon}</svg>
         </span>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: ".03em" }}>{m.title}</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, fontWeight: 700, color: m.accent, background: m.tint, borderRadius: 20, padding: "1px 8px" }}>{list.length}</span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: ".03em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{m.title}</span>
+        <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: 11, fontWeight: 700, color: m.accent, background: m.tint, borderRadius: 20, padding: "1px 8px" }}>{list.length}</span>
       </div>
       {list.length === 0 ? (
         <div style={{ fontSize: 12, color: "#9ca3af", padding: "6px 2px" }}>{empty}</div>
