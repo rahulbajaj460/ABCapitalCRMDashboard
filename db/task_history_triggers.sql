@@ -7,6 +7,12 @@
 -- The emitted `changes` shape matches the app's history renderer:
 --   { "status": {from,to} }, { "title": {from,to} }, { "created": true }, etc.
 -- Custom field changes use the field's name as the key.
+--
+-- NOTE: `create trigger` briefly needs an exclusive lock on the table. If the
+-- app is busy you may see "deadlock detected" — just RE-RUN this file (it's
+-- idempotent); it succeeds once the momentary contention clears. lock_timeout
+-- below makes a blocked run fail fast and cleanly instead of hanging.
+set lock_timeout = '5s';
 
 -- Actor: "Automation" when the change originated inside the automations engine
 -- (which sets abcap.in_automation), else the task's updated_by.
