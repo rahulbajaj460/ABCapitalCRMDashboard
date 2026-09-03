@@ -2276,26 +2276,6 @@ export default function Tasks({
   }
 
   // Build change diff for history
-  function buildChanges(oldTask, newPayload) {
-    const changes = {};
-    const fields = [
-      "title",
-      "status",
-      "priority",
-      "assignees",
-      "due_date",
-      "description",
-    ];
-    fields.forEach((f) => {
-      const oldVal =
-        f === "assignees" ? JSON.stringify(oldTask[f] || []) : oldTask[f];
-      const newVal =
-        f === "assignees" ? JSON.stringify(newPayload[f] || []) : newPayload[f];
-      if (oldVal !== newVal)
-        changes[f] = { from: oldTask[f], to: newPayload[f] };
-    });
-    return changes;
-  }
 
   async function saveDrawer() {
     if (!drawerTask) return;
@@ -2331,7 +2311,6 @@ export default function Tasks({
         return null;
       })(),
     };
-    const changes = buildChanges(drawerTask, payload);
     const { error } = await supabase
       .from("tasks")
       .update(payload)
@@ -2350,16 +2329,7 @@ export default function Tasks({
       if (added.length) await notifyAssignment(drawerTask, added);
     }
 
-    // Save history entry if anything changed
-    if (Object.keys(changes).length > 0) {
-      await supabase.from("task_history").insert({
-        task_id: drawerTask.id,
-        changed_by: profile?.full_name || "Unknown",
-        changed_at: new Date().toISOString(),
-        changes,
-        snapshot: { ...drawerTask, ...payload },
-      });
-    }
+    // History is recorded by the database trigger (covers every edit path).
 
     // Save field values
     const { data: currentFVs } = await supabase
@@ -2489,16 +2459,7 @@ export default function Tasks({
           .from("task_field_values")
           .insert({ task_id: data.id, field_id: fieldId, value });
     }
-    // Record creation in history
-    if (data) {
-      await supabase.from("task_history").insert({
-        task_id: data.id,
-        changed_by: profile?.full_name || "Unknown",
-        changed_at: new Date().toISOString(),
-        changes: { created: true },
-        snapshot: data,
-      });
-    }
+    // Creation is recorded by the database trigger.
     setShowNewTaskModal(false);
     setTaskFieldValues({});
     fetchTasks();
@@ -2558,14 +2519,7 @@ export default function Tasks({
         date_closed: nowClosed ? now.slice(0, 10) : (wasClosed && !nowClosed ? null : task?.date_closed || null),
       })
       .eq("id", taskId);
-    if (task && oldStatus !== newSt) {
-      await supabase.from("task_history").insert({
-        task_id: taskId,
-        changed_by: profile?.full_name || "Unknown",
-        changed_at: new Date().toISOString(),
-        changes: { status: { from: oldStatus, to: newSt } },
-      });
-    }
+    // Status change is recorded by the database trigger.
     if (drawerTask?.id === taskId)
       setDrawerEdits((p) => ({ ...p, status: newSt }));
     fetchTasks();
@@ -2689,13 +2643,7 @@ export default function Tasks({
       if (value === "" || value == null) continue;
       await supabase.from("task_field_values").insert({ task_id: data.id, field_id: fid, value });
     }
-    await supabase.from("task_history").insert({
-      task_id: data.id,
-      changed_by: profile?.full_name || "Unknown",
-      changed_at: now,
-      changes: { created: true, cloned_from: src.id },
-      snapshot: data,
-    });
+    // Clone creation is recorded by the database trigger.
     // Soft-delete the task THIS source was cloned from, keeping the list to the
     // latest filed task + its next clone (when the rule opts in).
     if (m.delete_parent && src.cloned_from) {
@@ -2708,14 +2656,10 @@ export default function Tasks({
     fetchTasks();
   }
 
-  async function recordHistory(taskId, changes) {
-    await supabase.from("task_history").insert({
-      task_id: taskId,
-      changed_by: profile?.full_name || "Unknown",
-      changed_at: new Date().toISOString(),
-      changes,
-    });
-  }
+  // History is now written by database triggers (db/task_history_triggers.sql)
+  // so every path — inline, drawer, board, automations, direct SQL — is logged
+  // exactly once. Kept as a no-op so existing callers don't double-log.
+  async function recordHistory() { /* handled by DB trigger */ }
 
   // Human-readable "Space / Folder / List" path for a task, from its ids.
   function taskScopePath(task) {
@@ -2822,6 +2766,10 @@ export default function Tasks({
       .eq("field_id", fieldId)
       .maybeSingle();
     const before = existing?.value || "";
+    if (before !== (value || "")) {
+      // Bump the task's editor so the history trigger credits the right person.
+      await supabase.from("tasks").update({ updated_by: profile?.full_name || "Unknown", updated_at: new Date().toISOString() }).eq("id", taskId);
+    }
     if (existing) await supabase.from("task_field_values").update({ value }).eq("id", existing.id);
     else await supabase.from("task_field_values").insert({ task_id: taskId, field_id: fieldId, value });
     if (before !== (value || "")) {
@@ -3957,6 +3905,11 @@ export default function Tasks({
     if (field === "due_date")
       return `Due date: ${change.from ? fmtDate(change.from) : "none"} → ${change.to ? fmtDate(change.to) : "none"}`;
     if (field === "description") return "Description updated";
+    // Custom fields (keyed by their name) — show the value change.
+    if (change && typeof change === "object" && ("from" in change || "to" in change)) {
+      const fmt = (v) => (v === "" || v == null ? "—" : Array.isArray(v) ? v.join(", ") : String(v));
+      return `${field}: ${fmt(change.from)} → ${fmt(change.to)}`;
+    }
     return `${field} changed`;
   }
 
