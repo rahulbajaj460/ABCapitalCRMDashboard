@@ -850,6 +850,16 @@ export default function Tasks({
     obs.observe(el);
     return () => obs.disconnect();
   }, [activeList, listHasMore, loadingMore, listCursor]);
+  // When grouped by status, the group header counts come from an exact DB count,
+  // so any unloaded tasks make a group look short. Auto-load the remaining pages
+  // (bounded) so grouped counts always match the rows shown, no matter the size.
+  const AUTO_LOAD_CAP = 5000;
+  useEffect(() => {
+    if (activeList && groupBy === "status" && listHasMore && !loadingMore && tasks.length < AUTO_LOAD_CAP) {
+      loadMoreListTasks();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeList?.id, groupBy, listHasMore, loadingMore, tasks.length]);
   useEffect(() => {
     function h(e) {
       if (e.key === "Escape") {
