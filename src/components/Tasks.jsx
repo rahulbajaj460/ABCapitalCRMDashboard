@@ -387,7 +387,11 @@ export default function Tasks({
   const [listHasMore, setListHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const loadSentinelRef = useRef(null);
-  const LIST_PAGE = 300;
+  // Page size for the list view. Kept high so status groups (whose header
+  // counts come from an exact DB count) aren't out of sync with the rows shown
+  // — a smaller page left older tasks in a group unloaded (e.g. "To Do 42" but
+  // only 2 rows). Larger lists still lazy-load the remainder on scroll.
+  const LIST_PAGE = 1000;
   const [selectedTaskIds, setSelectedTaskIds] = useState(() => new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkAssignSearch, setBulkAssignSearch] = useState("");
