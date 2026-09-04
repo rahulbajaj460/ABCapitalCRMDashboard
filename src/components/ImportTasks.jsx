@@ -290,14 +290,22 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         .replace(/,/g, "");
       const d = new Date(cleaned);
       if (isNaN(d.getTime())) return null;
-      return d.toISOString().split("T")[0];
+      // `new Date("6-Jul-26")` is parsed at LOCAL midnight. Using toISOString()
+      // here would report the UTC day, which is the PREVIOUS calendar day in any
+      // timezone ahead of UTC (e.g. UAE, UTC+4) — shifting every date back a day.
+      // Read the local calendar parts so the stored day matches the CSV.
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
     } catch {
       return null;
     }
   }
 
-  // Like normalizeDate but keeps full timestamp precision — used for
-  // created_at so "days since created" formulas reflect the real ClickUp date.
+  // Like normalizeDate but keeps a timestamp — used for created_at so
+  // "days since created" formulas reflect the real ClickUp date. Anchored at
+  // noon UTC of the local calendar day so the day can't flip across timezones.
   function normalizeDateTime(dateStr) {
     if (!dateStr || dateStr.trim() === "") return null;
     try {
@@ -306,7 +314,10 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
         .replace(/,/g, "");
       const d = new Date(cleaned);
       if (isNaN(d.getTime())) return null;
-      return d.toISOString();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}T12:00:00.000Z`;
     } catch {
       return null;
     }
