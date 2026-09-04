@@ -496,6 +496,19 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
       }
     }
 
+    // Which mapped columns target a DATE custom field — their values must be
+    // normalized to YYYY-MM-DD on import (matching how the app stores/displays
+    // dates), not stored as raw CSV strings like "6-Jul-26" or "4/29/27".
+    const dateFieldCols = new Set();
+    for (const [col, cfg] of Object.entries(customFieldMappings)) {
+      if (!fieldIdMap[col]) continue;
+      const type =
+        cfg.action === "new"
+          ? cfg.fieldType
+          : existingFields.find((f) => f.id === cfg.existingFieldId)?.field_type;
+      if (type === "date") dateFieldCols.add(col);
+    }
+
     let imported = 0;
     let skipped = 0;
     const errs = [];
@@ -606,10 +619,15 @@ export default function ImportTasks({ spaces, onDone, onRefreshSpaces }) {
               } else {
                 const value = row[col];
                 if (value && value.trim()) {
+                  // Date fields: store the parsed YYYY-MM-DD; if a value can't be
+                  // parsed as a date (e.g. "Liquidated"), keep the raw text.
+                  const stored = dateFieldCols.has(col)
+                    ? normalizeDate(value.trim()) || value.trim()
+                    : value.trim();
                   fieldValues.push({
                     task_id: task.id,
                     field_id: fieldId,
-                    value: value.trim(),
+                    value: stored,
                   });
                 }
               }
