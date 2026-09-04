@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../supabase";
-import { supabaseAdmin } from "../supabaseAdmin";
 import { IconClose } from "./icons";
 
 const DEFAULT_COL_WIDTHS = { member: 220, email: 240, role: 130, joined: 140, actions: 60 };
@@ -110,28 +109,21 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
   // ── Members actions ──
   async function updateRole(userId, newRole) {
     if (userId === currentUser.id) return;
-    const client = supabaseAdmin || supabase;
-    const { error } = await client.from("profiles").update({ role: newRole }).eq("id", userId);
-    if (error) { showMsg(error.message, "error"); return; }
+    const { data, error } = await supabase.functions.invoke("admin-users", { body: { action: "update_role", user_id: userId, role: newRole } });
+    if (error || data?.error) { showMsg(data?.error || error.message, "error"); return; }
     showMsg("Role updated.");
     fetchMembers();
   }
 
   async function handleInvite(e) {
     e.preventDefault();
-    if (!supabaseAdmin) { showMsg("Service role key not configured.", "error"); return; }
-    if (!invite.full_name.trim() || !invite.email.trim() || !invite.password.trim()) { showMsg("Please fill all fields.", "error"); return; }
+    if (!invite.full_name.trim() || !invite.email.trim() || invite.password.trim().length < 8) { showMsg("Fill all fields; password must be 8+ characters.", "error"); return; }
     setInviting(true);
     try {
-      const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-        email: invite.email.trim(), password: invite.password, email_confirm: true,
-        user_metadata: { full_name: invite.full_name.trim() },
+      const { data, error } = await supabase.functions.invoke("admin-users", {
+        body: { action: "create_user", email: invite.email.trim(), password: invite.password, full_name: invite.full_name.trim(), role: invite.role },
       });
-      if (authErr) { showMsg(authErr.message, "error"); setInviting(false); return; }
-      await supabaseAdmin.from("profiles").upsert({
-        id: authData.user.id, email: invite.email.trim(),
-        full_name: invite.full_name.trim(), role: invite.role,
-      });
+      if (error || data?.error) { showMsg(data?.error || error.message, "error"); setInviting(false); return; }
       showMsg(`${invite.full_name} added. Share their email and password with them.`);
       setInvite({ full_name: "", email: "", password: "", role: "member" });
       setShowInvite(false);
@@ -141,9 +133,8 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
   }
 
   async function handleRemove(member) {
-    if (!supabaseAdmin) { showMsg("Service role key not configured.", "error"); return; }
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(member.id);
-    if (error) showMsg(error.message, "error");
+    const { data, error } = await supabase.functions.invoke("admin-users", { body: { action: "delete_user", user_id: member.id } });
+    if (error || data?.error) showMsg(data?.error || error.message, "error");
     else { showMsg(`${member.full_name || member.email} removed.`); fetchMembers(); }
     setRemoveConfirm(null);
   }
@@ -204,7 +195,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
     return colors[name.charCodeAt(0) % colors.length];
   }
 
-  const adminConfigured = !!supabaseAdmin;
+  const isAdmin = profile?.role === "admin";
 
   // Build restricted entities lists for the permissions tab
   const restrictedSpaceIds = [...new Set(spaceAccess.map((r) => r.space_id))];
@@ -263,12 +254,9 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
         {/* ── MEMBERS TAB ── */}
         {activeTab === "members" && (
           <>
-            {!adminConfigured && (
-              <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "16px 20px", marginBottom: 24, fontSize: 13, color: "#92400e" }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>⚠️ One-time setup to enable in-app user management</div>
-                <div style={{ marginBottom: 8 }}>Add your Supabase service role key to <code style={{ background: "#fef3c7", padding: "1px 5px", borderRadius: 3 }}>.env</code>:</div>
-                <div style={{ background: "#fef3c7", padding: "8px 12px", borderRadius: 6, fontFamily: "monospace", fontSize: 12, marginBottom: 6 }}>VITE_SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here</div>
-                <div style={{ fontSize: 12, color: "#b45309" }}>Find it in Supabase → Project Settings → API → service_role secret. Then restart / redeploy.</div>
+            {!isAdmin && (
+              <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "14px 18px", marginBottom: 24, fontSize: 13, color: "#92400e" }}>
+                Only admins can add, remove, or change the role of team members.
               </div>
             )}
 
@@ -601,7 +589,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
               <div style={{ fontSize: 17, fontWeight: 700, color: "#111827" }}>Add New Member</div>
               <button onClick={() => setShowInvite(false)} style={{ background: "#f3f4f6", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 16, color: "#6b7280", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
             </div>
-            {!adminConfigured && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#dc2626" }}>Service role key not configured. Close and follow the setup instructions.</div>}
+            {!isAdmin && <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#dc2626" }}>Only admins can add members.</div>}
             <form onSubmit={handleInvite} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {[
                 { label: "Full Name", key: "full_name", type: "text", placeholder: "e.g. Ahmed Al Mansoori" },
@@ -624,7 +612,7 @@ export default function Settings({ currentUser, profile, spaces = [], onAccessCh
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                 <button type="button" onClick={() => setShowInvite(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 13, cursor: "pointer", color: "#374151", fontWeight: 500 }}>Cancel</button>
-                <button type="submit" disabled={inviting || !adminConfigured} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: adminConfigured ? "var(--accent)" : "#93c5fd", color: "#fff", fontSize: 13, fontWeight: 600, cursor: adminConfigured ? "pointer" : "not-allowed" }}>
+                <button type="submit" disabled={inviting || !isAdmin} style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: isAdmin ? "var(--accent)" : "#93c5fd", color: "#fff", fontSize: 13, fontWeight: 600, cursor: isAdmin ? "pointer" : "not-allowed" }}>
                   {inviting ? "Adding..." : "Add Member"}
                 </button>
               </div>
