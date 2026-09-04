@@ -174,6 +174,22 @@ const FORMULA_PRESETS = [
 
 // fmtDate / fmtDMY now live in ../dateFormat so every view stays consistent.
 
+// Split a "list" field's stored value (one item per line) into clean items.
+function listItems(value) {
+  return String(value || "").split(/\r?\n/).map((s) => s.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean);
+}
+function ListValue({ value, fontSize = 12 }) {
+  const items = listItems(value);
+  if (items.length === 0) return "—";
+  return (
+    <ul style={{ margin: 0, paddingLeft: 16 }}>
+      {items.map((it, i) => (
+        <li key={i} style={{ fontSize, color: "#555", lineHeight: 1.5 }}>{it}</li>
+      ))}
+    </ul>
+  );
+}
+
 // VAT cycle: next due date = base date + `months` months, snapped to `day`
 // (clamped to the month length). Base is the task's current due date, or today
 // if it has none. Returns an ISO yyyy-mm-dd string. Mirrors _abcap_shift_date.
@@ -2877,6 +2893,15 @@ export default function Tasks({
     fetchTasks();
   }
 
+  // Change an existing custom field's data type. Values are kept as-is (they're
+  // stored as text), so e.g. Text -> List just changes how they're edited and
+  // shown (each line becomes a bullet).
+  async function changeFieldType(fieldId, newType) {
+    await supabase.from("space_fields").update({ field_type: newType }).eq("id", fieldId);
+    await onRefreshSpaces();
+    fetchTasks();
+  }
+
   async function addCustomStatus() {
     if (!newStatus.name.trim() || !activeSpace) return;
     setStatusLoading(true);
@@ -3594,6 +3619,7 @@ export default function Tasks({
         const parsed = parseFlexibleDate(fv.value);
         return <span style={{ fontSize: 12, color: "#555" }}>{parsed ? fmtDMY(parsed) : fv.value}</span>;
       }
+      if (f.field_type === "list") return <ListValue value={fv.value} />;
       return <span style={{ fontSize: 12, color: "#555" }}>{fv.value}</span>;
     }
     return "—";
@@ -4065,6 +4091,8 @@ export default function Tasks({
                                 <option value="">—</option>
                                 {f.field_options.map((o) => <option key={o} value={o}>{o}</option>)}
                               </select>
+                            ) : f.field_type === "list" ? (
+                              <textarea rows={3} placeholder="One item per line…" value={v} onChange={(e) => set(e.target.value)} style={{ resize: "vertical", fontFamily: "inherit" }} />
                             ) : (
                               <input type={f.field_type === "date" ? "date" : f.field_type === "number" ? "number" : "text"} value={v} onChange={(e) => set(e.target.value)} />
                             )}
@@ -5933,6 +5961,14 @@ export default function Tasks({
                                 </option>
                               ))}
                             </select>
+                          ) : field.field_type === "list" ? (
+                            <textarea
+                              rows={4}
+                              placeholder="One item per line…"
+                              value={val}
+                              onChange={(e) => setDrawerFieldValues((p) => ({ ...p, [field.id]: e.target.value }))}
+                              style={{ fontSize: 12, padding: "7px 10px", borderRadius: 7, border: "1px solid #e0e0e0", background: "#fff", width: "100%", boxSizing: "border-box", outline: "none", resize: "vertical", fontFamily: "inherit" }}
+                            />
                           ) : (
                             <input
                               type={
@@ -7548,6 +7584,14 @@ export default function Tasks({
                             </option>
                           ))}
                         </select>
+                      ) : field.field_type === "list" ? (
+                        <textarea
+                          rows={4}
+                          placeholder={`One item per line…`}
+                          value={taskFieldValues[field.id] || ""}
+                          onChange={(e) => setTaskFieldValues((p) => ({ ...p, [field.id]: e.target.value }))}
+                          style={{ width: "100%", resize: "vertical", fontFamily: "inherit" }}
+                        />
                       ) : (
                         <input
                           type={
@@ -7793,18 +7837,26 @@ export default function Tasks({
                           flexShrink: 0,
                         }}
                       >
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "#aaa",
-                            background: "#fff",
-                            border: "1px solid #e0e0e0",
-                            borderRadius: 20,
-                            padding: "1px 8px",
-                          }}
-                        >
-                          {f.field_type}
-                        </span>
+                        {f.field_type === "formula" ? (
+                          <span style={{ fontSize: 11, color: "#aaa", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 20, padding: "1px 8px" }}>{f.field_type}</span>
+                        ) : (
+                          <select
+                            value={f.field_type}
+                            onChange={(e) => changeFieldType(f.id, e.target.value)}
+                            title="Change field type"
+                            style={{ fontSize: 11, color: "#555", background: "#fff", border: "1px solid #e0e0e0", borderRadius: 6, padding: "2px 6px" }}
+                          >
+                            <option value="text">text</option>
+                            <option value="list">list</option>
+                            <option value="number">number</option>
+                            <option value="date">date</option>
+                            <option value="email">email</option>
+                            <option value="phone">phone</option>
+                            <option value="url">url</option>
+                            <option value="username">username</option>
+                            <option value="dropdown">dropdown</option>
+                          </select>
+                        )}
                         {f.field_type === "dropdown" &&
                           editingFieldId !== f.id && (
                             <button
@@ -7969,6 +8021,7 @@ export default function Tasks({
                   style={{ width: "100%" }}
                 >
                   <option value="text">Text</option>
+                  <option value="list">List — bullet points</option>
                   <option value="number">Number</option>
                   <option value="date">Date</option>
                   <option value="email">Email</option>
