@@ -2899,6 +2899,12 @@ export default function Tasks({
   async function changeFieldType(fieldId, newType) {
     await supabase.from("space_fields").update({ field_type: newType }).eq("id", fieldId);
     await onRefreshSpaces();
+    // Refresh the list-scoped field cache too (getFields/drawer read from it),
+    // otherwise the drawer keeps showing the old input type.
+    if (activeList) {
+      const { data: lf } = await supabase.from("space_fields").select("*").eq("list_id", activeList.id).order("field_order");
+      setListFields(lf || []);
+    }
     fetchTasks();
   }
 
