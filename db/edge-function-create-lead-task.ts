@@ -26,11 +26,57 @@ async function sha256hex(s: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { secret, spaceName, folderName, listName, title, status, fields, assignTo } = await req.json();
+    const { secret, action, spaceName, folderName, listName, title, status, fields, assignTo } = await req.json();
     if (secret !== Deno.env.get("WEBHOOK_SECRET")) return json({ error: "Unauthorized" }, 401);
     if (!title || !listName) return json({ error: "Missing title or listName" }, 400);
 
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // ── Backfill path: update field values on an ALREADY-CREATED task, matched
+    // by list + title. Never creates a task or a list. Used to push sheet-only
+    // columns (e.g. created_time, Row Number) onto historical leads without
+    // re-running the create path (which would make duplicates, since adding
+    // fields changes the content hash). Only fields that already have a matching
+    // custom-field definition in the list are written.
+    if (action === "update_fields") {
+      const { data: sp, error: spE } = await db.from("spaces").select("id")
+        .eq("name", spaceName).is("deleted_at", null).limit(1).maybeSingle();
+      if (spE) return json({ error: "Space lookup failed: " + spE.message }, 500);
+      if (!sp) return json({ error: "Space not found" }, 404);
+      const { data: fo, error: foE } = await db.from("folders").select("id")
+        .eq("name", folderName).eq("space_id", sp.id).is("deleted_at", null).limit(1).maybeSingle();
+      if (foE) return json({ error: "Folder lookup failed: " + foE.message }, 500);
+      if (!fo) return json({ ok: true, updated: 0, reason: "folder not found" });
+      const { data: li, error: liE } = await db.from("lists").select("id")
+        .eq("name", listName).eq("folder_id", fo.id).is("deleted_at", null).limit(1).maybeSingle();
+      if (liE) return json({ error: "List lookup failed: " + liE.message }, 500);
+      if (!li) return json({ ok: true, updated: 0, reason: "list not found" });
+
+      // Match the task by title within the list (active only). Ambiguous or
+      // missing names are reported, not guessed.
+      const { data: matches, error: mE } = await db.from("tasks").select("id")
+        .eq("list_id", li.id).eq("title", String(title).trim()).is("deleted_at", null);
+      if (mE) return json({ error: "Task lookup failed: " + mE.message }, 500);
+      if (!matches || matches.length === 0) return json({ ok: true, updated: 0, reason: "no matching task" });
+      if (matches.length > 1) return json({ ok: true, updated: 0, reason: "ambiguous", count: matches.length });
+      const taskId = matches[0].id;
+
+      const { data: defs } = await db.from("space_fields").select("id, field_name").eq("list_id", li.id);
+      const byName = new Map((defs || []).map((d) => [String(d.field_name).toLowerCase(), d.id]));
+      let written = 0;
+      for (const [name, value] of Object.entries(fields || {})) {
+        if (value == null || String(value).trim() === "") continue;
+        const fid = byName.get(String(name).toLowerCase());
+        if (!fid) continue;
+        const v = String(value);
+        const { data: ex } = await db.from("task_field_values").select("id")
+          .eq("task_id", taskId).eq("field_id", fid).maybeSingle();
+        if (ex) await db.from("task_field_values").update({ value: v }).eq("id", ex.id);
+        else await db.from("task_field_values").insert({ task_id: taskId, field_id: fid, value: v });
+        written++;
+      }
+      return json({ ok: true, updated: 1, fields_written: written });
+    }
 
     // Resolve the space — active rows only. NOTE: no ORDER BY created_at here;
     // folders (and possibly other tables) have no created_at column, and an
@@ -72,7 +118,10 @@ Deno.serve(async (req) => {
     // fields like Start Date are intentionally excluded so the hash is stable.
     const entries = Object.entries(fields || {})
       .map(([k, v]) => [k, v == null ? "" : String(v)] as [string, string])
-      .filter(([, v]) => v.trim() !== "")
+      // Exclude positional/auto fields from the signature: "Row Number" shifts
+      // when rows are inserted/deleted above it, which must NOT be read as new
+      // content (that would create a duplicate task).
+      .filter(([k, v]) => v.trim() !== "" && k.toLowerCase() !== "row number")
       .map(([k, v]) => `${k}\t${v}`)
       .sort();
     const sourceKey = await sha256hex(`${list.id}\n${String(title).trim()}\n${entries.join("\n")}`);
