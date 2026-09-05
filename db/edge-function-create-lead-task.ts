@@ -43,7 +43,8 @@ Deno.serve(async (req) => {
   try {
     const { secret, action, spaceName, folderName, listName, title, status, fields, assignTo } = await req.json();
     if (secret !== Deno.env.get("WEBHOOK_SECRET")) return json({ error: "Unauthorized" }, 401);
-    if (!title || !listName) return json({ error: "Missing title or listName" }, 400);
+    if (!listName) return json({ error: "Missing listName" }, 400);
+    if (action !== "update_fields_batch" && !title) return json({ error: "Missing title" }, 400);
 
     const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -92,6 +93,59 @@ Deno.serve(async (req) => {
         written++;
       }
       return json({ ok: true, updated: 1, fields_written: written });
+    }
+
+    // ── Batched backfill: many {title, fields} in one request, so a large sheet
+    // backfills in a few calls instead of one HTTP round-trip per row (which
+    // blows the Apps Script 6-min limit). Resolves the list once, then updates
+    // each task by title. Returns a summary + per-item reasons.
+    if (action === "update_fields_batch") {
+      const items: { title?: string; fields?: Record<string, unknown> }[] =
+        Array.isArray(body.items) ? body.items : [];
+      const { data: sp, error: spE } = await db.from("spaces").select("id")
+        .eq("name", spaceName).is("deleted_at", null).limit(1).maybeSingle();
+      if (spE) return json({ error: "Space lookup failed: " + spE.message }, 500);
+      if (!sp) return json({ error: "Space not found" }, 404);
+      const { data: fo, error: foE } = await db.from("folders").select("id")
+        .eq("name", folderName).eq("space_id", sp.id).is("deleted_at", null).limit(1).maybeSingle();
+      if (foE) return json({ error: "Folder lookup failed: " + foE.message }, 500);
+      if (!fo) return json({ ok: true, summary: { updated: 0, noMatch: 0, ambiguous: 0, other: items.length }, results: [] });
+      const { data: li, error: liE } = await db.from("lists").select("id")
+        .eq("name", listName).eq("folder_id", fo.id).is("deleted_at", null).limit(1).maybeSingle();
+      if (liE) return json({ error: "List lookup failed: " + liE.message }, 500);
+      if (!li) return json({ ok: true, summary: { updated: 0, noMatch: 0, ambiguous: 0, other: items.length }, results: [] });
+
+      const { data: defs } = await db.from("space_fields").select("id, field_name, field_type").eq("list_id", li.id);
+      const byName = new Map((defs || []).map((d) => [String(d.field_name).toLowerCase(), d]));
+      const results: { title: string; updated: number; reason?: string; count?: number }[] = [];
+      for (const it of items) {
+        const t = String(it.title || "").trim();
+        if (!t) { results.push({ title: t, updated: 0, reason: "empty title" }); continue; }
+        const { data: matches } = await db.from("tasks").select("id")
+          .eq("list_id", li.id).eq("title", t).is("deleted_at", null);
+        if (!matches || matches.length === 0) { results.push({ title: t, updated: 0, reason: "no matching task" }); continue; }
+        if (matches.length > 1) { results.push({ title: t, updated: 0, reason: "ambiguous", count: matches.length }); continue; }
+        const taskId = matches[0].id;
+        for (const [name, value] of Object.entries(it.fields || {})) {
+          if (value == null || String(value).trim() === "") continue;
+          const def = byName.get(String(name).toLowerCase());
+          if (!def) continue;
+          const v = normalizeFieldValue(def.field_type, String(value));
+          const { data: ex } = await db.from("task_field_values").select("id")
+            .eq("task_id", taskId).eq("field_id", def.id).maybeSingle();
+          if (ex) await db.from("task_field_values").update({ value: v }).eq("id", ex.id);
+          else await db.from("task_field_values").insert({ task_id: taskId, field_id: def.id, value: v });
+        }
+        results.push({ title: t, updated: 1 });
+      }
+      const summary = results.reduce((a, r) => {
+        if (r.updated === 1) a.updated++;
+        else if (r.reason === "ambiguous") a.ambiguous++;
+        else if (r.reason === "no matching task") a.noMatch++;
+        else a.other++;
+        return a;
+      }, { updated: 0, noMatch: 0, ambiguous: 0, other: 0 });
+      return json({ ok: true, summary, results });
     }
 
     // Resolve the space — active rows only. NOTE: no ORDER BY created_at here;
