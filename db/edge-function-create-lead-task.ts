@@ -23,6 +23,21 @@ async function sha256hex(s: string) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Normalize a value for storage based on the target field's type. DATE fields
+// keep only the calendar day (YYYY-MM-DD): an ISO datetime like
+// "2026-06-19T12:14:49-05:00" is sliced to "2026-06-19" (no timezone math — the
+// date as written wins), so the app renders it correctly as 19-06-2026.
+// Unparseable values (e.g. "Liquidated") are left as-is.
+function normalizeFieldValue(type: string | undefined, raw: string): string {
+  if (type !== "date") return raw;
+  const s = raw.trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return s;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -61,14 +76,15 @@ Deno.serve(async (req) => {
       if (matches.length > 1) return json({ ok: true, updated: 0, reason: "ambiguous", count: matches.length });
       const taskId = matches[0].id;
 
-      const { data: defs } = await db.from("space_fields").select("id, field_name").eq("list_id", li.id);
-      const byName = new Map((defs || []).map((d) => [String(d.field_name).toLowerCase(), d.id]));
+      const { data: defs } = await db.from("space_fields").select("id, field_name, field_type").eq("list_id", li.id);
+      const byName = new Map((defs || []).map((d) => [String(d.field_name).toLowerCase(), d]));
       let written = 0;
       for (const [name, value] of Object.entries(fields || {})) {
         if (value == null || String(value).trim() === "") continue;
-        const fid = byName.get(String(name).toLowerCase());
-        if (!fid) continue;
-        const v = String(value);
+        const def = byName.get(String(name).toLowerCase());
+        if (!def) continue;
+        const fid = def.id;
+        const v = normalizeFieldValue(def.field_type, String(value));
         const { data: ex } = await db.from("task_field_values").select("id")
           .eq("task_id", taskId).eq("field_id", fid).maybeSingle();
         if (ex) await db.from("task_field_values").update({ value: v }).eq("id", ex.id);
@@ -143,16 +159,16 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: true, error: taskErr.message });
     }
 
-    const { data: defs } = await db.from("space_fields").select("id, field_name").eq("list_id", list.id);
-    const byName = new Map((defs || []).map((d) => [String(d.field_name).toLowerCase(), d.id]));
+    const { data: defs } = await db.from("space_fields").select("id, field_name, field_type").eq("list_id", list.id);
+    const byName = new Map((defs || []).map((d) => [String(d.field_name).toLowerCase(), d]));
     const rows: Record<string, string>[] = [];
     for (const [name, value] of Object.entries(fields || {})) {
       if (value == null || String(value).trim() === "") continue;
-      const fid = byName.get(String(name).toLowerCase());
-      if (fid) rows.push({ task_id: task.id, field_id: fid, value: String(value) });
+      const def = byName.get(String(name).toLowerCase());
+      if (def) rows.push({ task_id: task.id, field_id: def.id, value: normalizeFieldValue(def.field_type, String(value)) });
     }
-    const startId = byName.get("start date");
-    if (startId) rows.push({ task_id: task.id, field_id: startId, value: today });
+    const startDef = byName.get("start date");
+    if (startDef) rows.push({ task_id: task.id, field_id: startDef.id, value: today });
     if (rows.length) await db.from("task_field_values").insert(rows);
 
     return json({ ok: true, task_id: task.id });
