@@ -3,8 +3,14 @@
 // live script lives in the Google Sheet's bound Apps Script project.
 //
 // PREREQUISITE: run db/add_advertising_extra_fields.sql first (creates the
-// `created_time` and `Row Number` custom fields on the list) and deploy the
-// updated create-lead-task Edge Function (adds the `update_fields` action).
+// `created_time` DATE field and `Row Number` number field on the list) and
+// deploy the updated create-lead-task Edge Function (adds the `update_fields`
+// action and date normalization).
+//
+// NOTE: created_time is sent as the raw sheet value (e.g. an ISO datetime like
+// 2026-06-19T12:14:49-05:00). The Edge Function slices date-typed fields down to
+// the calendar day (2026-06-19), so no formatting is needed here on the Sheets
+// side — keep sending the cell value as-is.
 //
 // ── EDIT 1: add created_time to the "New Zap Leads 26" fieldMap ──
 // In the SHEETS config, the New Zap Leads 26 entry's fieldMap becomes:
