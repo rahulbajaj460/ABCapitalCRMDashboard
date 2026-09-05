@@ -5,6 +5,7 @@ import { fmtDate, fmtDMY } from "../dateFormat";
 import ImportTasks from "./ImportTasks";
 import Automations from "./Automations";
 import SpaceOverview from "./SpaceOverview";
+import MonthlyLeadReportScope from "./MonthlyLeadReport";
 import { IconList, IconBoard, IconBolt, IconUpload, IconDownload, IconSearch, IconColumns, IconTrash, IconClose, IconCheck, IconEdit } from "./icons";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -4715,7 +4716,16 @@ export default function Tasks({
 
         <div className="content-area">
           {viewMode === "overview" && activeSpace && (
-            <SpaceOverview key={activeSpace.id} space={activeSpace} onOpenScope={onOpenScope} />
+            <>
+              {!activeFolder && (
+                <SpaceOverview key={activeSpace.id} space={activeSpace} onOpenScope={onOpenScope} />
+              )}
+              <MonthlyLeadReportScope
+                spaceId={activeFolder ? undefined : activeSpace.id}
+                folderId={activeFolder?.id}
+                onOpenScope={onOpenScope}
+              />
+            </>
           )}
           {viewMode === "list" && (
             <div className={activeFolder ? undefined : "task-table-scroll"}>
