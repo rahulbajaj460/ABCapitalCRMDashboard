@@ -41,7 +41,7 @@ function normalizeFieldValue(type: string | undefined, raw: string): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const { secret, action, spaceName, folderName, listName, title, status, fields, assignTo } = await req.json();
+    const { secret, action, spaceName, folderName, listName, title, status, fields, assignTo, items: bodyItems } = await req.json();
     if (secret !== Deno.env.get("WEBHOOK_SECRET")) return json({ error: "Unauthorized" }, 401);
     if (!listName) return json({ error: "Missing listName" }, 400);
     if (action !== "update_fields_batch" && !title) return json({ error: "Missing title" }, 400);
@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     // each task by title. Returns a summary + per-item reasons.
     if (action === "update_fields_batch") {
       const items: { title?: string; fields?: Record<string, unknown> }[] =
-        Array.isArray(body.items) ? body.items : [];
+        Array.isArray(bodyItems) ? bodyItems : [];
       const { data: sp, error: spE } = await db.from("spaces").select("id")
         .eq("name", spaceName).is("deleted_at", null).limit(1).maybeSingle();
       if (spE) return json({ error: "Space lookup failed: " + spE.message }, 500);
