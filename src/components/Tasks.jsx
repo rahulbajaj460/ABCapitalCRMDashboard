@@ -2319,7 +2319,6 @@ export default function Tasks({
       return;
     }
     const payload = {
-      title: titleVal,
       description: drawerEdits.description ?? drawerTask.description ?? "",
       status: drawerEdits.status ?? drawerTask.status,
       priority: drawerEdits.priority ?? drawerTask.priority,
@@ -2343,6 +2342,14 @@ export default function Tasks({
         return null;
       })(),
     };
+    // Only write `title` when it actually changed. Sending it on every save
+    // (with a trim applied) made the DB history trigger log a phantom "Renamed"
+    // whenever a stored title had stray whitespace — e.g. every time an agent
+    // just changed status/assignee. Compare trimmed-to-trimmed so a real rename
+    // is still recorded, but a no-op save touches nothing.
+    if (titleVal !== (drawerTask.title || "").trim()) {
+      payload.title = titleVal;
+    }
     const { error } = await supabase
       .from("tasks")
       .update(payload)
