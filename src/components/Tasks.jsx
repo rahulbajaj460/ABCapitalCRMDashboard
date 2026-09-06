@@ -2346,9 +2346,18 @@ export default function Tasks({
     // (with a trim applied) made the DB history trigger log a phantom "Renamed"
     // whenever a stored title had stray whitespace — e.g. every time an agent
     // just changed status/assignee. Compare trimmed-to-trimmed so a real rename
-    // is still recorded, but a no-op save touches nothing.
+    // is still recorded, but a no-op save touches nothing. A real rename asks
+    // for confirmation first (guards accidental edits to a lead's name); if
+    // declined, the name reverts and the rest of the save still goes through.
     if (titleVal !== (drawerTask.title || "").trim()) {
-      payload.title = titleVal;
+      const ok = window.confirm(
+        `Rename this lead?\n\n"${drawerTask.title || ""}"\n→\n"${titleVal}"`
+      );
+      if (ok) {
+        payload.title = titleVal;
+      } else {
+        setDrawerEdits((p) => ({ ...p, title: drawerTask.title || "" }));
+      }
     }
     const { error } = await supabase
       .from("tasks")
