@@ -5,8 +5,9 @@
 // service key (available only here, in Deno env).
 //
 // Deploy:  supabase functions deploy admin-users
-// Secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY are
-//          injected automatically by Supabase — nothing to set.
+// Secrets: SUPABASE_URL is injected automatically. Set SERVICE_SECRET_KEY to a
+//          new secret API key (sb_secret_…) once you migrate off legacy JWT
+//          keys; until then it falls back to the injected SUPABASE_SERVICE_ROLE_KEY.
 //
 // Actions (POST body):
 //   { action: "create_user", email, password, full_name, role }
@@ -29,13 +30,18 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     const URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Prefer the new secret API key (sb_secret_…), set as the SERVICE_SECRET_KEY
+    // function secret; fall back to the legacy service_role during migration.
+    // Once legacy JWT keys are disabled, SERVICE_SECRET_KEY must be set.
+    const SERVICE = Deno.env.get("SERVICE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // 1) Identify the caller from their JWT.
+    // 1) Identify the caller from their JWT. The apikey here is only the gateway
+    // credential; the caller's identity comes from their Authorization bearer,
+    // and their admin role is re-checked below with the service client — so
+    // using the secret key as the apikey grants no extra privilege to the caller.
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Not authenticated" }, 401);
-    const userClient = createClient(URL, ANON, { global: { headers: { Authorization: authHeader } } });
+    const userClient = createClient(URL, SERVICE, { global: { headers: { Authorization: authHeader } } });
     const { data: { user: caller }, error: userErr } = await userClient.auth.getUser();
     if (userErr || !caller) return json({ error: "Not authenticated" }, 401);
 

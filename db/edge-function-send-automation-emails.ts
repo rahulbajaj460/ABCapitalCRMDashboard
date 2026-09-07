@@ -12,7 +12,9 @@
 //   EMAIL_WEBHOOK_SECRET - secret the cron sends in the x-webhook-secret header
 //                          (distinct from the lead-ingest function's WEBHOOK_SECRET,
 //                           since Edge Function secrets are shared project-wide)
-//   (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided automatically)
+//   (SUPABASE_URL is provided automatically. SERVICE_SECRET_KEY = a new secret
+//    API key (sb_secret_…); falls back to the injected SUPABASE_SERVICE_ROLE_KEY
+//    until you disable legacy JWT keys.)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -37,7 +39,10 @@ Deno.serve(async (req) => {
     const from = Deno.env.get("FROM_EMAIL") || "AB Capital <onboarding@resend.dev>";
     if (!resendKey) return json({ error: "RESEND_API_KEY not set" }, 500);
 
-    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const db = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SERVICE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
     // Pull a batch of pending emails.
     const { data: pending, error: qErr } = await db
