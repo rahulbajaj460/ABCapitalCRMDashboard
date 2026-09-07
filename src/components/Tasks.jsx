@@ -412,6 +412,7 @@ export default function Tasks({
   const [selectedTaskIds, setSelectedTaskIds] = useState(() => new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkAssignSearch, setBulkAssignSearch] = useState("");
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   // Filter tree: a group has { id, kind:"group", conj:"AND"|"OR", children:[] }
   // children are conditions { id, kind:"cond", field, op, value } or nested groups.
   const [filterTree, setFilterTree] = useState({ id: "root", kind: "group", conj: "AND", children: [] });
@@ -2787,6 +2788,37 @@ export default function Tasks({
     fetchTasks();
   }
 
+  // Set the same status on every selected task, applying the same done/closed
+  // date bookkeeping as a single status change. History is logged by the DB
+  // trigger. The clone-review popup is intentionally skipped for bulk changes
+  // (server-side automations still fire); it would otherwise stack many modals.
+  async function bulkSetStatus(newSt) {
+    const ids = [...selectedTaskIds];
+    const now = new Date().toISOString();
+    for (const id of ids) {
+      const task = tasks.find((t) => t.id === id);
+      if (!task || task.status === newSt) continue;
+      const wasDone = task.status === "Done";
+      const nowDone = newSt === "Done";
+      const wasClosed = isClosedStatus(task.status);
+      const nowClosed = isClosedStatus(newSt);
+      await supabase
+        .from("tasks")
+        .update({
+          status: newSt,
+          updated_by: profile?.full_name || "Unknown",
+          updated_at: now,
+          date_updated_manual: now.slice(0, 10),
+          date_done: nowDone ? now.slice(0, 10) : (wasDone && !nowDone ? null : task?.date_done || null),
+          date_closed: nowClosed ? now.slice(0, 10) : (wasClosed && !nowClosed ? null : task?.date_closed || null),
+        })
+        .eq("id", id);
+    }
+    setBulkStatusOpen(false);
+    clearSelection();
+    fetchTasks();
+  }
+
   // Inline set a built-in date column on a task.
   async function setTaskDate(taskId, colKey, value) {
     const task = tasks.find((t) => t.id === taskId);
@@ -3995,7 +4027,7 @@ export default function Tasks({
           <div style={{ width: 1, height: 20, background: "#374151" }} />
           <div style={{ position: "relative" }}>
             <button
-              onClick={() => { setBulkAssignSearch(""); setBulkAssignOpen((v) => !v); }}
+              onClick={() => { setBulkAssignSearch(""); setBulkStatusOpen(false); setBulkAssignOpen((v) => !v); }}
               style={{ fontSize: 13, fontWeight: 600, background: "#374151", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
             >
               Assign ▾
@@ -4026,6 +4058,36 @@ export default function Tasks({
                       >
                         <span style={{ width: 22, height: 22, borderRadius: "50%", background: avatarColor(name), color: "#fff", fontSize: 9, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initials(name)}</span>
                         <span style={{ flex: 1, fontSize: 13 }}>{name}</span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </>
+            )}
+          </div>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => { setBulkAssignOpen(false); setBulkStatusOpen((v) => !v); }}
+              style={{ fontSize: 13, fontWeight: 600, background: "#374151", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+            >
+              Status ▾
+            </button>
+            {bulkStatusOpen && (
+              <>
+                <div style={{ position: "fixed", inset: 0, zIndex: 1 }} onClick={() => setBulkStatusOpen(false)} />
+                <div style={{ position: "absolute", bottom: "120%", left: 0, zIndex: 2, width: 220, maxHeight: 300, overflowY: "auto", background: "#fff", color: "#111", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.18)", padding: 8 }}>
+                  {(() => {
+                    const opts = getStatuses();
+                    if (opts.length === 0) return <div style={{ fontSize: 12, color: "#bbb", padding: "6px 8px" }}>No statuses</div>;
+                    return opts.map((st) => (
+                      <div
+                        key={st}
+                        onClick={() => bulkSetStatus(st)}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "#f5f5f4"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <span style={{ flex: 1, fontSize: 13 }}>{st}</span>
                       </div>
                     ));
                   })()}
