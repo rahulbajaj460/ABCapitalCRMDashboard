@@ -46,7 +46,12 @@ Deno.serve(async (req) => {
     if (!listName) return json({ error: "Missing listName" }, 400);
     if (action !== "update_fields_batch" && !title) return json({ error: "Missing title" }, 400);
 
-    const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    // Prefer the new secret API key (SERVICE_SECRET_KEY = sb_secret_…); fall
+    // back to the legacy service_role during migration.
+    const db = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SERVICE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
     // ── Backfill path: update field values on an ALREADY-CREATED task, matched
     // by list + title. Never creates a task or a list. Used to push sheet-only
