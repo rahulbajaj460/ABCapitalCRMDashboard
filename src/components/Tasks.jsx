@@ -2380,58 +2380,47 @@ export default function Tasks({
 
     // History is recorded by the database trigger (covers every edit path).
 
-    // Save field values
-    const { data: currentFVs } = await supabase
-      .from("task_field_values")
-      .select("*")
-      .eq("task_id", drawerTask.id);
+    // Save field values — only the ones that actually changed. (Writing every
+    // field on each save, after a full re-fetch, was a big part of the delay.)
+    const origFV = {};
+    (drawerTask.task_field_values || []).forEach((fv) => { origFV[fv.field_id] = fv.value; });
     for (const [fieldId, value] of Object.entries(drawerFieldValues)) {
-      const existing = (currentFVs || []).find((v) => v.field_id === fieldId);
+      if ((origFV[fieldId] ?? "") === (value ?? "")) continue; // unchanged
+      const existing = (drawerTask.task_field_values || []).find((v) => v.field_id === fieldId);
       if (existing)
-        await supabase
-          .from("task_field_values")
-          .update({ value })
-          .eq("id", existing.id);
+        await supabase.from("task_field_values").update({ value }).eq("id", existing.id);
       else
-        await supabase
-          .from("task_field_values")
-          .insert({ task_id: drawerTask.id, field_id: fieldId, value });
+        await supabase.from("task_field_values").insert({ task_id: drawerTask.id, field_id: fieldId, value });
     }
 
-    // Refetch with the SAME scoping as fetchTasks (list/folder/space, no
-    // extra member filter) so other status groups aren't wiped out on save.
-    let q = supabase
+    // Re-fetch ONLY this task (with its field values) and patch it into local
+    // state, instead of re-querying the whole list (which for large lists meant
+    // pulling thousands of rows + their field values on every save — the 5–10s
+    // wait). Grouping/filtering in render derive from the task's own fields, so
+    // an in-place patch keeps the board correct.
+    const { data: updated } = await supabase
       .from("tasks")
       .select("*, task_field_values(*)")
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false });
-    if (activeList) q = q.eq("list_id", activeList.id);
-    else if (activeFolder) q = q.eq("folder_id", activeFolder.id);
-    else if (activeSpace) q = q.eq("space_id", activeSpace.id);
-    const { data: refreshed } = await q;
-    if (refreshed) {
-      setTasks(refreshed);
-      const updated = refreshed.find((t) => t.id === drawerTask.id);
-      if (updated) {
-        setDrawerTask(updated);
-        setDrawerEdits({
-          title: updated.title,
-          description: updated.description || "",
-          status: updated.status,
-          priority: updated.priority,
-          assignees: updated.assignees || [],
-          due_date: updated.due_date || "",
-          date_done: updated.date_done || "",
-          date_closed: updated.date_closed || "",
-          date_updated_manual: updated.date_updated_manual || "",
-        });
-        const fvMap = {};
-        (updated.task_field_values || []).forEach((fv) => {
-          fvMap[fv.field_id] = fv.value;
-        });
-        setDrawerFieldValues(fvMap);
-        maybeOpenVatClone(updated, drawerOldStatus, updated.status);
-      }
+      .eq("id", drawerTask.id)
+      .single();
+    if (updated) {
+      setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setDrawerTask(updated);
+      setDrawerEdits({
+        title: updated.title,
+        description: updated.description || "",
+        status: updated.status,
+        priority: updated.priority,
+        assignees: updated.assignees || [],
+        due_date: updated.due_date || "",
+        date_done: updated.date_done || "",
+        date_closed: updated.date_closed || "",
+        date_updated_manual: updated.date_updated_manual || "",
+      });
+      const fvMap = {};
+      (updated.task_field_values || []).forEach((fv) => { fvMap[fv.field_id] = fv.value; });
+      setDrawerFieldValues(fvMap);
+      maybeOpenVatClone(updated, drawerOldStatus, updated.status);
     }
     setDrawerSaving(false);
     setDrawerSaved(true);
