@@ -53,90 +53,104 @@
 // stopped; it prints "PAUSED at row N — run again to continue." When it prints
 // "COMPLETE" it's done. Read the Logs (View ▸ Logs) for any NO MATCH / AMBIGUOUS
 // rows to fix by hand. To force a fresh start, run resetBackfillCursor() first.
-function backfillExtraFields() {
-  const TAB = 'New Zap Leads 26';                 // sheet tab to backfill
-  // sheet column header → CRM field name (may differ). Add rows here to backfill
-  // more columns onto existing tasks.
-  const EXTRA_FIELDS = {
-    'created_time': 'created_time',
-    'phone_number': 'Alternate Number',
-  };
-  const CHUNK = 75;                               // rows per request
-  const TIME_BUDGET_MS = 4.5 * 60 * 1000;         // stop before the 6-min hard limit
-  const CURSOR_KEY = 'BF_CURSOR_' + TAB;
+// ===== CONFIG: which sheet tabs to backfill, and each tab's mapping of =====
+// sheet column header → CRM field name (they may differ). Add a line per tab.
+// The CRM field must already exist on that tab's list (create it via SQL first,
+// see db/add_list_extra_fields_template.sql). "Row Number" is added automatically
+// to every tab, so you don't list it here.
+const BACKFILL_CONFIG = {
+  'New Zap Leads 26': { 'created_time': 'created_time', 'phone_number': 'Alternate Number' },
+  // Examples — uncomment/add as you roll out to more sheets:
+  // 'ZAP Leads':    { 'created_time': 'created_time' },
+  // 'Fluent Forms': { 'created_time': 'created_time' },
+  // 'WA POP UP':    { 'created_time': 'created_time' },
+};
 
+// Backfills EXTRA fields + Row Number onto existing tasks for every tab in
+// BACKFILL_CONFIG. Matches tasks by name. Batched (75 rows/request) and
+// resumable per tab: if it runs long it saves its place and prints PAUSED —
+// just run it again. Finished tabs are marked DONE and skipped on re-runs.
+// Run resetBackfillCursor() to start every tab over from the top.
+function backfillExtraFields() {
+  const CHUNK = 75;
+  const TIME_BUDGET_MS = 4.5 * 60 * 1000;   // stop before the 6-min hard limit
   const started = Date.now();
   const ss = SpreadsheetApp.getActive();
   const url = _p().getProperty('SUPABASE_FUNCTION_URL');
   const secret = _p().getProperty('WEBHOOK_SECRET');
-  const cfg = SHEETS.find((c) => c.sheetName === TAB);
-  if (!cfg) { Logger.log('No SHEETS config for tab ' + TAB); return; }
 
-  const s = ss.getSheetByName(TAB);
-  if (!s) { Logger.log('Tab not found: ' + TAB); return; }
-  const lastRow = s.getLastRow(); if (lastRow < 2) return;
-  const lastCol = s.getLastColumn();
-  const h = s.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
-  const tc = _col(h, cfg.titleHeader);
-  if (tc === -1) { Logger.log('Title header not found: ' + cfg.titleHeader); return; }
+  for (const TAB of Object.keys(BACKFILL_CONFIG)) {
+    const CURSOR_KEY = 'BF_CURSOR_' + TAB;
+    if (_p().getProperty(CURSOR_KEY) === 'DONE') continue;   // already finished
+    const EXTRA_FIELDS = BACKFILL_CONFIG[TAB];
+    const cfg = SHEETS.find((c) => c.sheetName === TAB);
+    if (!cfg) { Logger.log('SKIP ' + TAB + ': no SHEETS config'); _p().setProperty(CURSOR_KEY, 'DONE'); continue; }
+    const s = ss.getSheetByName(TAB);
+    if (!s) { Logger.log('SKIP ' + TAB + ': tab not found'); _p().setProperty(CURSOR_KEY, 'DONE'); continue; }
+    const lastRow = s.getLastRow(); if (lastRow < 2) { _p().setProperty(CURSOR_KEY, 'DONE'); continue; }
+    const lastCol = s.getLastColumn();
+    const h = s.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+    const tc = _col(h, cfg.titleHeader);
+    if (tc === -1) { Logger.log('SKIP ' + TAB + ': title header not found'); _p().setProperty(CURSOR_KEY, 'DONE'); continue; }
 
-  const data = s.getRange(2, 1, lastRow - 1, lastCol).getValues();
-  let start = Number(_p().getProperty(CURSOR_KEY) || 0);
-  if (start >= data.length) start = 0;   // finished last time; start over
-  let ok = 0, noMatch = 0, ambiguous = 0, other = 0;
+    const data = s.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    let start = Number(_p().getProperty(CURSOR_KEY) || 0);
+    if (!(start >= 0) || start >= data.length) start = 0;
+    let ok = 0, noMatch = 0, ambiguous = 0, other = 0;
 
-  let i = start;
-  for (; i < data.length; i += CHUNK) {
-    if (Date.now() - started > TIME_BUDGET_MS) {
-      _p().setProperty(CURSOR_KEY, String(i));
-      Logger.log('PAUSED at row ' + (i + 2) + ' — run backfillExtraFields again to continue. ' +
-                 '(so far this pass: updated=' + ok + ' noMatch=' + noMatch + ' ambiguous=' + ambiguous + ' other=' + other + ')');
-      return;
-    }
-    const items = [];
-    for (let j = i; j < Math.min(i + CHUNK, data.length); j++) {
-      const r = data[j], rowNum = j + 2;
-      const title = String(r[tc] || '').trim();
-      if (!title) continue;
-      const fields = { 'Row Number': String(rowNum) };
-      Object.keys(EXTRA_FIELDS).forEach((hdr) => {
-        const c = _col(h, hdr);
-        if (c !== -1) fields[EXTRA_FIELDS[hdr]] = String(r[c] || '').trim();
+    let i = start;
+    for (; i < data.length; i += CHUNK) {
+      if (Date.now() - started > TIME_BUDGET_MS) {
+        _p().setProperty(CURSOR_KEY, String(i));
+        Logger.log('PAUSED on "' + TAB + '" at row ' + (i + 2) + ' — run backfillExtraFields again to continue.');
+        return;
+      }
+      const items = [];
+      for (let j = i; j < Math.min(i + CHUNK, data.length); j++) {
+        const r = data[j], rowNum = j + 2;
+        const title = String(r[tc] || '').trim();
+        if (!title) continue;
+        const fields = { 'Row Number': String(rowNum) };
+        Object.keys(EXTRA_FIELDS).forEach((hdr) => {
+          const c = _col(h, hdr);
+          if (c !== -1) fields[EXTRA_FIELDS[hdr]] = String(r[c] || '').trim();
+        });
+        items.push({ title: title, fields: fields });
+      }
+      if (!items.length) continue;
+
+      const resp = UrlFetchApp.fetch(url, {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        payload: JSON.stringify({
+          secret, action: 'update_fields_batch', spaceName: SPACE_NAME,
+          folderName: cfg.folderName || FOLDER_NAME, listName: cfg.listName, items: items,
+        }),
       });
-      items.push({ title: title, fields: fields });
+      if (resp.getResponseCode() !== 200) {
+        _p().setProperty(CURSOR_KEY, String(i));
+        Logger.log('HTTP ' + resp.getResponseCode() + ' on "' + TAB + '" at row ' + (i + 2) + ': ' +
+                   resp.getContentText() + ' — fix and run again to resume.');
+        return;
+      }
+      let body = {};
+      try { body = JSON.parse(resp.getContentText()); } catch (e) {}
+      const sum = body.summary || {};
+      ok += sum.updated || 0; noMatch += sum.noMatch || 0; ambiguous += sum.ambiguous || 0; other += sum.other || 0;
+      (body.results || []).forEach((r) => {
+        if (r.reason === 'ambiguous') Logger.log(TAB + ': AMBIGUOUS (' + r.count + ' tasks named "' + r.title + '")');
+        else if (r.reason === 'no matching task') Logger.log(TAB + ': NO MATCH for "' + r.title + '"');
+      });
     }
-    if (!items.length) continue;
 
-    const resp = UrlFetchApp.fetch(url, {
-      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      payload: JSON.stringify({
-        secret, action: 'update_fields_batch', spaceName: SPACE_NAME,
-        folderName: cfg.folderName || FOLDER_NAME, listName: cfg.listName, items: items,
-      }),
-    });
-    if (resp.getResponseCode() !== 200) {
-      _p().setProperty(CURSOR_KEY, String(i));
-      Logger.log('HTTP ' + resp.getResponseCode() + ' at row ' + (i + 2) + ': ' + resp.getContentText() +
-                 ' — fix and run again to resume.');
-      return;
-    }
-    let body = {};
-    try { body = JSON.parse(resp.getContentText()); } catch (e) {}
-    const sum = body.summary || {};
-    ok += sum.updated || 0; noMatch += sum.noMatch || 0; ambiguous += sum.ambiguous || 0; other += sum.other || 0;
-    (body.results || []).forEach((r) => {
-      if (r.reason === 'ambiguous') Logger.log('AMBIGUOUS (' + r.count + ' tasks named "' + r.title + '")');
-      else if (r.reason === 'no matching task') Logger.log('NO MATCH for "' + r.title + '"');
-    });
+    _p().setProperty(CURSOR_KEY, 'DONE');
+    Logger.log('DONE "' + TAB + '": updated=' + ok + ' noMatch=' + noMatch +
+               ' ambiguous=' + ambiguous + ' other=' + other + ' of ' + data.length + ' rows.');
   }
-
-  _p().deleteProperty(CURSOR_KEY);
-  Logger.log('COMPLETE: updated=' + ok + ' noMatch=' + noMatch +
-             ' ambiguous=' + ambiguous + ' other=' + other + ' of ' + data.length + ' rows.');
+  Logger.log('ALL BACKFILLS COMPLETE.');
 }
 
-// Run this once to force backfillExtraFields to start again from the top.
+// Run once to make backfillExtraFields start every configured tab over.
 function resetBackfillCursor() {
-  _p().deleteProperty('BF_CURSOR_New Zap Leads 26');
-  Logger.log('Backfill cursor reset.');
+  Object.keys(BACKFILL_CONFIG).forEach((tab) => _p().deleteProperty('BF_CURSOR_' + tab));
+  Logger.log('Backfill cursors reset for: ' + Object.keys(BACKFILL_CONFIG).join(', '));
 }
