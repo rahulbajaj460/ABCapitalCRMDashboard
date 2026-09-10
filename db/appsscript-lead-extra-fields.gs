@@ -23,8 +23,13 @@
 //       'Comments': 'Comments',
 //       'Remark1': 'Remark1',
 //       'Remark2': 'Remark2',
-//       'created_time': 'created_time'   // ← ADD THIS LINE
+//       'created_time': 'created_time',       // ← created_time
+//       'phone_number': 'Alternate Number'    // ← sheet phone_number → CRM "Alternate Number"
 //     },
+// (The sheet header and CRM field name can differ — the left side is the sheet
+//  column, the right side is the CRM field. `work_phone_number` still maps to
+//  the existing "Phone Number"; the separate `phone_number` column feeds the new
+//  "Alternate Number" field. Prerequisite: run db/add_alternate_number_field.sql.)
 //
 // ── EDIT 2: inject the Row Number into every payload ──
 // In BOTH processNewLeads() and backfillAll(), right AFTER the block that builds
@@ -38,9 +43,9 @@
 
 // ── EDIT 3: one-time backfill of existing tasks (BATCHED + RESUMABLE) ──
 // Paste this whole function in, then run it from the Apps Script editor
-// (Run ▸ backfillExtraFields). It pushes created_time + Row Number onto the
-// matching existing task (matched by name). It NEVER creates tasks and is safe
-// to re-run.
+// (Run ▸ backfillExtraFields). It pushes every column in EXTRA_FIELDS (below)
+// plus Row Number onto the matching existing task (matched by name). It NEVER
+// creates tasks and is safe to re-run (re-writing the same values is a no-op).
 //
 // It sends CHUNK rows per request (not one-at-a-time), so ~250 rows finish in a
 // handful of calls instead of blowing the 6-minute limit. If it still runs out
@@ -50,7 +55,12 @@
 // rows to fix by hand. To force a fresh start, run resetBackfillCursor() first.
 function backfillExtraFields() {
   const TAB = 'New Zap Leads 26';                 // sheet tab to backfill
-  const EXTRA_HEADERS = ['created_time'];         // sheet columns → same-named CRM fields
+  // sheet column header → CRM field name (may differ). Add rows here to backfill
+  // more columns onto existing tasks.
+  const EXTRA_FIELDS = {
+    'created_time': 'created_time',
+    'phone_number': 'Alternate Number',
+  };
   const CHUNK = 75;                               // rows per request
   const TIME_BUDGET_MS = 4.5 * 60 * 1000;         // stop before the 6-min hard limit
   const CURSOR_KEY = 'BF_CURSOR_' + TAB;
@@ -89,9 +99,9 @@ function backfillExtraFields() {
       const title = String(r[tc] || '').trim();
       if (!title) continue;
       const fields = { 'Row Number': String(rowNum) };
-      EXTRA_HEADERS.forEach((hdr) => {
+      Object.keys(EXTRA_FIELDS).forEach((hdr) => {
         const c = _col(h, hdr);
-        if (c !== -1) fields[hdr] = String(r[c] || '').trim();
+        if (c !== -1) fields[EXTRA_FIELDS[hdr]] = String(r[c] || '').trim();
       });
       items.push({ title: title, fields: fields });
     }
