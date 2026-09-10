@@ -82,15 +82,17 @@ export function Donut({ data, size = 150, thickness = 22, centerLabel, centerSub
 }
 
 // Horizontal bars. data = [{ label, value, sub, color }]
-export function HBars({ data, max, emptyText = "No data" }) {
+export function HBars({ data, max, emptyText = "No data", onRowClick }) {
   if (!data || data.length === 0) return <div style={{ fontSize: 12.5, color: "#9ca3af" }}>{emptyText}</div>;
   const m = max || Math.max(...data.map((d) => d.value), 1);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {data.map((d, i) => (
-        <div key={i}>
+        <div key={i}
+          onClick={onRowClick ? () => onRowClick(d) : undefined}
+          style={onRowClick ? { cursor: "pointer" } : undefined}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-            <span style={{ color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "72%" }}>{d.label}</span>
+            <span style={{ color: onRowClick ? "var(--accent)" : "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "72%" }}>{d.label}</span>
             <span style={{ color: "#6b7280", fontWeight: 600 }}>{d.sub != null ? d.sub : d.value}</span>
           </div>
           <div style={{ height: 8, background: "#f1f2f2", borderRadius: 5, overflow: "hidden" }}>
