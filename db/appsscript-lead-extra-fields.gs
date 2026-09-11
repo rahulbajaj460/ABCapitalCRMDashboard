@@ -63,7 +63,9 @@ function normCreatedTime(v) {
     return y + '-' + m + '-' + d;
   }
   const s = String(v == null ? '' : v).trim();
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);   // dd/mm/yyyy (day first)
+  // Day-first dd/mm/yyyy OR dd-mm-yyyy (slash or dash). The 4-digit YEAR is last,
+  // so ISO yyyy-mm-dd (year first) does NOT match and is left untouched.
+  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
   return s;   // ISO datetime, yyyy-mm-dd, or anything else → leave as-is
 }
