@@ -208,11 +208,20 @@ function advanceDue(baseStr, months = 3, day = 28) {
 
 function parseFlexibleDate(str) {
   if (!str) return null;
-  // Strip ordinal suffixes: 26th → 26, 2nd → 2, 1st → 1, 3rd → 3
-  const cleaned = str.replace(/(\d+)(st|nd|rd|th)/gi, "$1");
-  // Strip leading day name if present: "Thursday, February 26 2026" → "February 26 2026"
-  const withoutDay = cleaned.replace(/^[A-Za-z]+,\s*/, "");
-  const d = new Date(withoutDay);
+  const s = String(str).trim();
+  // ISO first (year-first): "2026-03-01" or "2026-03-01T..". Build from parts in
+  // UTC so a date-only value never shifts a day across timezones.
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  // Day-first "dd-mm-yyyy" / "dd/mm/yyyy" (1–2 digit day & month). This app
+  // displays and reads dates day-first, so parse them day-first explicitly —
+  // JS's own `new Date("01-03-2026")` would wrongly read them month-first (US)
+  // and swap the day and month.
+  m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  // Fallback for long forms like "Thursday, February 26th 2026".
+  const cleaned = s.replace(/(\d+)(st|nd|rd|th)/gi, "$1").replace(/^[A-Za-z]+,\s*/, "");
+  const d = new Date(cleaned);
   return isNaN(d) ? null : d;
 }
 
