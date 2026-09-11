@@ -40,6 +40,33 @@
 //
 // (`rowNum` already exists in both loops.) Harmless for other tabs — lists with
 // no "Row Number" field simply ignore it, and it's excluded from the dedupe hash.
+//
+// ── EDIT 2b: normalize created_time for NEW leads (forward path) ──
+// So future leads store the correct date too, normalize created_time inside the
+// `fields`-building loops of processNewLeads() AND backfillAll(). Change the line
+// that copies each mapped value from:
+//     if (c !== -1) fields[cfg.fieldMap[hdr]] = String(r[c] || '').trim();
+// to:
+//     if (c !== -1) fields[cfg.fieldMap[hdr]] =
+//       (cfg.fieldMap[hdr] === 'created_time') ? normCreatedTime(r[c]) : String(r[c] || '').trim();
+// (normCreatedTime is defined below; safe for every sheet — it only rewrites
+// day-first dd/mm/yyyy and Date cells, and leaves ISO/other values unchanged.)
+
+// Normalize a created_time cell to YYYY-MM-DD so the CRM stores an unambiguous
+// date. Handles: a real spreadsheet Date cell; a dd/mm/yyyy string (e.g. WA POP
+// UP — day-first, which new Date()/the Edge Function would otherwise misread as
+// month-first and swap); and leaves ISO / other formats untouched (the Edge
+// Function already slices those to the day).
+function normCreatedTime(v) {
+  if (v instanceof Date && !isNaN(v)) {
+    const y = v.getFullYear(), m = ('0' + (v.getMonth() + 1)).slice(-2), d = ('0' + v.getDate()).slice(-2);
+    return y + '-' + m + '-' + d;
+  }
+  const s = String(v == null ? '' : v).trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);   // dd/mm/yyyy (day first)
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return s;   // ISO datetime, yyyy-mm-dd, or anything else → leave as-is
+}
 
 // ── EDIT 3: one-time backfill of existing tasks (BATCHED + RESUMABLE) ──
 // Paste this whole function in, then run it from the Apps Script editor
@@ -113,7 +140,12 @@ function backfillExtraFields() {
         const fields = { 'Row Number': String(rowNum) };
         Object.keys(EXTRA_FIELDS).forEach((hdr) => {
           const c = _col(h, hdr);
-          if (c !== -1) fields[EXTRA_FIELDS[hdr]] = String(r[c] || '').trim();
+          if (c === -1) return;
+          const crmField = EXTRA_FIELDS[hdr];
+          // created_time gets date-normalized (dd/mm/yyyy → yyyy-mm-dd); others sent as text.
+          fields[crmField] = (crmField === 'created_time')
+            ? normCreatedTime(r[c])
+            : String(r[c] || '').trim();
         });
         items.push({ title: title, fields: fields });
       }
