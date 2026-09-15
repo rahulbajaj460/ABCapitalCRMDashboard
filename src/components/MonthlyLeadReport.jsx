@@ -87,70 +87,86 @@ export default function MonthlyLeadReportScope({ spaceId, folderId, onOpenScope 
   let grand = 0;
   rows.forEach((row) => { statuses.forEach((s) => { colTotals[s] = (colTotals[s] || 0) + (row.cells[s] || 0); }); grand += row.total; });
 
-  const th = { textAlign: "right", padding: "7px 10px", fontSize: 11, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap", borderBottom: "1px solid #e5e7eb" };
-  const td = { textAlign: "right", padding: "7px 10px", fontSize: 12.5, color: "#111827", whiteSpace: "nowrap", borderBottom: "1px solid #f2f2f2" };
-  const selStyle = { fontSize: 13, padding: "5px 8px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff" };
+  const th = { textAlign: "right", padding: "9px 12px", fontSize: 11, fontWeight: 700, color: "#64748b", whiteSpace: "nowrap", letterSpacing: "0.02em", textTransform: "uppercase" };
+  const td = { textAlign: "right", padding: "9px 12px", fontSize: 13, color: "#111827", whiteSpace: "nowrap" };
+
+  // Segmented month/year picker with a prev/next month stepper, rendered inline
+  // beside the card title.
+  const stepMonth = (delta) => {
+    if (!year || !month) return;
+    let m = month + delta, y = Number(year);
+    if (m < 1) { m = 12; y -= 1; } else if (m > 12) { m = 1; y += 1; }
+    setMonth(m); setYear(String(y));
+  };
+  const navBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 30, border: "none", background: "transparent", color: "#64748b", cursor: "pointer", fontSize: 14, lineHeight: 1 };
+  const bareSelect = { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", border: "none", background: "transparent", fontSize: 13, fontWeight: 600, color: "#111827", padding: "5px 4px", cursor: "pointer", outline: "none", textAlign: "center", textAlignLast: "center" };
+  const picker = (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 2, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 9, padding: 2 }}>
+      <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)} style={navBtn}>‹</button>
+      <select value={month ?? ""} onChange={(e) => setMonth(Number(e.target.value))} style={bareSelect}>
+        {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+      </select>
+      <select value={year ?? ""} onChange={(e) => setYear(e.target.value)} style={bareSelect}>
+        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+      </select>
+      <button type="button" aria-label="Next month" onClick={() => stepMonth(1)} style={navBtn}>›</button>
+    </div>
+  );
 
   if (!loading && lists.length === 0) return null;
 
   return (
     <Card
       title="Monthly Lead Report"
-      tip="Leads per list for the selected month, by task status. Pick month and year above. Counts each task once by the month of its created_time."
+      tip="Leads per list for the selected month, by task status. Counts each task once by the month of its created_time."
+      action={picker}
       style={{ marginBottom: 16 }}
     >
-      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12.5, color: "#6b7280" }}>Showing</span>
-        <select value={month ?? ""} onChange={(e) => setMonth(Number(e.target.value))} style={selStyle}>
-          {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-        </select>
-        <select value={year ?? ""} onChange={(e) => setYear(e.target.value)} style={selStyle}>
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-      </div>
-
       {loading ? (
-        <div style={{ fontSize: 12.5, color: "#9ca3af" }}>Loading report…</div>
+        <div style={{ fontSize: 12.5, color: "#9ca3af", padding: "8px 0" }}>Loading report…</div>
+      ) : grand === 0 ? (
+        <div style={{ fontSize: 12.5, color: "#9ca3af", padding: "18px 0", textAlign: "center" }}>
+          No leads in {MONTHS[(month || 1) - 1]} {year}.
+        </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto", margin: "0 -18px", padding: "0 18px" }}>
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 480 }}>
             <thead>
-              <tr>
-                <th style={{ ...th, textAlign: "left" }}>List</th>
+              <tr style={{ background: "#f8fafc" }}>
+                <th style={{ ...th, textAlign: "left", borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }}>List</th>
                 {statuses.map((s) => (
                   <th key={s} style={th}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, justifyContent: "flex-end" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 2, background: statusColor(s), display: "inline-block" }} />
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusColor(s), display: "inline-block" }} />
                       {s}
                     </span>
                   </th>
                 ))}
-                <th style={{ ...th, color: "#111827" }}>Total</th>
+                <th style={{ ...th, color: "#111827", borderTopRightRadius: 8, borderBottomRightRadius: 8 }}>Total</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const clickable = onOpenScope;
-                return (
-                  <tr key={row.list.id}
-                    onClick={clickable ? () => onOpenScope({ space_id: row.list.space_id, folder_id: row.list.folder_id, list_id: row.list.id }, null) : undefined}
-                    style={clickable ? { cursor: "pointer" } : undefined}>
-                    <td style={{ ...td, textAlign: "left", fontWeight: 600 }}>{row.list.name}</td>
-                    {statuses.map((s) => (
-                      <td key={s} style={{ ...td, color: row.cells[s] ? "#111827" : "#d1d5db" }}>{row.cells[s] || 0}</td>
-                    ))}
-                    <td style={{ ...td, fontWeight: 700 }}>{row.total}</td>
-                  </tr>
-                );
-              })}
+              {rows.map((row) => (
+                <tr key={row.list.id}
+                  onClick={onOpenScope ? () => onOpenScope({ space_id: row.list.space_id, folder_id: row.list.folder_id, list_id: row.list.id }, null) : undefined}
+                  style={{ borderTop: "1px solid #f1f5f9", cursor: onOpenScope ? "pointer" : "default", transition: "background 0.12s" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                  <td style={{ ...td, textAlign: "left", fontWeight: 600, color: onOpenScope ? "var(--accent)" : "#111827" }}>{row.list.name}</td>
+                  {statuses.map((s) => (
+                    <td key={s} style={{ ...td, color: row.cells[s] ? "#111827" : "#cbd5e1", fontVariantNumeric: "tabular-nums" }}>{row.cells[s] || 0}</td>
+                  ))}
+                  <td style={{ ...td, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{row.total}</td>
+                </tr>
+              ))}
             </tbody>
             <tfoot>
-              <tr>
-                <td style={{ ...td, textAlign: "left", fontWeight: 700, borderTop: "2px solid #e5e7eb", borderBottom: "none" }}>Total</td>
+              <tr style={{ borderTop: "2px solid #e5e7eb" }}>
+                <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>Total</td>
                 {statuses.map((s) => (
-                  <td key={s} style={{ ...td, fontWeight: 700, borderTop: "2px solid #e5e7eb", borderBottom: "none" }}>{colTotals[s] || 0}</td>
+                  <td key={s} style={{ ...td, fontWeight: 700, color: "#374151", fontVariantNumeric: "tabular-nums" }}>{colTotals[s] || 0}</td>
                 ))}
-                <td style={{ ...td, fontWeight: 800, borderTop: "2px solid #e5e7eb", borderBottom: "none" }}>{grand}</td>
+                <td style={{ ...td, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{grand}</td>
               </tr>
             </tfoot>
           </table>
