@@ -24,7 +24,17 @@ language sql stable security definer set search_path = public as $$
   with ct as (
     select distinct on (tfv.task_id)
            tfv.task_id,
-           case when tfv.value ~ '^\d{4}-\d{2}' then substr(tfv.value, 1, 7) else null end as ym
+           case
+             -- ISO (yyyy-mm-dd / yyyy-mm-ddT..): take year-month directly.
+             when tfv.value ~ '^\d{4}-\d{2}' then substr(tfv.value, 1, 7)
+             -- Day-first dd[-/]mm[-/]yyyy (legacy raw sheet values): reorder to
+             -- YYYY-MM so they bucket into the right month instead of Undated.
+             when tfv.value ~ '^\d{1,2}[-/]\d{1,2}[-/]\d{4}$'
+               then to_char(
+                 to_date(regexp_replace(tfv.value, '^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$', '\1-\2-\3'), 'DD-MM-YYYY'),
+                 'YYYY-MM')
+             else null
+           end as ym
     from task_field_values tfv
     join space_fields sf on sf.id = tfv.field_id
     where sf.list_id = p_list_id and lower(sf.field_name) = 'created_time'
