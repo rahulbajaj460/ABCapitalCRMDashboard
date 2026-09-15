@@ -99,14 +99,14 @@ export default function MonthlyLeadReportScope({ spaceId, folderId, onOpenScope 
     setMonth(m); setYear(String(y));
   };
   const navBtn = { display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 30, border: "none", background: "transparent", color: "#64748b", cursor: "pointer", fontSize: 14, lineHeight: 1 };
-  const bareSelect = { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", border: "none", background: "transparent", fontSize: 13, fontWeight: 600, color: "#111827", padding: "5px 4px", cursor: "pointer", outline: "none", textAlign: "center", textAlignLast: "center" };
+  const bareSelect = { appearance: "none", WebkitAppearance: "none", MozAppearance: "none", border: "none", background: "transparent", fontSize: 13, fontWeight: 600, color: "#111827", padding: "5px 8px", cursor: "pointer", outline: "none", textAlign: "center", textAlignLast: "center", boxSizing: "content-box" };
   const picker = (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 2, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 9, padding: 2 }}>
       <button type="button" aria-label="Previous month" onClick={() => stepMonth(-1)} style={navBtn}>‹</button>
-      <select value={month ?? ""} onChange={(e) => setMonth(Number(e.target.value))} style={bareSelect}>
+      <select value={month ?? ""} onChange={(e) => setMonth(Number(e.target.value))} style={{ ...bareSelect, minWidth: 40 }}>
         {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
       </select>
-      <select value={year ?? ""} onChange={(e) => setYear(e.target.value)} style={bareSelect}>
+      <select value={year ?? ""} onChange={(e) => setYear(e.target.value)} style={{ ...bareSelect, minWidth: 48 }}>
         {years.map((y) => <option key={y} value={y}>{y}</option>)}
       </select>
       <button type="button" aria-label="Next month" onClick={() => stepMonth(1)} style={navBtn}>›</button>
