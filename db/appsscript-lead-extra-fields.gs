@@ -1,6 +1,16 @@
-// Apps Script changes to bring `created_time` + the sheet Row Number into the
-// CRM for the "New Zap Leads 26" tab (Advertising list). Reference copy — the
-// live script lives in the Google Sheet's bound Apps Script project.
+// Apps Script changes to bring extra columns + the sheet Row Number into the
+// CRM. Reference copy — the live script lives in the Google Sheet's bound Apps
+// Script project.
+//
+// ⚠️ UPDATE (created_time): created_time is now set AUTOMATICALLY by the
+// create-lead-task Edge Function to the task's creation day — it is NO LONGER
+// pulled from the sheet (day-first/month-first sheet formats caused swapped
+// dates). So:
+//   • REMOVE any 'X': 'created_time' entry from every fieldMap in SHEETS.
+//   • REMOVE 'created_time' from BACKFILL_CONFIG (and normCreatedTime is no
+//     longer needed for it).
+//   • Run db/set_created_time_from_created_at.sql once to fix existing tasks.
+// The notes below that still mention created_time are historical.
 //
 // PREREQUISITE: run db/add_advertising_extra_fields.sql first (creates the
 // `created_time` DATE field and `Row Number` number field on the list) and

@@ -223,11 +223,17 @@ Deno.serve(async (req) => {
     const rows: Record<string, string>[] = [];
     for (const [name, value] of Object.entries(fields || {})) {
       if (value == null || String(value).trim() === "") continue;
+      // created_time is set from the task's creation day below — never from the
+      // sheet (whose ambiguous dd/mm vs mm/dd formats caused swapped dates).
+      if (String(name).toLowerCase() === "created_time") continue;
       const def = byName.get(String(name).toLowerCase());
       if (def) rows.push({ task_id: task.id, field_id: def.id, value: normalizeFieldValue(def.field_type, String(value)) });
     }
     const startDef = byName.get("start date");
     if (startDef) rows.push({ task_id: task.id, field_id: startDef.id, value: today });
+    // created_time := today (the day the task is created in the CRM).
+    const createdDef = byName.get("created_time");
+    if (createdDef) rows.push({ task_id: task.id, field_id: createdDef.id, value: today });
     if (rows.length) await db.from("task_field_values").insert(rows);
 
     return json({ ok: true, task_id: task.id });
