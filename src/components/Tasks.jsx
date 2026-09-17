@@ -2495,12 +2495,22 @@ export default function Tasks({
       updated_by: profile?.full_name || "Unknown",
       updated_at: new Date().toISOString(),
     };
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("tasks")
       .insert(payload)
       .select()
       .single();
-    if (data && Object.keys(taskFieldValues).length > 0) {
+    if (error || !data) {
+      console.error("Create task failed:", error);
+      alert(
+        "Could not create the task:\n\n" +
+        (error?.message || "Unknown error") +
+        (error?.details ? `\n\n${error.details}` : "") +
+        (error?.hint ? `\n\nHint: ${error.hint}` : "")
+      );
+      return; // keep the modal open so the user doesn't lose their input
+    }
+    if (Object.keys(taskFieldValues).length > 0) {
       for (const [fieldId, value] of Object.entries(taskFieldValues))
         await supabase
           .from("task_field_values")
