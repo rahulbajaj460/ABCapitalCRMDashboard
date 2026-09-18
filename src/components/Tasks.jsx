@@ -800,7 +800,7 @@ export default function Tasks({
           // Pull the full row (with custom field values) so columns render.
           const { data: full } = await supabase
             .from("tasks")
-            .select("*, task_field_values(*)")
+            .select("*, task_field_values(id, field_id, value)")
             .eq("id", row.id)
             .single();
           const t = full || row;
@@ -826,7 +826,7 @@ export default function Tasks({
     (async () => {
       const { data } = await supabase
         .from("tasks")
-        .select("*, task_field_values(*)")
+        .select("*, task_field_values(id, field_id, value)")
         .eq("id", openTaskId)
         .single();
       if (!cancelled && data) openDrawer(data);
@@ -921,7 +921,7 @@ export default function Tasks({
       const perList = await Promise.all(
         folderListIds.map(async (id) => {
           const [{ data }, { count }] = await Promise.all([
-            supabase.from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+            supabase.from("tasks").select("*, task_field_values(id, field_id, value)").is("deleted_at", null)
               .eq("list_id", id).order("created_at", { ascending: false }).limit(1000),
             supabase.from("tasks").select("id", { count: "exact", head: true })
               .is("deleted_at", null).eq("list_id", id).is("parent_task_id", null),
@@ -930,7 +930,7 @@ export default function Tasks({
           return data || [];
         }),
       );
-      const { data: noList } = await supabase.from("tasks").select("*, task_field_values(*)")
+      const { data: noList } = await supabase.from("tasks").select("*, task_field_values(id, field_id, value)")
         .is("deleted_at", null).eq("folder_id", activeFolder.id).is("list_id", null)
         .order("created_at", { ascending: false }).limit(1000);
       if (fetchToken.current !== token) return; // a newer fetch superseded this
@@ -949,13 +949,13 @@ export default function Tasks({
     // ordered+limited joins), fall back to the plain fetch so rows show.
     if (activeList) {
       let { data } = await supabase
-        .from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+        .from("tasks").select("*, task_field_values(id, field_id, value)").is("deleted_at", null)
         .eq("list_id", activeList.id).order("created_at", { ascending: false })
         .limit(LIST_PAGE);
       let rows = data || [];
       if (rows.length === 0) {
         const { data: d2 } = await supabase
-          .from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+          .from("tasks").select("*, task_field_values(id, field_id, value)").is("deleted_at", null)
           .eq("list_id", activeList.id).order("created_at", { ascending: false });
         rows = d2 || [];
         setListHasMore(false);       // paging unreliable here; show what loaded
@@ -976,7 +976,7 @@ export default function Tasks({
     }
     let q = supabase
       .from("tasks")
-      .select("*, task_field_values(*)")
+      .select("*, task_field_values(id, field_id, value)")
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
     if (activeSpace) q = q.eq("space_id", activeSpace.id);
@@ -997,7 +997,7 @@ export default function Tasks({
     if (!activeList || !listHasMore || loadingMore || !listCursor) return;
     setLoadingMore(true);
     const { data } = await supabase
-      .from("tasks").select("*, task_field_values(*)").is("deleted_at", null)
+      .from("tasks").select("*, task_field_values(id, field_id, value)").is("deleted_at", null)
       .eq("list_id", activeList.id).lt("created_at", listCursor)
       .order("created_at", { ascending: false }).limit(LIST_PAGE);
     const rows = data || [];
@@ -2409,7 +2409,7 @@ export default function Tasks({
     // an in-place patch keeps the board correct.
     const { data: updated } = await supabase
       .from("tasks")
-      .select("*, task_field_values(*)")
+      .select("*, task_field_values(id, field_id, value)")
       .eq("id", drawerTask.id)
       .single();
     if (updated) {
