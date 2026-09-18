@@ -3760,6 +3760,12 @@ export default function Tasks({
           minWidth: "100%",
           background: rowBg,
           cursor: "pointer",
+          // Native row virtualization: the browser skips layout/paint for rows
+          // that are scrolled off-screen, cheaply rendering only what's visible.
+          // contentVisibility 'auto' + an intrinsic height keeps the scrollbar
+          // correct without a windowing library. Applies to subtask rows too.
+          contentVisibility: "auto",
+          containIntrinsicSize: "0 41px",
         }}
         onClick={() => openDrawer(task)}
         className={"task-grid-row" + (isNew ? " task-row-new" : "")}
