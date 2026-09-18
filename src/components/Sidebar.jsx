@@ -211,22 +211,8 @@ export default function Sidebar({
     );
     setLists(fetchedLists);
 
-    // Count tasks per list using exact counts — avoids row-limit issues with bulk task fetches
-    if (fetchedLists.length > 0) {
-      const countResults = await Promise.all(
-        fetchedLists.map((l) =>
-          supabase
-            .from("tasks")
-            .select("*", { count: "exact", head: true })
-            .eq("list_id", l.id)
-            .is("deleted_at", null)
-            .then(({ count }) => ({ id: l.id, count: count || 0 }))
-        )
-      );
-      const counts = {};
-      countResults.forEach(({ id, count }) => { if (count > 0) counts[id] = count; });
-      setListTaskCounts(counts);
-    }
+    // Per-list counts come from the parent's single task_counts RPC (via the
+    // taskCounts prop) — no longer one COUNT request per list here.
     onRefreshTaskCounts?.();
   }
 
