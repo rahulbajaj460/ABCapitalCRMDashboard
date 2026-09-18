@@ -1,15 +1,18 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { supabase } from "./supabase";
 import Sidebar from "./components/Sidebar";
-import Dashboard from "./components/Dashboard";
-import Tasks from "./components/Tasks";
-import Wiki from "./components/Wiki";
-import WhiteboardView from "./components/Whiteboard";
 import Login from "./components/Login";
-import Settings from "./components/Settings";
-import MyTasks from "./components/MyTasks";
-import Quotations from "./components/Quotations";
 import "./App.css";
+
+// Code-split the heavy views so the initial load only downloads the one in use
+// (Tasks.jsx alone is ~8k lines). Each becomes its own chunk, lazy-loaded.
+const Dashboard = lazy(() => import("./components/Dashboard"));
+const Tasks = lazy(() => import("./components/Tasks"));
+const Wiki = lazy(() => import("./components/Wiki"));
+const WhiteboardView = lazy(() => import("./components/Whiteboard"));
+const Settings = lazy(() => import("./components/Settings"));
+const MyTasks = lazy(() => import("./components/MyTasks"));
+const Quotations = lazy(() => import("./components/Quotations"));
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -192,56 +195,23 @@ export default function App() {
 
   async function fetchTaskCounts() {
     if (!spaces.length) return;
-
-    const { data: listsData } = await supabase
-      .from("lists")
-      .select("id, folder_id, space_id")
-      .is("deleted_at", null);
-    const allLists = listsData || [];
-
-    const allFolders = spaces.flatMap((s) => (s.folders || []).map((f) => ({ id: f.id, space_id: s.id })));
-
-    // Run count queries per list, per folder (direct tasks only), per space (direct tasks only)
-    const [listResults, folderResults, spaceResults] = await Promise.all([
-      Promise.all(
-        allLists.map((l) =>
-          supabase.from("tasks").select("*", { count: "exact", head: true })
-            .eq("list_id", l.id).is("deleted_at", null)
-            .then(({ count }) => ({ ...l, count: count || 0 }))
-        )
-      ),
-      Promise.all(
-        allFolders.map((f) =>
-          supabase.from("tasks").select("*", { count: "exact", head: true })
-            .eq("folder_id", f.id).is("list_id", null).is("deleted_at", null)
-            .then(({ count }) => ({ ...f, count: count || 0 }))
-        )
-      ),
-      Promise.all(
-        spaces.map((s) =>
-          supabase.from("tasks").select("*", { count: "exact", head: true })
-            .eq("space_id", s.id).is("folder_id", null).is("list_id", null).is("deleted_at", null)
-            .then(({ count }) => ({ id: s.id, count: count || 0 }))
-        )
-      ),
-    ]);
-
+    // Single RPC returns list / folder-direct / space-direct counts, replacing
+    // ~60 per-scope COUNT round-trips. Roll up list → folder → space client-side.
+    const { data, error } = await supabase.rpc("task_counts");
+    if (error || !data) return;
     const counts = {};
-    // Lists: count directly, roll up to folder and space
-    listResults.forEach(({ id, folder_id, space_id, count }) => {
+    (data.lists || []).forEach(({ id, folder_id, space_id, count }) => {
       if (!count) return;
       counts[id] = (counts[id] || 0) + count;
       if (folder_id) counts[folder_id] = (counts[folder_id] || 0) + count;
       if (space_id) counts[space_id] = (counts[space_id] || 0) + count;
     });
-    // Folders: direct tasks (no list), roll up to space
-    folderResults.forEach(({ id, space_id, count }) => {
+    (data.folders || []).forEach(({ id, space_id, count }) => {
       if (!count) return;
       counts[id] = (counts[id] || 0) + count;
       if (space_id) counts[space_id] = (counts[space_id] || 0) + count;
     });
-    // Spaces: direct tasks (no folder, no list)
-    spaceResults.forEach(({ id, count }) => {
+    (data.spaces || []).forEach(({ id, count }) => {
       if (count) counts[id] = (counts[id] || 0) + count;
     });
     setTaskCounts(counts);
@@ -442,6 +412,7 @@ export default function App() {
         title="Drag to resize sidebar"
       />
       <main className="app-main">
+        <Suspense fallback={<div style={{ padding: 24, fontSize: 13, color: "#9ca3af" }}>Loading…</div>}>
         {view === "dashboard" && (
           <Dashboard
             spaces={spaces}
@@ -490,6 +461,7 @@ export default function App() {
         {view === "settings" && profile?.role === "admin" && (
           <Settings currentUser={user} profile={profile} spaces={spaces} onAccessChanged={() => fetchAccessRules(profile)} />
         )}
+        </Suspense>
       </main>
     </div>
   );
