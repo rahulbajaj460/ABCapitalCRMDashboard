@@ -3100,12 +3100,17 @@ export default function Tasks({
     setStatusLoading(false);
   }
 
-  // Cycle a status's completion setting: Auto (null) → Complete (true) →
-  // Not complete (false) → Auto. Drives the completion rate on the dashboards.
-  async function cycleStatusComplete(statusId, current) {
-    const next = current === true ? false : current === false ? null : true;
+  // Set a status's lifecycle category. `status_category` holds the human label
+  // (auto / todo / in_progress / complete); `is_complete` is kept in sync so the
+  // dashboards' completion rate keeps working: Complete → true, To Do / In
+  // Progress → false, Auto → null (detect by name).
+  async function setStatusCategory(statusId, category) {
+    const is_complete = category === "complete" ? true : category === "auto" ? null : false;
     setStatusLoading(true);
-    await supabase.from("space_statuses").update({ is_complete: next }).eq("id", statusId);
+    await supabase
+      .from("space_statuses")
+      .update({ status_category: category === "auto" ? null : category, is_complete })
+      .eq("id", statusId);
     await fetchModalStatuses();
     await onRefreshSpaces();
     setStatusLoading(false);
@@ -8641,19 +8646,20 @@ export default function Tasks({
                         </div>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           {(() => {
-                            const v = s.is_complete;
-                            const label = v === true ? "✓ Complete" : v === false ? "Not complete" : "Auto";
-                            const bg = v === true ? "#dcfce7" : v === false ? "#f1f2f2" : "#e0f2f1";
-                            const fg = v === true ? "#15803d" : v === false ? "#6b7280" : "#0d7d82";
+                            const cat = s.status_category || (s.is_complete === true ? "complete" : s.is_complete === false ? "in_progress" : "auto");
                             return (
-                              <button
-                                title="Does this status count as complete for the completion rate? Click to cycle: Auto (detect by name) → Complete → Not complete"
-                                onClick={() => cycleStatusComplete(s.id, v)}
+                              <select
+                                title="How this status counts toward the completion rate: Complete = done; To Do / In Progress = not done; Auto = detect by the status name."
+                                value={cat}
+                                onChange={(e) => setStatusCategory(s.id, e.target.value)}
                                 disabled={statusLoading}
-                                style={{ padding: "2px 10px", fontSize: 11, borderRadius: 20, border: "none", cursor: statusLoading ? "default" : "pointer", background: bg, color: fg, fontWeight: 600 }}
+                                style={{ padding: "3px 8px", fontSize: 11, borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", cursor: statusLoading ? "default" : "pointer", fontWeight: 600, color: cat === "complete" ? "#15803d" : cat === "auto" ? "#0d7d82" : "#374151" }}
                               >
-                                {label}
-                              </button>
+                                <option value="auto">Auto</option>
+                                <option value="todo">To Do</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="complete">Complete</option>
+                              </select>
                             );
                           })()}
                           <button
