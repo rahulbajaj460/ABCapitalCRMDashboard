@@ -44,7 +44,7 @@ export function Kpi({ label, value, sub, tone, icon, tip, onClick }) {
 }
 
 // Donut with legend. data = [{ label, value, color }]
-export function Donut({ data, size = 150, thickness = 22, centerLabel, centerSub }) {
+export function Donut({ data, size = 150, thickness = 22, centerLabel, centerSub, onSliceClick }) {
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
@@ -52,7 +52,7 @@ export function Donut({ data, size = 150, thickness = 22, centerLabel, centerSub
   const segs = [];
   data.reduce((offset, d) => {
     const dash = (d.value / total) * c;
-    segs.push({ color: d.color, dash, offset });
+    segs.push({ color: d.color, dash, offset, datum: d });
     return offset + dash;
   }, 0);
   return (
@@ -63,7 +63,9 @@ export function Donut({ data, size = 150, thickness = 22, centerLabel, centerSub
           {segs.map((s, i) => (
             <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none"
               stroke={s.color} strokeWidth={thickness}
-              strokeDasharray={`${s.dash} ${c - s.dash}`} strokeDashoffset={-s.offset} />
+              strokeDasharray={`${s.dash} ${c - s.dash}`} strokeDashoffset={-s.offset}
+              style={onSliceClick ? { cursor: "pointer" } : undefined}
+              onClick={onSliceClick ? () => onSliceClick(s.datum) : undefined} />
           ))}
         </g>
         {centerLabel != null && (
@@ -75,9 +77,12 @@ export function Donut({ data, size = 150, thickness = 22, centerLabel, centerSub
       </svg>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
         {data.map((d, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: onSliceClick ? "pointer" : "default", borderRadius: 5, padding: "1px 3px" }}
+            onClick={onSliceClick ? () => onSliceClick(d) : undefined}
+            onMouseEnter={onSliceClick ? (e) => { e.currentTarget.style.background = "#f4f6f8"; } : undefined}
+            onMouseLeave={onSliceClick ? (e) => { e.currentTarget.style.background = "transparent"; } : undefined}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
-            <span style={{ color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150 }}>{d.label}</span>
+            <span style={{ color: onSliceClick ? "var(--accent)" : "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150 }}>{d.label}</span>
             <span style={{ color: "#9ca3af", marginLeft: "auto", fontWeight: 600 }}>{d.value}</span>
           </div>
         ))}
