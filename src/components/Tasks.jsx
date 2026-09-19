@@ -969,15 +969,21 @@ export default function Tasks({
     // query fails/returns nothing (some large lists time out on
     // ordered+limited joins), fall back to the plain fetch so rows show.
     if (activeList) {
-      let { data } = await supabase
-        .from("tasks").select("*, task_field_values(id, field_id, value)").is("deleted_at", null)
-        .eq("list_id", activeList.id).order("created_at", { ascending: false })
-        .limit(LIST_PAGE);
+      // Fetch field values only for the columns currently SHOWN (a list can have
+      // 30+ fields; showing a few columns means far fewer field-value rows). The
+      // drawer loads the full set on open, so hidden fields are never blank. A
+      // !left join keeps tasks that have no value for any visible field.
+      const vfIds = getActiveColumns(listFields).filter((c) => c.field).map((c) => c.field.id);
+      const sel = vfIds.length ? "*, task_field_values!left(id, field_id, value)" : "*";
+      const scoped = (base) => {
+        let q = base.select(sel).is("deleted_at", null).eq("list_id", activeList.id);
+        if (vfIds.length) q = q.in("task_field_values.field_id", vfIds);
+        return q.order("created_at", { ascending: false });
+      };
+      let { data } = await scoped(supabase.from("tasks")).limit(LIST_PAGE);
       let rows = data || [];
       if (rows.length === 0) {
-        const { data: d2 } = await supabase
-          .from("tasks").select("*, task_field_values(id, field_id, value)").is("deleted_at", null)
-          .eq("list_id", activeList.id).order("created_at", { ascending: false });
+        const { data: d2 } = await scoped(supabase.from("tasks"));
         rows = d2 || [];
         setListHasMore(false);       // paging unreliable here; show what loaded
         setListCursor(null);
@@ -1013,14 +1019,26 @@ export default function Tasks({
     }
   }
 
+  // When the visible columns change, the list is fetching a different set of
+  // field values — refetch so a newly-shown column's values load. Skips the
+  // initial mount (the main fetch already runs).
+  const colToggleInit = useRef(false);
+  useEffect(() => {
+    if (!colToggleInit.current) { colToggleInit.current = true; return; }
+    if (activeList) fetchTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleColumns, columnOrder]);
+
   // Load the next page of the active list (cursor by created_at) and append.
   async function loadMoreListTasks() {
     if (!activeList || !listHasMore || loadingMore || !listCursor) return;
     setLoadingMore(true);
-    const { data } = await supabase
-      .from("tasks").select("*, task_field_values(id, field_id, value)").is("deleted_at", null)
-      .eq("list_id", activeList.id).lt("created_at", listCursor)
-      .order("created_at", { ascending: false }).limit(LIST_PAGE);
+    const vfIds = getActiveColumns(listFields).filter((c) => c.field).map((c) => c.field.id);
+    const sel = vfIds.length ? "*, task_field_values!left(id, field_id, value)" : "*";
+    let mq = supabase.from("tasks").select(sel).is("deleted_at", null)
+      .eq("list_id", activeList.id).lt("created_at", listCursor);
+    if (vfIds.length) mq = mq.in("task_field_values.field_id", vfIds);
+    const { data } = await mq.order("created_at", { ascending: false }).limit(LIST_PAGE);
     const rows = data || [];
     if (rows.length) {
       setTasks((prev) => {
@@ -2296,6 +2314,17 @@ export default function Tasks({
       fvMap[fv.field_id] = fv.value;
     });
     setDrawerFieldValues(fvMap);
+    // The list may fetch only the visible columns' field values, so load the
+    // FULL set for this task — otherwise hidden fields show blank and a save
+    // could insert a duplicate value row (origFV wouldn't find the existing one).
+    supabase.from("task_field_values").select("id, field_id, value").eq("task_id", task.id)
+      .then(({ data: fvs }) => {
+        if (!fvs) return;
+        const full = {};
+        fvs.forEach((fv) => { full[fv.field_id] = fv.value; });
+        setDrawerFieldValues(full);
+        setDrawerTask((prev) => (prev && prev.id === task.id ? { ...prev, task_field_values: fvs } : prev));
+      });
     setDrawerEdits({
       title: task.title,
       description: task.description || "",
