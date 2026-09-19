@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import PizZip from "pizzip";
-import Docxtemplater from "docxtemplater";
-import * as XLSX from "xlsx";
-import JSZip from "jszip";
-import { saveAs } from "file-saver";
 import { supabase } from "../supabase";
+// Heavy document/spreadsheet libs (pizzip, docxtemplater, xlsx, jszip,
+// file-saver ≈ 500KB) are loaded on demand — only when a doc is generated or an
+// Excel file is parsed — so opening this view stays light.
 import { IconPlus, IconTrash, IconUpload, IconFile, IconClose } from "./icons";
 
 // ── helpers ──
@@ -145,8 +143,13 @@ const trimParser = (tag) => {
   };
 };
 
-// Fill a template (ArrayBuffer) with a context → docx Blob.
-function renderDocx(arrayBuffer, data) {
+// Fill a template (ArrayBuffer) with a context → docx Blob. Loads pizzip +
+// docxtemplater on demand.
+async function renderDocx(arrayBuffer, data) {
+  const [{ default: PizZip }, { default: Docxtemplater }] = await Promise.all([
+    import("pizzip"),
+    import("docxtemplater"),
+  ]);
   const zip = new PizZip(arrayBuffer);
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
@@ -394,8 +397,9 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
     try {
       const buf = await downloadTemplateBuffer(tpl);
       const ctx = buildContext(values, fields, 1, tpl.usd_rate, extraRows);
-      const blob = renderDocx(buf, ctx);
+      const blob = await renderDocx(buf, ctx);
       const fname = docName(ctx, fields);
+      const { saveAs } = await import("file-saver");
       saveAs(blob, fname);
 
       let crmMsg = "";
@@ -423,6 +427,9 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
     setStatus(null);
     try {
       const buf = await downloadTemplateBuffer(tpl);
+      const [XLSX, { default: JSZip }, { saveAs }] = await Promise.all([
+        import("xlsx"), import("jszip"), import("file-saver"),
+      ]);
       const wb = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: "" }).filter((r) =>
@@ -431,11 +438,11 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
       if (rows.length === 0) throw new Error("The sheet has no data rows.");
 
       const zip = new JSZip();
-      rows.forEach((row, i) => {
-        const ctx = buildContext(row, fields, i + 1, tpl.usd_rate);
-        const blob = renderDocx(buf, ctx);
+      for (let i = 0; i < rows.length; i++) {
+        const ctx = buildContext(rows[i], fields, i + 1, tpl.usd_rate);
+        const blob = await renderDocx(buf, ctx);
         zip.file(docName(ctx, fields, ` (${i + 1})`), blob);
-      });
+      }
       const out = await zip.generateAsync({ type: "blob" });
       saveAs(out, `${safeName(tpl.freezone)} - quotations.zip`);
       setStatus({ ok: true, msg: `Generated ${rows.length} document${rows.length > 1 ? "s" : ""} (zip).` });
