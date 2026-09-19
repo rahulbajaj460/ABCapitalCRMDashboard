@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment, memo } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../supabase";
 import { fmtDate, fmtDMY } from "../dateFormat";
@@ -13,6 +13,27 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
+
+// Memoized wrapper for a single task row. It renders the pre-built `content`
+// element, but skips re-rendering (and the expensive DOM reconcile) whenever the
+// row's inputs are unchanged. A row only bails when its task OBJECT is the same
+// reference AND every UI flag matches — which happens on the frequent re-renders
+// that don't refetch tasks (selecting a checkbox, opening a menu, hover popups,
+// typing in search). After an edit, fetchTasks replaces the objects, so rows
+// refresh correctly. `content` is intentionally excluded from the comparison.
+const TaskRowMemo = memo(
+  function TaskRowMemo({ content }) { return content; },
+  (a, b) =>
+    a.task === b.task &&
+    a.isActive === b.isActive &&
+    a.selected === b.selected &&
+    a.subExpanded === b.subExpanded &&
+    a.isNew === b.isNew &&
+    a.descActive === b.descActive &&
+    a.statusColor === b.statusColor &&
+    a.colSig === b.colSig &&
+    a.metaSig === b.metaSig,
+);
 
 // ── Toolbar button for rich text editor ──
 function TBBtn({ onClick, active, title, children }) {
@@ -3742,6 +3763,13 @@ export default function Tasks({
     const rowBg = isActive ? "#eaf6f6" : isNew ? "#fffbe6" : undefined;
     const subExpanded = expandedSubtasks[task.id];
     const prog = hasKids ? subtaskProgress(task.id) : null;
+    const meta = taskMeta[task.id];
+    const descActive = descPopup?.taskId === task.id;
+    const selected = selectedTaskIds.has(task.id);
+    // Value-based signatures so column/meta changes still invalidate the memo
+    // (new array identities each render would otherwise never bail).
+    const colSig = `${gridTemplate}|${activeCols.map((c) => c.key).join(",")}|${statusList.join(",")}`;
+    const metaSig = `${meta?.attachmentCount || 0}/${meta?.checklistChecked || 0}/${meta?.checklistTotal || 0}`;
     const cellStyle = {
       display: "flex",
       alignItems: "center",
@@ -3750,8 +3778,7 @@ export default function Tasks({
       fontSize: 13,
       overflow: "hidden",
     };
-    return (
-      <Fragment key={task.id}>
+    const rowContent = (
       <div
         style={{
           display: "grid",
@@ -3957,10 +3984,25 @@ export default function Tasks({
           )}
         </div>
       </div>
-      {hasKids && subExpanded &&
-        sortTasks(kids).map((child) =>
-          renderTaskRow(child, statusList, fieldList, folderCtx, depth + 1),
-        )}
+    );
+    return (
+      <Fragment key={task.id}>
+        <TaskRowMemo
+          content={rowContent}
+          task={task}
+          isActive={isActive}
+          selected={selected}
+          subExpanded={subExpanded}
+          isNew={isNew}
+          descActive={descActive}
+          statusColor={statusColor}
+          colSig={colSig}
+          metaSig={metaSig}
+        />
+        {hasKids && subExpanded &&
+          sortTasks(kids).map((child) =>
+            renderTaskRow(child, statusList, fieldList, folderCtx, depth + 1),
+          )}
       </Fragment>
     );
   }
