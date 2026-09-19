@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase";
-import { Kpi, Card, Donut, HBars, ProgressBar, DeltaBadge, SegmentBar } from "./charts";
+import { Kpi, Card, Donut, HBars, ProgressBar, DeltaBadge, SegmentBar, TrendBars } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
 import { fmtDate } from "../dateFormat";
 
@@ -180,17 +180,22 @@ function AttentionPanel({ items, kind, onOpenScope, spaceName, empty }) {
 
 export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, onOpenScope }) {
   const [data, setData] = useState(null);
+  const [ceo, setCeo] = useState(null);           // executive summary (admins)
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [assigneeModal, setAssigneeModal] = useState(null); // assignee name being drilled into
+  const isAdmin = profile?.role === "admin";
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
-    const { data: d, error } = await supabase.rpc("dashboard_overview");
-    if (error) setErr(error.message);
-    else setData(d);
+    const calls = [supabase.rpc("dashboard_overview")];
+    if (isAdmin) calls.push(supabase.rpc("ceo_overview"));
+    const [ov, ce] = await Promise.all(calls);
+    if (ov.error) setErr(ov.error.message);
+    else setData(ov.data);
+    if (ce && !ce.error) setCeo(ce.data);
     setLoading(false);
-  }, []);
+  }, [isAdmin]);
   useEffect(() => { load(); }, [load]);
 
   const total = data?.total ?? 0;
@@ -219,6 +224,57 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
           <EmptyState />
         ) : data ? (
           <>
+            {isAdmin && ceo && (() => {
+              const leads = ceo.leads || {};
+              const rn = ceo.renewals || {};
+              const convRate = leads.total > 0 ? Math.round((leads.converted / leads.total) * 100) : 0;
+              const soon = rn.soon || [];
+              return (
+                <div style={{ marginBottom: 22 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 10 }}>Executive summary</div>
+
+                  {/* Value */}
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+                    <Kpi label="Leads (pipeline)" value={(leads.total || 0).toLocaleString()} sub="in lead lists" tip="Every non-deleted task in a lead list (a list with a created_time field)." />
+                    <Kpi label="Converted" value={(leads.converted || 0).toLocaleString()} sub={`${convRate}% conversion`} tone="good" tip="Leads whose status is 'Converted'. Conversion % = converted ÷ leads." />
+                    <Kpi label="Renewals overdue" value={(rn.overdue || 0).toLocaleString()} sub="past expiry" tone="danger" tip="License/visa/expiry-type date fields whose date is already in the past." />
+                    <Kpi label="Due ≤ 30 days" value={(rn.d30 || 0).toLocaleString()} sub="renew now" tone="warn" tip="Renewals/expiries falling due within 30 days." />
+                    <Kpi label="Due 31–90 days" value={((rn.d60 || 0) + (rn.d90 || 0)).toLocaleString()} sub="plan ahead" tip="Renewals/expiries due in 31–90 days." />
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(320px, 1.2fr)", gap: 16, marginBottom: 8 }}>
+                    <Card title="Leads vs Converted (6 mo)" tip="Monthly leads created vs converted, by created_time. Rising green vs blue is improving conversion.">
+                      <TrendBars data={(leads.by_month || []).map((m) => ({ month: m.ym, created: m.leads, completed: m.converted }))} />
+                    </Card>
+                    <Card title={`Upcoming renewals (${soon.length})`} tip="License/visa/tenancy/permit/VAT-type date fields coming due in the next 90 days, soonest first. Click to open the task.">
+                      {soon.length === 0 ? (
+                        <div style={{ fontSize: 12.5, color: "#9ca3af" }}>Nothing due in the next 90 days. 🎉</div>
+                      ) : (
+                        <div style={{ maxHeight: 230, overflowY: "auto" }}>
+                          {soon.map((r) => {
+                            const urgent = r.days_left <= 30;
+                            return (
+                              <div key={r.task_id + r.field} onClick={() => onOpenScope?.({ list_id: null }, r.task_id)}
+                                style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: "1px solid #f2f2f2", fontSize: 12.5, cursor: "pointer" }}>
+                                <span style={{ minWidth: 0 }}>
+                                  <span style={{ color: "#111827", fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title || "Untitled"}</span>
+                                  <span style={{ color: "#9ca3af", fontSize: 11 }}>{r.list} · {r.field}</span>
+                                </span>
+                                <span style={{ flexShrink: 0, textAlign: "right" }}>
+                                  <span style={{ color: urgent ? "#b91c1c" : "#374151", fontWeight: 700 }}>{r.days_left}d</span>
+                                  <span style={{ color: "#9ca3af", fontSize: 11, display: "block" }}>{fmtDate(r.date)}</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                  <div style={{ borderBottom: "1px solid #eef0f0", margin: "14px 0 18px" }} />
+                </div>
+              );
+            })()}
             {/* KPI row */}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
               <Kpi label="Total tasks" value={total.toLocaleString()} sub="across all spaces" tip="Every non-deleted task across all spaces (excludes trashed tasks)." />
