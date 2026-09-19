@@ -82,10 +82,11 @@ export default function SpaceOverview({ space, onOpenScope }) {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(280px, 1fr)", gap: 16, marginBottom: 16 }}>
-            <Card title="Status distribution">
+            <Card title="Status distribution" tip="Tasks by status. Click a slice or label to list those tasks.">
               <Donut
                 centerLabel={total.toLocaleString()} centerSub="tasks"
                 data={(data.by_status || []).slice(0, 8).map((s) => ({ label: s.status, value: s.count, color: statusColor(s.status) }))}
+                onSliceClick={(d) => setDrill({ title: `Status: ${d.label}`, metric: `status:${d.label}` })}
               />
             </Card>
             <Card title="Workload by assignee">

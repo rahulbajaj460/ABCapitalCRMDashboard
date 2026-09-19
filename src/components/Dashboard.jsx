@@ -291,12 +291,12 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 16, marginBottom: 16 }}>
               <Card title="Velocity (last 30 days)" tip="Created = tasks added in the last 30 days. Completed = tasks marked complete in the last 30 days. '▲/▼ vs prior 30d' compares to the previous 30-day window. Backlog change = created − completed (a growing backlog means work is coming in faster than it's cleared).">
                 <div style={{ display: "flex", gap: 24 }}>
-                  <div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: "#111827" }}>{data.created_30d}</div>
+                  <div onClick={() => setDrill({ title: "Created (last 30 days)", metric: "created_30d" })} style={{ cursor: "pointer" }} title="Click to list these tasks">
+                    <div style={{ fontSize: 24, fontWeight: 800, color: "var(--accent)" }}>{data.created_30d}</div>
                     <div style={{ fontSize: 11.5, color: "#6b7280" }}>created</div>
                     <div style={{ marginTop: 2 }}><DeltaBadge curr={data.created_30d} prev={data.created_prev_30d} goodWhenUp={false} /></div>
                   </div>
-                  <div>
+                  <div onClick={() => setDrill({ title: "Completed (last 30 days)", metric: "completed_30d" })} style={{ cursor: "pointer" }} title="Click to list these tasks">
                     <div style={{ fontSize: 24, fontWeight: 800, color: "#15803d" }}>{data.completed_30d}</div>
                     <div style={{ fontSize: 11.5, color: "#6b7280" }}>completed</div>
                     <div style={{ marginTop: 2 }}><DeltaBadge curr={data.completed_30d} prev={data.completed_prev_30d} goodWhenUp /></div>
@@ -361,10 +361,11 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
 
             {/* Status distribution + assignee workload */}
             <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(280px, 1fr)", gap: 16, marginBottom: 16 }}>
-              <Card title="Status distribution">
+              <Card title="Status distribution" tip="Tasks by status. Click a slice or label to list those tasks.">
                 <Donut
                   centerLabel={total.toLocaleString()} centerSub="tasks"
                   data={(data.by_status || []).slice(0, 8).map((s) => ({ label: s.status, value: s.count, color: statusColor(s.status) }))}
+                  onSliceClick={(d) => setDrill({ title: `Status: ${d.label}`, metric: `status:${d.label}` })}
                 />
               </Card>
               <Card title="Workload by assignee" tip="Open (not-done) tasks per person, with overdue counts. Click a name to see their tasks and reassign them (e.g. when someone leaves). Anyone marked '⚠ likely bulk/system' has an abnormally high load (5×+ the median, 100+) — usually a catch-all/import account, not a real person; it's greyed so it doesn't distort the view.">

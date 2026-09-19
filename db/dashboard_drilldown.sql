@@ -49,6 +49,43 @@ begin
     return res;
   end if;
 
+  -- Tasks with a specific status (donut slice). p_metric = 'status:<name>'.
+  if p_metric like 'status:%' then
+    declare v_status text := substring(p_metric from 8);
+    begin
+      select coalesce(jsonb_agg(x order by (x->>'due')), '[]'::jsonb) into res from (
+        select jsonb_build_object('id', tk.id, 'title', tk.title, 'status', tk.status,
+                 'space_id', tk.space_id, 'folder_id', tk.folder_id, 'list_id', tk.list_id,
+                 'due', to_char(tk.due_date, 'YYYY-MM-DD')) x
+        from tasks tk
+        where tk.deleted_at is null and (p_space is null or tk.space_id = p_space)
+          and (case when v_status = '(no status)' then coalesce(nullif(tk.status, ''), '(no status)') else tk.status end) = v_status
+        order by tk.due_date nulls last
+        limit p_limit
+      ) s;
+      return res;
+    end;
+  end if;
+
+  -- Velocity: created / completed in the last 30 days.
+  if p_metric in ('created_30d', 'completed_30d') then
+    select coalesce(jsonb_agg(x), '[]'::jsonb) into res from (
+      select jsonb_build_object('id', tk.id, 'title', tk.title, 'status', tk.status,
+               'space_id', tk.space_id, 'folder_id', tk.folder_id, 'list_id', tk.list_id,
+               'due', to_char(tk.due_date, 'YYYY-MM-DD')) x
+      from tasks tk
+      where tk.deleted_at is null and (p_space is null or tk.space_id = p_space)
+        and case p_metric
+              when 'created_30d' then tk.created_at >= now() - interval '30 days'
+              when 'completed_30d' then (tk.date_done::text ~ '^\d{4}-\d{2}-\d{2}'
+                                         and substring(tk.date_done::text, 1, 10)::date >= current_date - 30)
+            end
+      order by tk.created_at desc
+      limit p_limit
+    ) s;
+    return res;
+  end if;
+
   -- Generic task-status/date metrics.
   select coalesce(jsonb_agg(x order by due_date nulls last), '[]'::jsonb) into res from (
     select jsonb_build_object('id', tk.id, 'title', tk.title, 'status', tk.status,
