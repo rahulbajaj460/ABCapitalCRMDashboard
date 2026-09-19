@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import { Kpi, Card, Donut, HBars, ProgressBar, DeltaBadge, SegmentBar, TrendBars } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
 import { fmtDate } from "../dateFormat";
+import DrilldownModal from "./DrilldownModal";
 
 // Drill-in for one assignee: lists their tasks and lets you reassign them to
 // someone else (or unassign) — e.g. when a person leaves. Uses SECURITY DEFINER
@@ -184,6 +185,7 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [assigneeModal, setAssigneeModal] = useState(null); // assignee name being drilled into
+  const [drill, setDrill] = useState(null);                 // { title, metric } KPI drill-down
   const isAdmin = profile?.role === "admin";
 
   const load = useCallback(async () => {
@@ -235,11 +237,11 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
 
                   {/* Value */}
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
-                    <Kpi label="Leads (pipeline)" value={(leads.total || 0).toLocaleString()} sub="in lead lists" tip="Every non-deleted task in a lead list (a list with a created_time field)." />
-                    <Kpi label="Converted" value={(leads.converted || 0).toLocaleString()} sub={`${convRate}% conversion`} tone="good" tip="Leads whose status is 'Converted'. Conversion % = converted ÷ leads." />
-                    <Kpi label="Renewals overdue" value={(rn.overdue || 0).toLocaleString()} sub="past expiry" tone="danger" tip="License/visa/expiry-type date fields whose date is already in the past." />
-                    <Kpi label="Due ≤ 30 days" value={(rn.d30 || 0).toLocaleString()} sub="renew now" tone="warn" tip="Renewals/expiries falling due within 30 days." />
-                    <Kpi label="Due 31–90 days" value={((rn.d60 || 0) + (rn.d90 || 0)).toLocaleString()} sub="plan ahead" tip="Renewals/expiries due in 31–90 days." />
+                    <Kpi label="Leads (pipeline)" value={(leads.total || 0).toLocaleString()} sub="in lead lists" tip="Every non-deleted task in a lead list (a list with a created_time field)." onClick={() => setDrill({ title: "Leads (pipeline)", metric: "leads" })} />
+                    <Kpi label="Converted" value={(leads.converted || 0).toLocaleString()} sub={`${convRate}% conversion`} tone="good" tip="Leads whose status is 'Converted'. Conversion % = converted ÷ leads." onClick={() => setDrill({ title: "Converted leads", metric: "converted" })} />
+                    <Kpi label="Renewals overdue" value={(rn.overdue || 0).toLocaleString()} sub="past expiry" tone="danger" tip="License/visa/expiry-type date fields whose date is already in the past." onClick={() => setDrill({ title: "Renewals overdue", metric: "renewals_overdue" })} />
+                    <Kpi label="Due ≤ 30 days" value={(rn.d30 || 0).toLocaleString()} sub="renew now" tone="warn" tip="Renewals/expiries falling due within 30 days." onClick={() => setDrill({ title: "Renewals due ≤ 30 days", metric: "renewals_30" })} />
+                    <Kpi label="Due 31–90 days" value={((rn.d60 || 0) + (rn.d90 || 0)).toLocaleString()} sub="plan ahead" tip="Renewals/expiries due in 31–90 days." onClick={() => setDrill({ title: "Renewals due 31–90 days", metric: "renewals_90" })} />
                   </div>
 
                   <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(320px, 1.2fr)", gap: 16, marginBottom: 8 }}>
@@ -254,7 +256,7 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
                           {soon.map((r) => {
                             const urgent = r.days_left <= 30;
                             return (
-                              <div key={r.task_id + r.field} onClick={() => onOpenScope?.({ list_id: null }, r.task_id)}
+                              <div key={r.task_id + r.field} onClick={() => onOpenScope?.({ space_id: r.space_id, folder_id: r.folder_id, list_id: r.list_id }, r.task_id)}
                                 style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderBottom: "1px solid #f2f2f2", fontSize: 12.5, cursor: "pointer" }}>
                                 <span style={{ minWidth: 0 }}>
                                   <span style={{ color: "#111827", fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title || "Untitled"}</span>
@@ -277,12 +279,12 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
             })()}
             {/* KPI row */}
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
-              <Kpi label="Total tasks" value={total.toLocaleString()} sub="across all spaces" tip="Every non-deleted task across all spaces (excludes trashed tasks)." />
-              <Kpi label="In progress" value={data.in_progress.toLocaleString()} sub={`${pct(data.in_progress)}% of all`} tone="warn" tip="Tasks whose status is exactly 'In Progress'." />
-              <Kpi label="Completed" value={(data.completed ?? data.done).toLocaleString()} sub={`${pct(data.completed ?? data.done)}% completion`} tone="good" tip="Tasks in a status marked as 'complete' for their space (set per status in Manage statuses; unset statuses auto-count done/complete/closed). Completion % = completed ÷ total." />
-              <Kpi label="Urgent open" value={data.urgent.toLocaleString()} sub="high priority, not done" tone="danger" tip="High-priority tasks that are still open (not in a done/closed/cancelled status)." />
-              <Kpi label="Overdue" value={data.overdue.toLocaleString()} sub="past due & still open" tone="danger" tip="Open tasks whose due date is before today." />
-              <Kpi label="Due in 30 days" value={data.due_30d.toLocaleString()} sub={`${data.due_7d} within 7 days`} tip="Open tasks due within the next 30 days (the sub-line shows how many fall within 7 days)." />
+              <Kpi label="Total tasks" value={total.toLocaleString()} sub="across all spaces" tip="Every non-deleted task across all spaces (excludes trashed tasks)." onClick={() => setDrill({ title: "All tasks", metric: "total" })} />
+              <Kpi label="In progress" value={data.in_progress.toLocaleString()} sub={`${pct(data.in_progress)}% of all`} tone="warn" tip="Tasks whose status is exactly 'In Progress'." onClick={() => setDrill({ title: "In progress", metric: "in_progress" })} />
+              <Kpi label="Completed" value={(data.completed ?? data.done).toLocaleString()} sub={`${pct(data.completed ?? data.done)}% completion`} tone="good" tip="Tasks in a status marked as 'complete' for their space (set per status in Manage statuses; unset statuses auto-count done/complete/closed). Completion % = completed ÷ total." onClick={() => setDrill({ title: "Completed tasks", metric: "completed" })} />
+              <Kpi label="Urgent open" value={data.urgent.toLocaleString()} sub="high priority, not done" tone="danger" tip="High-priority tasks that are still open (not in a done/closed/cancelled status)." onClick={() => setDrill({ title: "Urgent open", metric: "urgent" })} />
+              <Kpi label="Overdue" value={data.overdue.toLocaleString()} sub="past due & still open" tone="danger" tip="Open tasks whose due date is before today." onClick={() => setDrill({ title: "Overdue tasks", metric: "overdue" })} />
+              <Kpi label="Due in 30 days" value={data.due_30d.toLocaleString()} sub={`${data.due_7d} within 7 days`} tip="Open tasks due within the next 30 days (the sub-line shows how many fall within 7 days)." onClick={() => setDrill({ title: "Due in 30 days", metric: "due_30d" })} />
             </div>
 
             {/* Executive row: velocity · aging · cycle */}
@@ -429,6 +431,14 @@ export default function Dashboard({ spaces, profile, onNavigate, onSpaceSelect, 
           onOpenScope={onOpenScope}
           onClose={() => setAssigneeModal(null)}
           onChanged={load}
+        />
+      )}
+      {drill && (
+        <DrilldownModal
+          title={drill.title}
+          metric={drill.metric}
+          onOpenScope={onOpenScope}
+          onClose={() => setDrill(null)}
         />
       )}
     </div>

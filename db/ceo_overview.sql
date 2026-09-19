@@ -61,7 +61,8 @@ begin
       and sf.field_name ~* 'expiry|expire|licen|visa|renew|tenancy|e-?jari|permit'
   ),
   exp_clean as (
-    select t.id as task_id, t.title, ef.list_name, ef.field_name,
+    select t.id as task_id, t.title, t.space_id, t.folder_id, t.list_id,
+           ef.list_name, ef.field_name,
            _abcap_parse_date(tfv.value) as edate
     from exp_fields ef
     join task_field_values tfv on tfv.field_id = ef.field_id
@@ -82,6 +83,7 @@ begin
       'soon', coalesce((select jsonb_agg(x order by (x->>'days_left')::int) from (
         select jsonb_build_object(
           'task_id', task_id, 'title', title, 'list', list_name, 'field', field_name,
+          'space_id', space_id, 'folder_id', folder_id, 'list_id', list_id,
           'date', to_char(edate, 'YYYY-MM-DD'), 'days_left', (edate - current_date)
         ) x
         from exp_clean

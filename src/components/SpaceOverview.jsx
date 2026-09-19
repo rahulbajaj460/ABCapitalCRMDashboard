@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import { fmtDate } from "../dateFormat";
 import { Kpi, Card, Donut, HBars, ProgressBar, SegmentBar } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
+import DrilldownModal from "./DrilldownModal";
 
 // Per-space analytics shown in the Overview tab. Refetches whenever it mounts
 // (i.e. each time the tab is opened) so it reflects current data.
@@ -10,6 +11,7 @@ export default function SpaceOverview({ space, onOpenScope }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [drill, setDrill] = useState(null);
 
   const load = useCallback(async () => {
     if (!space?.id) return;
@@ -51,10 +53,10 @@ export default function SpaceOverview({ space, onOpenScope }) {
       ) : data ? (
         <>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
-            <Kpi label="Total tasks" value={total.toLocaleString()} sub="in this space" tip="Every non-deleted task in this space (excludes trashed)." />
-            <Kpi label="Completed" value={completedCount.toLocaleString()} sub={`${donePct}% completion`} tone="good" tip="Tasks in a status marked 'complete' for this space (set per status in Manage statuses; unset statuses auto-count done/complete/closed). Completion % = completed ÷ total." />
-            <Kpi label="Overdue" value={(data.overdue || 0).toLocaleString()} sub="past due & open" tone="danger" tip="Open tasks in this space whose due date is before today." />
-            <Kpi label="Due in 30 days" value={(data.due_30d || 0).toLocaleString()} sub="upcoming & open" tone="warn" tip="Open tasks in this space due within the next 30 days." />
+            <Kpi label="Total tasks" value={total.toLocaleString()} sub="in this space" tip="Every non-deleted task in this space (excludes trashed)." onClick={() => setDrill({ title: "All tasks", metric: "total" })} />
+            <Kpi label="Completed" value={completedCount.toLocaleString()} sub={`${donePct}% completion`} tone="good" tip="Tasks in a status marked 'complete' for this space (set per status in Manage statuses; unset statuses auto-count done/complete/closed). Completion % = completed ÷ total." onClick={() => setDrill({ title: "Completed tasks", metric: "completed" })} />
+            <Kpi label="Overdue" value={(data.overdue || 0).toLocaleString()} sub="past due & open" tone="danger" tip="Open tasks in this space whose due date is before today." onClick={() => setDrill({ title: "Overdue tasks", metric: "overdue" })} />
+            <Kpi label="Due in 30 days" value={(data.due_30d || 0).toLocaleString()} sub="upcoming & open" tone="warn" tip="Open tasks in this space due within the next 30 days." onClick={() => setDrill({ title: "Due in 30 days", metric: "due_30d" })} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1.3fr) minmax(200px, 1fr)", gap: 16, marginBottom: 16 }}>
@@ -153,6 +155,15 @@ export default function SpaceOverview({ space, onOpenScope }) {
           </Card>
         </>
       ) : null}
+      {drill && (
+        <DrilldownModal
+          title={drill.title}
+          metric={drill.metric}
+          spaceId={space?.id}
+          onOpenScope={onOpenScope}
+          onClose={() => setDrill(null)}
+        />
+      )}
     </div>
   );
 }

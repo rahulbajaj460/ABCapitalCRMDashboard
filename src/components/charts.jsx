@@ -23,11 +23,16 @@ export function Card({ title, action, children, style, tip }) {
   );
 }
 
-export function Kpi({ label, value, sub, tone, icon, tip }) {
+export function Kpi({ label, value, sub, tone, icon, tip, onClick }) {
   const color = tone === "danger" ? "#dc2626" : tone === "warn" ? "#b45309" : tone === "good" ? "#15803d" : "#111827";
   const accent = tone === "danger" ? "#ef4444" : tone === "warn" ? "#f59e0b" : tone === "good" ? "#22c55e" : "#cbd5e1";
   return (
-    <div style={{ background: "#fff", border: "1px solid #eef0f0", borderLeft: `3px solid ${accent}`, borderRadius: 14, padding: "16px 18px", flex: 1, minWidth: 150, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+    <div
+      onClick={onClick}
+      style={{ background: "#fff", border: "1px solid #eef0f0", borderLeft: `3px solid ${accent}`, borderRadius: 14, padding: "16px 18px", flex: 1, minWidth: 150, boxShadow: "0 1px 2px rgba(16,24,40,0.04)", cursor: onClick ? "pointer" : "default", transition: "box-shadow 0.12s, transform 0.12s" }}
+      onMouseEnter={onClick ? (e) => { e.currentTarget.style.boxShadow = "0 4px 14px rgba(16,24,40,0.10)"; e.currentTarget.style.transform = "translateY(-1px)"; } : undefined}
+      onMouseLeave={onClick ? (e) => { e.currentTarget.style.boxShadow = "0 1px 2px rgba(16,24,40,0.04)"; e.currentTarget.style.transform = "none"; } : undefined}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 12.5, color: "#6b7280", fontWeight: 600, display: "flex", alignItems: "center" }}>{label}{tip && <InfoDot tip={tip} />}</div>
         {icon}
