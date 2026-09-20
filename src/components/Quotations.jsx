@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 // Heavy document/spreadsheet libs (pizzip, docxtemplater, xlsx, jszip,
 // file-saver ≈ 500KB) are loaded on demand — only when a doc is generated or an
 // Excel file is parsed — so opening this view stays light.
-import { IconPlus, IconTrash, IconUpload, IconFile, IconClose } from "./icons";
+import { IconPlus, IconTrash, IconUpload, IconFile, IconClose, IconDownload } from "./icons";
 
 // ── helpers ──
 // Normalize a key on SAVE (collapses runs, trims ends).
@@ -349,6 +349,7 @@ export default function Quotations({ profile }) {
             templates={templates}
             profile={profile}
             onChanged={fetchTemplates}
+            downloadTemplateBuffer={downloadTemplateBuffer}
           />
         )}
       </div>
@@ -616,9 +617,24 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
 }
 
 // ─────────────────────────── Templates (admin) ───────────────────────────
-function TemplatesTab({ templates, profile, onChanged }) {
+function TemplatesTab({ templates, profile, onChanged, downloadTemplateBuffer }) {
   const isAdmin = profile?.role === "admin";
   const [editing, setEditing] = useState(null); // template object or {} for new
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  async function downloadTemplate(t) {
+    setDownloadingId(t.id);
+    try {
+      const buf = await downloadTemplateBuffer(t);
+      const { saveAs } = await import("file-saver");
+      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      saveAs(blob, t.file_name || `${cleanFreezone(t.freezone) || "template"}.docx`);
+    } catch (e) {
+      alert("Could not download the template: " + (e.message || e));
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   return (
     <div style={{ maxWidth: 760 }}>
@@ -650,6 +666,15 @@ function TemplatesTab({ templates, profile, onChanged }) {
                   {(t.fields || []).length} field{(t.fields || []).length === 1 ? "" : "s"} · {t.file_name || "template.docx"}
                 </div>
               </div>
+              <button
+                onClick={() => downloadTemplate(t)}
+                disabled={downloadingId === t.id}
+                className="btn btn-sm"
+                title="Download the original .docx template"
+                style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+              >
+                <IconDownload size={13} /> {downloadingId === t.id ? "…" : "Download"}
+              </button>
               <button onClick={() => setEditing(t)} className="btn btn-sm">Edit</button>
             </div>
           ))}
