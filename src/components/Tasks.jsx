@@ -904,7 +904,7 @@ export default function Tasks({
   // lists fall back to scroll-based loading to keep the DOM/render light.
   const AUTO_LOAD_CAP = 1500;
   useEffect(() => {
-    if (activeList && groupBy === "status" && listHasMore && !loadingMore && tasks.length < AUTO_LOAD_CAP) {
+    if (activeList && groupBy !== "none" && listHasMore && !loadingMore && tasks.length < AUTO_LOAD_CAP) {
       loadMoreListTasks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -974,6 +974,8 @@ export default function Tasks({
       // drawer loads the full set on open, so hidden fields are never blank. A
       // !left join keeps tasks that have no value for any visible field.
       const vfIds = getActiveColumns(listFields).filter((c) => c.field).map((c) => c.field.id);
+      // Also fetch the field we're grouping by, even if it isn't a shown column.
+      if (typeof groupBy === "string" && groupBy.startsWith("field_") && !vfIds.includes(groupBy.slice(6))) vfIds.push(groupBy.slice(6));
       const sel = vfIds.length ? "*, task_field_values!left(id, field_id, value)" : "*";
       const scoped = (base) => {
         let q = base.select(sel).is("deleted_at", null).eq("list_id", activeList.id);
@@ -1027,13 +1029,14 @@ export default function Tasks({
     if (!colToggleInit.current) { colToggleInit.current = true; return; }
     if (activeList) fetchTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleColumns, columnOrder]);
+  }, [visibleColumns, columnOrder, groupBy]);
 
   // Load the next page of the active list (cursor by created_at) and append.
   async function loadMoreListTasks() {
     if (!activeList || !listHasMore || loadingMore || !listCursor) return;
     setLoadingMore(true);
     const vfIds = getActiveColumns(listFields).filter((c) => c.field).map((c) => c.field.id);
+    if (typeof groupBy === "string" && groupBy.startsWith("field_") && !vfIds.includes(groupBy.slice(6))) vfIds.push(groupBy.slice(6));
     const sel = vfIds.length ? "*, task_field_values!left(id, field_id, value)" : "*";
     let mq = supabase.from("tasks").select(sel).is("deleted_at", null)
       .eq("list_id", activeList.id).lt("created_at", listCursor);
@@ -2270,6 +2273,42 @@ export default function Tasks({
     return g;
   }
 
+  // Group by a custom field's value. Date fields group by month (e.g. Month_Year
+  // → "Sep 2026"), newest first; blanks go to "—" at the end.
+  function groupByFieldId(tl, fieldId, fields) {
+    const ftype = (fields || []).find((f) => String(f.id) === String(fieldId))?.field_type;
+    const isMonth = (raw) => ftype === "date" && /^\d{4}-\d{2}-\d{2}/.test(raw);
+    const label = (raw) => {
+      if (!raw || String(raw).trim() === "") return "—";
+      if (isMonth(raw)) {
+        const [y, m] = raw.split("-");
+        return new Date(Date.UTC(+y, +m - 1, 1)).toLocaleString("en-US", { month: "short", year: "numeric" });
+      }
+      return String(raw);
+    };
+    const buckets = {};
+    tl.forEach((t) => {
+      const raw = (t.task_field_values || []).find((v) => String(v.field_id) === String(fieldId))?.value || "";
+      const key = !raw || String(raw).trim() === "" ? "—" : isMonth(raw) ? raw.slice(0, 7) : String(raw);
+      if (!buckets[key]) buckets[key] = { label: label(raw), tasks: [] };
+      buckets[key].tasks.push(t);
+    });
+    const keys = Object.keys(buckets).sort((a, b) => (a === "—" ? 1 : b === "—" ? -1 : a < b ? 1 : -1));
+    const g = {};
+    keys.forEach((k) => { g[buckets[k].label] = buckets[k].tasks; });
+    return g;
+  }
+
+  // Central grouping used by the list/folder views (status / priority / assignee
+  // / custom field / none). Folder grouping is handled by getGroupedTasks.
+  function computeGrouped(tl, statusList, fields) {
+    if (groupBy === "priority") return ["High", "Medium", "Low"].reduce((a, p) => { a[p] = tl.filter((t) => t.priority === p); return a; }, {});
+    if (groupBy === "assignee") return Object.fromEntries(Object.entries(groupByAssignees(tl)).sort(([a], [b]) => a.localeCompare(b)));
+    if (typeof groupBy === "string" && groupBy.startsWith("field_")) return groupByFieldId(tl, groupBy.slice(6), fields);
+    if (groupBy === "none") return { "All tasks": tl };
+    return (statusList || []).reduce((acc, s) => { acc[s] = tl.filter((t) => t.status === s); return acc; }, {});
+  }
+
   function getGroupedTasks() {
     const tl = filteredTasks;
     let result;
@@ -2296,6 +2335,8 @@ export default function Tasks({
         acc[p] = tl.filter((t) => t.priority === p);
         return acc;
       }, {});
+    } else if (typeof groupBy === "string" && groupBy.startsWith("field_")) {
+      result = groupByFieldId(tl, groupBy.slice(6), getFields());
     } else {
       result = { "All tasks": tl };
     }
@@ -4785,6 +4826,13 @@ export default function Tasks({
               <option value="assignee">Group by: Assignee</option>
               <option value="priority">Group by: Priority</option>
               <option value="none">Group by: None</option>
+              {(() => {
+                // Custom fields of the current scope you can group by (date / dropdown / text / number).
+                const scopeFields = activeList ? getFields() : activeFolder ? getFolderFields(activeFolder) : [];
+                return (scopeFields || [])
+                  .filter((f) => ["date", "dropdown", "text", "number"].includes(f.field_type))
+                  .map((f) => <option key={f.id} value={`field_${f.id}`}>Group by: {f.field_name}</option>);
+              })()}
             </select>
             <div className="filter-panel-wrap" style={{ position: "relative" }}>
               <button
@@ -4921,24 +4969,7 @@ export default function Tasks({
                       const isExpanded = expandedGroups[folder.id] !== false;
                       const folderStatusList = getFolderStatuses(folder);
                       const folderFieldList = getFolderFields(folder);
-                      const groupedRaw =
-                        groupBy === "status"
-                          ? folderStatusList.reduce((acc, s) => {
-                              acc[s] = filteredFolderTasks.filter(
-                                (t) => t.status === s,
-                              );
-                              return acc;
-                            }, {})
-                          : groupBy === "priority"
-                            ? ["High", "Medium", "Low"].reduce((acc, p) => {
-                                acc[p] = filteredFolderTasks.filter(
-                                  (t) => t.priority === p,
-                                );
-                                return acc;
-                              }, {})
-                            : groupBy === "assignee"
-                              ? groupByAssignees(filteredFolderTasks)
-                              : { "All tasks": filteredFolderTasks };
+                      const groupedRaw = computeGrouped(filteredFolderTasks, folderStatusList, folderFieldList);
                       const grouped = Object.fromEntries(
                         Object.entries(groupedRaw).map(([k, v]) => [
                           k,
@@ -5028,13 +5059,7 @@ export default function Tasks({
                                     const listTasks = filteredFolderTasks.filter((t) => t.list_id === list.id);
                                     const listKey = `list_${list.id}`;
                                     const listExpanded = expandedGroups[listKey] !== false;
-                                    const listGroupedRaw = groupBy === "status"
-                                      ? folderStatusList.reduce((acc, s) => { acc[s] = listTasks.filter((t) => t.status === s); return acc; }, {})
-                                      : groupBy === "priority"
-                                        ? ["High", "Medium", "Low"].reduce((acc, p) => { acc[p] = listTasks.filter((t) => t.priority === p); return acc; }, {})
-                                        : groupBy === "assignee"
-                                          ? groupByAssignees(listTasks)
-                                          : { "All tasks": listTasks };
+                                    const listGroupedRaw = computeGrouped(listTasks, folderStatusList, folderFieldList);
                                     const listGrouped = Object.fromEntries(Object.entries(listGroupedRaw).map(([k, v]) => [k, sortTasks(v)]));
                                     return (
                                       <div key={list.id} style={{ marginBottom: 12, borderTop: "1px solid #f0f0ef" }}>
@@ -5241,13 +5266,7 @@ export default function Tasks({
                           const listKey = `flv_${list.id}`;
                           const listExpanded = expandedGroups[listKey] !== false;
                           const thisListStatuses = getStatusesForList(list.id);
-                          const listGroupedRaw = groupBy === "status"
-                            ? thisListStatuses.reduce((acc, s) => { acc[s] = filteredListTasks.filter((t) => t.status === s); return acc; }, {})
-                            : groupBy === "priority"
-                              ? ["High", "Medium", "Low"].reduce((acc, p) => { acc[p] = filteredListTasks.filter((t) => t.priority === p); return acc; }, {})
-                              : groupBy === "assignee"
-                                ? groupByAssignees(filteredListTasks)
-                                : { "All tasks": filteredListTasks };
+                          const listGroupedRaw = computeGrouped(filteredListTasks, thisListStatuses, getFields());
                           const listGrouped = Object.fromEntries(Object.entries(listGroupedRaw).map(([k, v]) => [k, sortTasks(v)]));
 
                           return (
