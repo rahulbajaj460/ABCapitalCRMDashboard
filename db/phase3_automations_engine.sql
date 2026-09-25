@@ -530,9 +530,12 @@ begin
       from task_field_values tfv join space_fields sf on sf.id = tfv.field_id
      where tfv.task_id = t.id
   loop
-    tgt_name := coalesce(params->'map'->>fv.src_name, fv.src_name);
+    tgt_name := coalesce(
+      params->'map'->>fv.src_name,
+      (select v from jsonb_each_text(coalesce(params->'map','{}'::jsonb)) as m(kk, v) where lower(kk) = lower(fv.src_name) limit 1),
+      fv.src_name);
     select id into tgt_fid from space_fields
-     where field_name = tgt_name
+     where lower(field_name) = lower(tgt_name)
        and ((tgt_list is not null and list_id = tgt_list)
          or (tgt_list is null and folder_id = tgt_folder and list_id is null))
      limit 1;
@@ -553,7 +556,7 @@ begin
                else tok
              end;
       select id into tgt_fid from space_fields
-       where field_name = k
+       where lower(field_name) = lower(k)
          and ((tgt_list is not null and list_id = tgt_list)
            or (tgt_list is null and folder_id = tgt_folder and list_id is null))
        limit 1;
