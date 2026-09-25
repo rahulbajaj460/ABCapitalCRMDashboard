@@ -537,7 +537,8 @@ begin
     select id into tgt_fid from space_fields
      where lower(field_name) = lower(tgt_name)
        and ((tgt_list is not null and list_id = tgt_list)
-         or (tgt_list is null and folder_id = tgt_folder and list_id is null))
+         or (tgt_list is null and (folder_id = tgt_folder
+              or list_id in (select id from lists where folder_id = tgt_folder and deleted_at is null))))
      limit 1;
     if tgt_fid is not null then
       update task_field_values set value = fv.value where task_id = new_id and field_id = tgt_fid;
@@ -558,7 +559,8 @@ begin
       select id into tgt_fid from space_fields
        where lower(field_name) = lower(k)
          and ((tgt_list is not null and list_id = tgt_list)
-           or (tgt_list is null and folder_id = tgt_folder and list_id is null))
+           or (tgt_list is null and (folder_id = tgt_folder
+                or list_id in (select id from lists where folder_id = tgt_folder and deleted_at is null))))
        limit 1;
       if tgt_fid is not null then
         update task_field_values set value = val where task_id = new_id and field_id = tgt_fid;
