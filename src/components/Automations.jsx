@@ -24,6 +24,7 @@ const ACTION_TYPES = [
   { value: "shift_date", label: "Advance a date field" },
   { value: "clone_reset", label: "Clone task for next cycle (review before create)" },
   { value: "mirror_to_list", label: "Mirror task to another list" },
+  { value: "clone_to", label: "Clone task to another list (one-time, mapped)" },
 ];
 const RECIPIENT_PRESETS = [
   { value: "assignee", label: "Assignee" },
@@ -389,6 +390,7 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       : e.target.value === "shift_date" ? { field: "due_date", months: 3, day: 28 }
                       : e.target.value === "clone_reset" ? { to_status: "To Do", date_field: "due_date", months: 3, day: 28, delete_parent: true }
                       : e.target.value === "mirror_to_list" ? { list_id: "", sync: "all" }
+                      : e.target.value === "clone_to" ? { list_id: "", status: "target_first", map: {}, set: {} }
                       : {} })} style={sel}>
                       {ACTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
@@ -568,6 +570,88 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       </div>
                       <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 6, lineHeight: 1.6 }}>
                         When the trigger + conditions match, a linked copy is created in the target list (once), then kept updated one-way from this task. Use the <strong>Any change</strong> trigger so it syncs on every edit. Custom fields map by column name between the two lists; a matching column is auto-created on the target list if it doesn't exist. Editing the copy never affects the original; if the condition later stops matching, the copy stays but stops updating.
+                      </div>
+                    </div>
+                    );
+                  })()}
+
+                  {a.type === "clone_to" && (() => {
+                    const savedList = allLists.find((l) => l.id === a.params.list_id);
+                    const tSpace = a.params.target_space_id || savedList?.space_id || "";
+                    const tFolder = a.params.target_folder_id || savedList?.folder_id || "";
+                    const map = a.params.map || {};
+                    const setv = a.params.set || {};
+                    const setMap = (obj) => updAction(a.id, { params: { ...a.params, map: obj } });
+                    const setSet = (obj) => updAction(a.id, { params: { ...a.params, set: obj } });
+                    const inp = { fontSize: 12, padding: "5px 8px", border: "1px solid #d1d5db", borderRadius: 6, flex: 1, minWidth: 0 };
+                    const rmBtn = { border: "none", background: "none", color: "#ef4444", cursor: "pointer", fontSize: 14, padding: "0 4px" };
+                    const addBtn = { background: "none", border: "none", color: "var(--accent)", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: 0, marginTop: 2 };
+                    const TOKENS = ["today", "month_start", "now"];
+                    return (
+                    <div>
+                      <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 6 }}>Create clone in</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <select value={tSpace} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: e.target.value, target_folder_id: "", list_id: "" } })} style={sel}>
+                          <option value="">Select space…</option>
+                          {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        {tSpace && (
+                          <select value={tFolder} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: e.target.value, list_id: "" } })} style={sel}>
+                            <option value="">Select folder…</option>
+                            {foldersOf(tSpace).map((f) => <option key={f.id} value={f.id}>↳ {f.name}</option>)}
+                          </select>
+                        )}
+                        {tFolder && (
+                          <select value={a.params.list_id || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: tFolder, list_id: e.target.value } })} style={sel}>
+                            <option value="">Select list…</option>
+                            {allLists.filter((l) => l.folder_id === tFolder).map((l) => <option key={l.id} value={l.id}>↳↳ {l.name}</option>)}
+                          </select>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                        <span style={{ fontSize: 12.5, color: "#6b7280" }}>Clone status</span>
+                        <select value={a.params.status || "target_first"} onChange={(e) => updAction(a.id, { params: { ...a.params, status: e.target.value } })} style={{ ...sel, minWidth: 200 }}>
+                          <option value="target_first">Target's default (first) status</option>
+                          <option value="source">Same as the source task</option>
+                        </select>
+                      </div>
+
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 6 }}>Rename columns on copy (source → target)</div>
+                        {Object.entries(map).map(([from, to], i) => (
+                          <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                            <input value={from} placeholder="Source column" onChange={(e) => { const o = { ...map }; delete o[from]; o[e.target.value] = to; setMap(o); }} style={inp} />
+                            <span style={{ color: "#9ca3af" }}>→</span>
+                            <input value={to} placeholder="Target column" onChange={(e) => setMap({ ...map, [from]: e.target.value })} style={inp} />
+                            <button onClick={() => { const o = { ...map }; delete o[from]; setMap(o); }} style={rmBtn} title="Remove">×</button>
+                          </div>
+                        ))}
+                        <button onClick={() => setMap({ ...map, "": "" })} style={addBtn}>+ Add rename</button>
+                      </div>
+
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 6 }}>Set values on the clone (target column → value)</div>
+                        {Object.entries(setv).map(([field, val], i) => (
+                          <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                            <input value={field} placeholder="Target column" onChange={(e) => { const o = { ...setv }; delete o[field]; o[e.target.value] = val; setSet(o); }} style={inp} />
+                            <select value={TOKENS.includes(val) ? val : "__literal"} onChange={(e) => setSet({ ...setv, [field]: e.target.value === "__literal" ? "" : e.target.value })} style={{ ...sel, minWidth: 150 }}>
+                              <option value="today">Today's date</option>
+                              <option value="month_start">1st of this month</option>
+                              <option value="now">Now (timestamp)</option>
+                              <option value="__literal">Custom text…</option>
+                            </select>
+                            {!TOKENS.includes(val) && (
+                              <input value={val} placeholder="Value" onChange={(e) => setSet({ ...setv, [field]: e.target.value })} style={inp} />
+                            )}
+                            <button onClick={() => { const o = { ...setv }; delete o[field]; setSet(o); }} style={rmBtn} title="Remove">×</button>
+                          </div>
+                        ))}
+                        <button onClick={() => setSet({ ...setv, "": "today" })} style={addBtn}>+ Add value</button>
+                      </div>
+
+                      <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 8, lineHeight: 1.6 }}>
+                        Creates a <strong>one-time</strong> clone in the target list when the trigger + conditions match. Only columns that <strong>already exist</strong> in the target are copied (matched by name; use renames to remap). It never syncs afterward and won't create a second clone for the same task. Use the <strong>Task created</strong> trigger to clone on creation.
                       </div>
                     </div>
                     );
