@@ -633,16 +633,17 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                       <div style={{ marginTop: 10 }}>
                         <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 6 }}>Set values on the clone (target column → value)</div>
                         {Object.entries(setv).map(([field, val], i) => (
-                          <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-                            <input value={field} placeholder="Target column" onChange={(e) => { const o = { ...setv }; delete o[field]; o[e.target.value] = val; setSet(o); }} style={inp} />
-                            <select value={TOKENS.includes(val) ? val : "__literal"} onChange={(e) => setSet({ ...setv, [field]: e.target.value === "__literal" ? "" : e.target.value })} style={{ ...sel, minWidth: 150 }}>
+                          <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center", flexWrap: "wrap" }}>
+                            <input value={field} placeholder="Target column" onChange={(e) => { const o = { ...setv }; delete o[field]; o[e.target.value] = val; setSet(o); }} style={{ ...inp, flex: "1 1 160px", minWidth: 150 }} />
+                            <span style={{ color: "#9ca3af" }}>→</span>
+                            <select value={TOKENS.includes(val) ? val : "__literal"} onChange={(e) => setSet({ ...setv, [field]: e.target.value === "__literal" ? "" : e.target.value })} style={{ ...sel, flex: "0 0 auto", width: 160 }}>
                               <option value="today">Today's date</option>
                               <option value="month_start">1st of this month</option>
                               <option value="now">Now (timestamp)</option>
                               <option value="__literal">Custom text…</option>
                             </select>
                             {!TOKENS.includes(val) && (
-                              <input value={val} placeholder="Value" onChange={(e) => setSet({ ...setv, [field]: e.target.value })} style={inp} />
+                              <input value={val} placeholder="Value" onChange={(e) => setSet({ ...setv, [field]: e.target.value })} style={{ ...inp, flex: "1 1 120px", minWidth: 110 }} />
                             )}
                             <button onClick={() => { const o = { ...setv }; delete o[field]; setSet(o); }} style={rmBtn} title="Remove">×</button>
                           </div>
