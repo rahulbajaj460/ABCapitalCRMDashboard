@@ -2566,6 +2566,10 @@ export default function Tasks({
           .from("task_field_values")
           .insert({ task_id: data.id, field_id: fieldId, value });
     }
+    // The task-created trigger fired before these field values existed, so a
+    // clone_to automation couldn't copy them. Re-run clone actions now that the
+    // values are written (idempotent — refreshes the clone, doesn't duplicate).
+    await supabase.rpc("run_clone_actions", { p_task_id: data.id });
     // Creation is recorded by the database trigger.
     setShowNewTaskModal(false);
     setTaskFieldValues({});
