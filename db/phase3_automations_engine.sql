@@ -25,6 +25,7 @@ set search_path = public;
 alter table automations add column if not exists conditions_match text default 'all';
 -- Links a task created by the mirror_to_list action back to its source task.
 alter table tasks add column if not exists mirror_of uuid references tasks(id) on delete set null;
+alter table tasks add column if not exists cloned_from uuid references tasks(id) on delete set null;
 create index if not exists tasks_mirror_of_idx on tasks (mirror_of) where deleted_at is null;
 
 -- ---------------------------------------------------------------------
@@ -459,6 +460,109 @@ begin
   end if;
 end $$;
 
+-- Generic ONE-TIME clone into another list/folder. Unlike mirror_to_list it
+-- does NOT keep syncing, only copies fields that ALREADY EXIST in the target
+-- (matched by name — never auto-creates), and supports renaming + computed
+-- defaults. Params (all optional except a target):
+--   list_id / folder_id : where to create the clone (list preferred)
+--   status : 'target_first' (default, the target's first status) | 'source'
+--            (copy the source status) | any literal status name
+--   map    : { "<source field name>": "<target field name>" }  -- rename on copy
+--   set    : { "<target field name>": "<token|literal>" }       -- computed/default
+--            tokens: 'today' (current date), 'month_start' (1st of this month),
+--                    'now' (timestamp); anything else is used literally.
+-- Idempotent per source task per target (uses cloned_from), and re-entrancy
+-- guarded so the clone doesn't trigger further automations.
+create or replace function _abcap_clone_to(t tasks, params jsonb)
+returns void language plpgsql security definer set search_path=public as $$
+declare
+  tgt_list uuid; tgt_folder uuid; tgt_space uuid;
+  new_id uuid; st text; fv record; tgt_fid uuid; tgt_name text; k text; tok text; val text;
+begin
+  if t.cloned_from is not null then return; end if;   -- don't clone a clone
+  tgt_list   := nullif(params->>'list_id','')::uuid;
+  tgt_folder := nullif(params->>'folder_id','')::uuid;
+
+  if tgt_list is not null then
+    select folder_id, space_id into tgt_folder, tgt_space from lists where id = tgt_list and deleted_at is null;
+    if not found then return; end if;
+  elsif tgt_folder is not null then
+    select space_id into tgt_space from folders where id = tgt_folder and deleted_at is null;
+    if not found then return; end if;
+  else
+    return;   -- no target
+  end if;
+
+  -- Only clone once per source task per target.
+  if exists (
+    select 1 from tasks
+     where cloned_from = t.id and deleted_at is null
+       and ((tgt_list is not null and list_id = tgt_list)
+         or (tgt_list is null and folder_id = tgt_folder and list_id is null))
+  ) then return; end if;
+
+  perform set_config('abcap.in_automation','1', true);   -- suppress cascade
+
+  -- Resolve status.
+  st := nullif(params->>'status','');
+  if st is null or st = 'target_first' then
+    select name into st from space_statuses
+     where ((tgt_list is not null and list_id = tgt_list)
+         or (tgt_list is null and folder_id = tgt_folder and list_id is null)
+         or (tgt_list is null and tgt_folder is null and space_id = tgt_space and folder_id is null and list_id is null))
+     order by status_order limit 1;
+    st := coalesce(st, 'To Do');
+  elsif st = 'source' then
+    st := t.status;
+  end if;
+
+  insert into tasks (title, status, priority, space_id, folder_id, list_id, cloned_from, updated_by, updated_at)
+  values (coalesce(nullif(t.title,''),'Untitled'), st, 'Medium', tgt_space, tgt_folder, tgt_list, t.id,
+          coalesce(nullif(t.updated_by,''),'Automation'), now())
+  returning id into new_id;
+
+  -- Copy source field values onto target fields of the same (or renamed) name,
+  -- but ONLY where the target already has that field.
+  for fv in
+    select sf.field_name as src_name, tfv.value
+      from task_field_values tfv join space_fields sf on sf.id = tfv.field_id
+     where tfv.task_id = t.id
+  loop
+    tgt_name := coalesce(params->'map'->>fv.src_name, fv.src_name);
+    select id into tgt_fid from space_fields
+     where field_name = tgt_name
+       and ((tgt_list is not null and list_id = tgt_list)
+         or (tgt_list is null and folder_id = tgt_folder and list_id is null))
+     limit 1;
+    if tgt_fid is not null then
+      update task_field_values set value = fv.value where task_id = new_id and field_id = tgt_fid;
+      if not found then insert into task_field_values(task_id, field_id, value) values (new_id, tgt_fid, fv.value); end if;
+    end if;
+  end loop;
+
+  -- Apply computed/default values (override anything copied above).
+  if params ? 'set' then
+    for k in select jsonb_object_keys(params->'set') loop
+      tok := params->'set'->>k;
+      val := case tok
+               when 'today'       then to_char(current_date, 'YYYY-MM-DD')
+               when 'month_start' then to_char(date_trunc('month', current_date), 'YYYY-MM-DD')
+               when 'now'         then to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS')
+               else tok
+             end;
+      select id into tgt_fid from space_fields
+       where field_name = k
+         and ((tgt_list is not null and list_id = tgt_list)
+           or (tgt_list is null and folder_id = tgt_folder and list_id is null))
+       limit 1;
+      if tgt_fid is not null then
+        update task_field_values set value = val where task_id = new_id and field_id = tgt_fid;
+        if not found then insert into task_field_values(task_id, field_id, value) values (new_id, tgt_fid, val); end if;
+      end if;
+    end loop;
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------------
 -- 4. Executor — run one matched automation's actions against a task
 -- ---------------------------------------------------------------------
@@ -531,6 +635,9 @@ begin
 
     elsif atype = 'mirror_to_list' then
       perform _abcap_mirror_to_list(t, act->'params');
+
+    elsif atype = 'clone_to' then
+      perform _abcap_clone_to(t, act->'params');
     end if;
   end loop;
 
