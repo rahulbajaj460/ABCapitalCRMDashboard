@@ -495,33 +495,36 @@ begin
     return;   -- no target
   end if;
 
-  -- Only clone once per source task per target.
-  if exists (
-    select 1 from tasks
-     where cloned_from = t.id and deleted_at is null
-       and ((tgt_list is not null and list_id = tgt_list)
-         or (tgt_list is null and folder_id = tgt_folder and list_id is null))
-  ) then return; end if;
-
   perform set_config('abcap.in_automation','1', true);   -- suppress cascade
 
-  -- Resolve status.
-  st := nullif(params->>'status','');
-  if st is null or st = 'target_first' then
-    select name into st from space_statuses
-     where ((tgt_list is not null and list_id = tgt_list)
-         or (tgt_list is null and folder_id = tgt_folder and list_id is null)
-         or (tgt_list is null and tgt_folder is null and space_id = tgt_space and folder_id is null and list_id is null))
-     order by status_order limit 1;
-    st := coalesce(st, 'To Do');
-  elsif st = 'source' then
-    st := t.status;
-  end if;
+  -- One clone per source per target. If it already exists (e.g. the task-created
+  -- run fired before the field values were written), REUSE it and refresh the
+  -- field values below — don't create a duplicate.
+  select id into new_id from tasks
+   where cloned_from = t.id and deleted_at is null
+     and ((tgt_list is not null and list_id = tgt_list)
+       or (tgt_list is null and folder_id = tgt_folder and list_id is null))
+   limit 1;
 
-  insert into tasks (title, status, priority, space_id, folder_id, list_id, cloned_from, updated_by, updated_at)
-  values (coalesce(nullif(t.title,''),'Untitled'), st, 'Medium', tgt_space, tgt_folder, tgt_list, t.id,
-          coalesce(nullif(t.updated_by,''),'Automation'), now())
-  returning id into new_id;
+  if new_id is null then
+    -- Resolve status only when creating.
+    st := nullif(params->>'status','');
+    if st is null or st = 'target_first' then
+      select name into st from space_statuses
+       where ((tgt_list is not null and list_id = tgt_list)
+           or (tgt_list is null and folder_id = tgt_folder and list_id is null)
+           or (tgt_list is null and tgt_folder is null and space_id = tgt_space and folder_id is null and list_id is null))
+       order by status_order limit 1;
+      st := coalesce(st, 'To Do');
+    elsif st = 'source' then
+      st := t.status;
+    end if;
+
+    insert into tasks (title, status, priority, space_id, folder_id, list_id, cloned_from, updated_by, updated_at)
+    values (coalesce(nullif(t.title,''),'Untitled'), st, 'Medium', tgt_space, tgt_folder, tgt_list, t.id,
+            coalesce(nullif(t.updated_by,''),'Automation'), now())
+    returning id into new_id;
+  end if;
 
   -- Copy source field values onto target fields of the same (or renamed) name,
   -- but ONLY where the target already has that field.
@@ -573,6 +576,36 @@ begin
     end loop;
   end if;
 end $$;
+
+-- Re-run only the clone_to actions for a task — called by the app right AFTER a
+-- task's custom-field values are written, so a task-created clone picks up those
+-- values (the INSERT trigger fires before field values exist). Idempotent: the
+-- clone is reused and its fields refreshed, never duplicated. Only clone_to runs
+-- here, so notifications/other actions aren't repeated.
+create or replace function run_clone_actions(p_task_id uuid)
+returns void language plpgsql security definer set search_path=public as $$
+declare t tasks; a automations; act jsonb;
+begin
+  select * into t from tasks where id = p_task_id and deleted_at is null;
+  if not found then return; end if;
+  for a in
+    select * from automations
+     where enabled
+       and ((scope_type = 'list'   and scope_id = t.list_id)
+         or (scope_type = 'folder' and scope_id = t.folder_id)
+         or (scope_type = 'space'  and scope_id = t.space_id))
+       and trigger->>'type' in ('task_created', 'any_change')
+  loop
+    if _abcap_eval_conditions(a.conditions, t, coalesce(a.conditions_match, 'all')) then
+      for act in select jsonb_array_elements(a.actions) loop
+        if act->>'type' = 'clone_to' then
+          perform _abcap_clone_to(t, act->'params');
+        end if;
+      end loop;
+    end if;
+  end loop;
+end $$;
+grant execute on function run_clone_actions(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- 4. Executor — run one matched automation's actions against a task
