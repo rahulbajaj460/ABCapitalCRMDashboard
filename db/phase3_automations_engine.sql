@@ -481,7 +481,9 @@ declare
 begin
   if t.cloned_from is not null then return; end if;   -- don't clone a clone
   tgt_list   := nullif(params->>'list_id','')::uuid;
-  tgt_folder := nullif(params->>'folder_id','')::uuid;
+  -- Folder target: accept either folder_id or the UI's target_folder_id, so a
+  -- folder-level clone works even when no list is chosen.
+  tgt_folder := coalesce(nullif(params->>'folder_id',''), nullif(params->>'target_folder_id',''))::uuid;
 
   if tgt_list is not null then
     select folder_id, space_id into tgt_folder, tgt_space from lists where id = tgt_list and deleted_at is null;

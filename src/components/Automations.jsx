@@ -591,19 +591,19 @@ export default function Automations({ open, onClose, spaces, members, profile, a
                     <div>
                       <div style={{ fontSize: 12.5, color: "#6b7280", marginBottom: 6 }}>Create clone in</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        <select value={tSpace} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: e.target.value, target_folder_id: "", list_id: "" } })} style={sel}>
+                        <select value={tSpace} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: e.target.value, target_folder_id: "", folder_id: "", list_id: "" } })} style={sel}>
                           <option value="">Select space…</option>
                           {spaces.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                         {tSpace && (
-                          <select value={tFolder} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: e.target.value, list_id: "" } })} style={sel}>
+                          <select value={tFolder} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: e.target.value, folder_id: e.target.value, list_id: "" } })} style={sel}>
                             <option value="">Select folder…</option>
                             {foldersOf(tSpace).map((f) => <option key={f.id} value={f.id}>↳ {f.name}</option>)}
                           </select>
                         )}
                         {tFolder && (
-                          <select value={a.params.list_id || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: tFolder, list_id: e.target.value } })} style={sel}>
-                            <option value="">Select list…</option>
+                          <select value={a.params.list_id || ""} onChange={(e) => updAction(a.id, { params: { ...a.params, target_space_id: tSpace, target_folder_id: tFolder, folder_id: tFolder, list_id: e.target.value } })} style={sel}>
+                            <option value="">List (optional — leave blank to clone at folder level)</option>
                             {allLists.filter((l) => l.folder_id === tFolder).map((l) => <option key={l.id} value={l.id}>↳↳ {l.name}</option>)}
                           </select>
                         )}
