@@ -536,9 +536,11 @@ begin
       fv.src_name);
     select id into tgt_fid from space_fields
      where lower(field_name) = lower(tgt_name)
-       and ((tgt_list is not null and list_id = tgt_list)
-         or (tgt_list is null and (folder_id = tgt_folder
-              or list_id in (select id from lists where folder_id = tgt_folder and deleted_at is null))))
+       and ( (tgt_list is not null and list_id = tgt_list)
+          or (tgt_folder is not null and folder_id = tgt_folder)
+          or (tgt_folder is not null and list_id in (select id from lists where folder_id = tgt_folder and deleted_at is null))
+          or (space_id = tgt_space and folder_id is null and list_id is null) )
+     order by (list_id = tgt_list) desc nulls last, (folder_id = tgt_folder) desc nulls last
      limit 1;
     if tgt_fid is not null then
       update task_field_values set value = fv.value where task_id = new_id and field_id = tgt_fid;
@@ -558,9 +560,11 @@ begin
              end;
       select id into tgt_fid from space_fields
        where lower(field_name) = lower(k)
-         and ((tgt_list is not null and list_id = tgt_list)
-           or (tgt_list is null and (folder_id = tgt_folder
-                or list_id in (select id from lists where folder_id = tgt_folder and deleted_at is null))))
+         and ( (tgt_list is not null and list_id = tgt_list)
+            or (tgt_folder is not null and folder_id = tgt_folder)
+            or (tgt_folder is not null and list_id in (select id from lists where folder_id = tgt_folder and deleted_at is null))
+            or (space_id = tgt_space and folder_id is null and list_id is null) )
+       order by (list_id = tgt_list) desc nulls last, (folder_id = tgt_folder) desc nulls last
        limit 1;
       if tgt_fid is not null then
         update task_field_values set value = val where task_id = new_id and field_id = tgt_fid;
