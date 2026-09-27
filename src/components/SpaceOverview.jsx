@@ -167,6 +167,7 @@ export default function SpaceOverview({ space, folderId, folderName, onOpenScope
           title={drill.title}
           metric={drill.metric}
           spaceId={space?.id}
+          folderId={folderId}
           onOpenScope={onOpenScope}
           onClose={() => setDrill(null)}
         />
@@ -175,6 +176,7 @@ export default function SpaceOverview({ space, folderId, folderName, onOpenScope
         <AssigneeTasksModal
           name={assignee}
           spaceId={space?.id}
+          folderId={folderId}
           people={(data?.by_assignee || []).map((a) => a.name).filter(Boolean)}
           onOpenScope={onOpenScope}
           onClose={() => setAssignee(null)}
