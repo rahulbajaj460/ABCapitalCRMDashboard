@@ -402,13 +402,21 @@ export default function Tasks({
   const [taskMeta, setTaskMeta] = useState({}); // { [taskId]: { attachmentCount, checklistChecked, checklistTotal } }
   const [descPopup, setDescPopup] = useState(null); // { taskId, x, y }
   const [viewMode, setViewMode] = useState("list");
-  // Selecting a bare space defaults to the Overview tab; drilling into a folder
-  // or list leaves Overview for the List view.
+  // Default tab per scope, applied once when the scope changes (so it never
+  // overrides a manual tab switch): a bare space → Overview; a folder → Overview
+  // if it has lists, else List; a list → List.
+  const lastScopeKey = useRef(null);
   useEffect(() => {
-    if (activeSpace && !activeFolder && !activeList) setViewMode("overview");
-    else setViewMode((v) => (v === "overview" ? "list" : v));
+    const key = activeList ? `l:${activeList.id}` : activeFolder ? `f:${activeFolder.id}` : activeSpace ? `s:${activeSpace.id}` : null;
+    if (key === lastScopeKey.current) return;   // same scope; don't fight manual switches
+    lastScopeKey.current = key;
+    if (activeList) setViewMode((v) => (v === "overview" ? "list" : v));
+    else if (activeFolder) {
+      const folderHasLists = (spaceLists || []).some((l) => l.folder_id === activeFolder.id);
+      setViewMode(folderHasLists ? "overview" : "list");
+    } else if (activeSpace) setViewMode("overview");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSpace?.id, activeFolder?.id, activeList?.id]);
+  }, [activeSpace?.id, activeFolder?.id, activeList?.id, spaceLists]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showFieldModal, setShowFieldModal] = useState(false);

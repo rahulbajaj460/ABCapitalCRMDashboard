@@ -4,6 +4,7 @@ import { fmtDate } from "../dateFormat";
 import { Kpi, Card, Donut, HBars, ProgressBar, SegmentBar } from "./charts";
 import { statusColor, PALETTE } from "../chartUtils";
 import DrilldownModal from "./DrilldownModal";
+import AssigneeTasksModal from "./AssigneeTasksModal";
 
 // Per-space analytics shown in the Overview tab. Refetches whenever it mounts
 // (i.e. each time the tab is opened) so it reflects current data.
@@ -12,6 +13,7 @@ export default function SpaceOverview({ space, onOpenScope }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [drill, setDrill] = useState(null);
+  const [assignee, setAssignee] = useState(null);
 
   const load = useCallback(async () => {
     if (!space?.id) return;
@@ -89,11 +91,12 @@ export default function SpaceOverview({ space, onOpenScope }) {
                 onSliceClick={(d) => setDrill({ title: `Status: ${d.label}`, metric: `status:${d.label}` })}
               />
             </Card>
-            <Card title="Workload by assignee">
+            <Card title="Workload by assignee" tip="Open tasks per person in this space. Click a name to see their tasks and reassign them.">
               <HBars
                 emptyText="No assignees yet"
+                onRowClick={(d) => d.name && setAssignee(d.name)}
                 data={(data.by_assignee || []).map((a, i) => ({
-                  label: a.name, value: a.open,
+                  name: a.name, label: a.name, value: a.open,
                   sub: `${a.open} open${a.overdue > 0 ? ` · ${a.overdue} overdue` : ""}`,
                   color: a.overdue > 0 ? "#ef4444" : PALETTE[i % PALETTE.length],
                 }))}
@@ -163,6 +166,16 @@ export default function SpaceOverview({ space, onOpenScope }) {
           spaceId={space?.id}
           onOpenScope={onOpenScope}
           onClose={() => setDrill(null)}
+        />
+      )}
+      {assignee && (
+        <AssigneeTasksModal
+          name={assignee}
+          spaceId={space?.id}
+          people={(data?.by_assignee || []).map((a) => a.name).filter(Boolean)}
+          onOpenScope={onOpenScope}
+          onClose={() => setAssignee(null)}
+          onChanged={load}
         />
       )}
     </div>
