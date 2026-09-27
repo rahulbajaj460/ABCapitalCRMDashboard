@@ -8,7 +8,7 @@ import AssigneeTasksModal from "./AssigneeTasksModal";
 
 // Per-space analytics shown in the Overview tab. Refetches whenever it mounts
 // (i.e. each time the tab is opened) so it reflects current data.
-export default function SpaceOverview({ space, onOpenScope }) {
+export default function SpaceOverview({ space, folderId, folderName, onOpenScope }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -18,11 +18,14 @@ export default function SpaceOverview({ space, onOpenScope }) {
   const load = useCallback(async () => {
     if (!space?.id) return;
     setLoading(true); setErr("");
-    const { data: d, error } = await supabase.rpc("space_overview", { p_space_id: space.id });
+    // Folder-scoped overview when a folder is active, else the whole space.
+    const { data: d, error } = folderId
+      ? await supabase.rpc("folder_overview", { p_folder_id: folderId })
+      : await supabase.rpc("space_overview", { p_space_id: space.id });
     if (error) setErr(error.message);
     else setData(d);
     setLoading(false);
-  }, [space?.id]);
+  }, [space?.id, folderId]);
   useEffect(() => { load(); }, [load]);
 
   const total = data?.total ?? 0;
@@ -40,7 +43,7 @@ export default function SpaceOverview({ space, onOpenScope }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: "#6b7280" }}>Live overview of <strong>{space?.name}</strong> — folders, lists, status and workload.</div>
+        <div style={{ fontSize: 13, color: "#6b7280" }}>Live overview of <strong>{folderId ? (folderName || "this folder") : space?.name}</strong> — lists, status and workload.</div>
         <button className="btn btn-sm" onClick={load} disabled={loading}>{loading ? "Refreshing…" : "Refresh"}</button>
       </div>
 
