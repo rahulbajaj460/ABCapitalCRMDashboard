@@ -4949,9 +4949,13 @@ export default function Tasks({
         <div className="content-area">
           {viewMode === "overview" && activeSpace && (
             <>
-              {!activeFolder && (
-                <SpaceOverview key={activeSpace.id} space={activeSpace} onOpenScope={onOpenScope} />
-              )}
+              <SpaceOverview
+                key={activeFolder?.id || activeSpace.id}
+                space={activeSpace}
+                folderId={activeFolder?.id}
+                folderName={activeFolder?.name}
+                onOpenScope={onOpenScope}
+              />
               <MonthlyLeadReportScope
                 spaceId={activeFolder ? undefined : activeSpace.id}
                 folderId={activeFolder?.id}
