@@ -5,7 +5,11 @@
 -- Run in the Supabase SQL editor (idempotent). Requires _abcap_parse_date from
 -- db/ceo_overview.sql.
 
-create or replace function dashboard_drilldown(p_metric text, p_space uuid default null, p_limit int default 300)
+-- Drop the older (text, uuid, int) signature so adding p_folder doesn't create
+-- an ambiguous overload.
+drop function if exists dashboard_drilldown(text, uuid, int);
+
+create or replace function dashboard_drilldown(p_metric text, p_space uuid default null, p_folder uuid default null, p_limit int default 300)
 returns jsonb language plpgsql stable set search_path = public as $$
 declare res jsonb;
 begin
@@ -22,6 +26,7 @@ begin
         and sf.field_name ~* 'expiry|expire|licen|visa|renew|tenancy|e-?jari|permit'
         and _abcap_parse_date(tfv.value) is not null
         and (p_space is null or t.space_id = p_space)
+        and (p_folder is null or t.folder_id = p_folder)
         and case p_metric
               when 'renewals_overdue' then _abcap_parse_date(tfv.value) < current_date
               when 'renewals_30' then _abcap_parse_date(tfv.value) >= current_date and _abcap_parse_date(tfv.value) < current_date + 30
@@ -43,6 +48,7 @@ begin
       where t.deleted_at is null
         and t.list_id in (select distinct list_id from space_fields where lower(field_name) = 'created_time' and list_id is not null)
         and (p_space is null or t.space_id = p_space)
+        and (p_folder is null or t.folder_id = p_folder)
         and (p_metric <> 'converted' or lower(t.status) = 'converted')
       limit p_limit
     ) s;
@@ -59,6 +65,7 @@ begin
                  'due', to_char(tk.due_date, 'YYYY-MM-DD')) x
         from tasks tk
         where tk.deleted_at is null and (p_space is null or tk.space_id = p_space)
+          and (p_folder is null or tk.folder_id = p_folder)
           and (case when v_status = '(no status)' then coalesce(nullif(tk.status, ''), '(no status)') else tk.status end) = v_status
         order by tk.due_date nulls last
         limit p_limit
@@ -75,6 +82,7 @@ begin
                'due', to_char(tk.due_date, 'YYYY-MM-DD')) x
       from tasks tk
       where tk.deleted_at is null and (p_space is null or tk.space_id = p_space)
+        and (p_folder is null or tk.folder_id = p_folder)
         and case p_metric
               when 'created_30d' then tk.created_at >= now() - interval '30 days'
               when 'completed_30d' then (tk.date_done::text ~ '^\d{4}-\d{2}-\d{2}'
@@ -100,6 +108,7 @@ begin
     ) cs on true
     where tk.deleted_at is null
       and (p_space is null or tk.space_id = p_space)
+      and (p_folder is null or tk.folder_id = p_folder)
       and case p_metric
         when 'total' then true
         when 'done' then tk.status = 'Done'
@@ -118,4 +127,4 @@ begin
   ) s;
   return res;
 end $$;
-grant execute on function dashboard_drilldown(text, uuid, int) to authenticated;
+grant execute on function dashboard_drilldown(text, uuid, uuid, int) to authenticated;

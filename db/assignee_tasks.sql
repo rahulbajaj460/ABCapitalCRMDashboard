@@ -10,8 +10,13 @@
 -- Run in the Supabase SQL editor (idempotent).
 
 -- Every non-deleted task assigned to p_name, with its location. Optionally
--- scoped to a single space (for the per-space Overview drill-in).
-create or replace function assignee_tasks(p_name text, p_space uuid default null)
+-- scoped to a single space, and/or a single folder (for the per-space and
+-- per-folder Overview drill-in).
+-- Drop the older (text, uuid) signature so adding p_folder doesn't leave an
+-- ambiguous overload.
+drop function if exists assignee_tasks(text, uuid);
+
+create or replace function assignee_tasks(p_name text, p_space uuid default null, p_folder uuid default null)
 returns table(id uuid, title text, status text, priority text, due_date date,
               space_id uuid, folder_id uuid, list_id uuid,
               space_name text, list_name text)
@@ -24,9 +29,10 @@ language sql stable security definer set search_path = public as $$
   where t.deleted_at is null
     and p_name = any(t.assignees)
     and (p_space is null or t.space_id = p_space)
+    and (p_folder is null or t.folder_id = p_folder)
   order by (t.due_date is null), t.due_date;
 $$;
-grant execute on function assignee_tasks(text, uuid) to anon, authenticated;
+grant execute on function assignee_tasks(text, uuid, uuid) to anon, authenticated;
 
 -- Replace p_from with p_to on the given tasks (or ALL of p_from's tasks when
 -- p_task_ids is null). An empty p_to just unassigns p_from. Returns the count

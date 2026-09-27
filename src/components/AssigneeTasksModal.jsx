@@ -7,7 +7,7 @@ import { fmtDate } from "../dateFormat";
 // someone else (or unassign) — e.g. when a person leaves. Uses SECURITY DEFINER
 // RPCs so it works regardless of the caller's RLS scope. Pass spaceId to scope
 // the list to a single space (per-space Overview); omit it for CRM-wide.
-export default function AssigneeTasksModal({ name, actor, people, spaceId, onOpenScope, onClose, onChanged }) {
+export default function AssigneeTasksModal({ name, actor, people, spaceId, folderId, onOpenScope, onClose, onChanged }) {
   const [rows, setRows] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sel, setSel] = useState(() => new Set());
@@ -17,11 +17,11 @@ export default function AssigneeTasksModal({ name, actor, people, spaceId, onOpe
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
-    const { data, error } = await supabase.rpc("assignee_tasks", { p_name: name, p_space: spaceId || null });
+    const { data, error } = await supabase.rpc("assignee_tasks", { p_name: name, p_space: spaceId || null, p_folder: folderId || null });
     if (error) setErr(error.message);
     else { setRows(data || []); setSel(new Set((data || []).map((t) => t.id))); }
     setLoading(false);
-  }, [name, spaceId]);
+  }, [name, spaceId, folderId]);
   useEffect(() => { load(); }, [load]);
 
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -53,7 +53,7 @@ export default function AssigneeTasksModal({ name, actor, people, spaceId, onOpe
         <div style={{ padding: "14px 18px", borderBottom: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{name}</div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>{loading ? "Loading…" : `${rows?.length || 0} task${(rows?.length || 0) === 1 ? "" : "s"} assigned${spaceId ? " in this space" : ""}`}</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>{loading ? "Loading…" : `${rows?.length || 0} task${(rows?.length || 0) === 1 ? "" : "s"} assigned${folderId ? " in this folder" : spaceId ? " in this space" : ""}`}</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>×</button>
         </div>

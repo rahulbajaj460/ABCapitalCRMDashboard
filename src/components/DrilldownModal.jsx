@@ -6,7 +6,7 @@ import { fmtDate } from "../dateFormat";
 // Lists the tasks behind a clicked KPI (via the dashboard_drilldown RPC). Each
 // row opens its task in the right space/folder/list. Optionally scoped to one
 // space (per-space Overview).
-export default function DrilldownModal({ title, metric, spaceId, onOpenScope, onClose }) {
+export default function DrilldownModal({ title, metric, spaceId, folderId, onOpenScope, onClose }) {
   const [rows, setRows] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -15,14 +15,14 @@ export default function DrilldownModal({ title, metric, spaceId, onOpenScope, on
     let alive = true;
     (async () => {
       setLoading(true); setErr("");
-      const { data, error } = await supabase.rpc("dashboard_drilldown", { p_metric: metric, p_space: spaceId || null });
+      const { data, error } = await supabase.rpc("dashboard_drilldown", { p_metric: metric, p_space: spaceId || null, p_folder: folderId || null });
       if (!alive) return;
       if (error) setErr(error.message);
       else setRows(data || []);
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [metric, spaceId]);
+  }, [metric, spaceId, folderId]);
 
   const open = (r) => { onOpenScope?.({ space_id: r.space_id, folder_id: r.folder_id, list_id: r.list_id }, r.id); onClose(); };
 
