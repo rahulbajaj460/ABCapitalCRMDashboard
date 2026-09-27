@@ -415,8 +415,12 @@ export default function Tasks({
       const folderHasLists = (spaceLists || []).some((l) => l.folder_id === activeFolder.id);
       setViewMode(folderHasLists ? "overview" : "list");
     } else if (activeSpace) setViewMode("overview");
+    // spaceLists is read inside the callback (it's declared later in the
+    // component, so it must NOT be in the deps array — that would evaluate it
+    // during render before initialization and crash). We only re-default on a
+    // scope change anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSpace?.id, activeFolder?.id, activeList?.id, spaceLists]);
+  }, [activeSpace?.id, activeFolder?.id, activeList?.id]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showFieldModal, setShowFieldModal] = useState(false);
