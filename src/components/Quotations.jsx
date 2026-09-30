@@ -225,14 +225,17 @@ async function ensureField(space, list, name, type, options, order, cache) {
   return field;
 }
 
-// File a generated quotation as a task in Delivery ▸ Quotation ▸ Quotations by
-// CRM. Instead of a description blob, each fee's AED value becomes a number
-// custom field (USD is skipped), plus a Free Zone dropdown and Total (AED).
+// File a generated quotation as a task under Delivery ▸ Quotation. Each template
+// files into its own per-freezone list ("CRM <FREEZONE> Quotations", e.g.
+// "CRM RAKEZ Quotations"), created on demand if it doesn't exist yet; if the
+// freezone is unknown it falls back to the shared "Quotations by CRM" list.
+// Each fee's AED value becomes a number custom field (USD is skipped), plus a
+// Free Zone dropdown and Total (AED).
 // Best-effort: callers catch errors so a failure never blocks the download.
 async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, taskTitle }) {
-  const findOne = async (table, filters) => {
+  const findOne = async (table, filters, { ci } = {}) => {
     let q = supabase.from(table).select("*").is("deleted_at", null);
-    for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
+    for (const [k, v] of Object.entries(filters)) q = ci === k ? q.ilike(k, v) : q.eq(k, v);
     const { data } = await q.limit(1).maybeSingle();
     return data;
   };
@@ -240,12 +243,24 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, task
   if (!space) throw new Error(`space "${CRM_TARGET.space}" not found`);
   const folder = await findOne("folders", { name: CRM_TARGET.folder, space_id: space.id });
   if (!folder) throw new Error(`folder "${CRM_TARGET.folder}" not found`);
-  const list = await findOne("lists", { name: CRM_TARGET.list, folder_id: folder.id });
-  if (!list) throw new Error(`list "${CRM_TARGET.list}" not found`);
 
-  const cache = new Map();
   // Clean, de-duplicated freezone names from all templates (e.g. "IFZA").
   const freeZoneName = cleanFreezone(tpl.freezone);
+
+  // Route to the per-template list. Match case-insensitively so a list the user
+  // created ("CRM RAKEZ Quotations") is reused rather than duplicated; create it
+  // if absent. Fall back to the shared list when we can't derive a freezone.
+  const perTemplateName = freeZoneName ? `CRM ${freeZoneName} Quotations` : CRM_TARGET.list;
+  let list = await findOne("lists", { name: perTemplateName, folder_id: folder.id }, { ci: "name" });
+  if (!list) {
+    const { data: created, error: listErr } = await supabase
+      .from("lists").insert({ folder_id: folder.id, space_id: space.id, name: perTemplateName })
+      .select().single();
+    if (listErr) throw new Error("list: " + listErr.message);
+    list = created;
+  }
+
+  const cache = new Map();
   const freeZoneOptions = [...new Set((templates || []).map((t) => cleanFreezone(t.freezone)).filter(Boolean))];
   const options = freeZoneOptions.length ? freeZoneOptions : [freeZoneName];
 
@@ -280,7 +295,7 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, task
   if (error) throw new Error("task: " + error.message);
 
   await supabase.from("task_field_values").insert(values.map((v) => ({ task_id: task.id, ...v })));
-  return task;
+  return { task, listName: list.name };
 }
 
 export default function Quotations({ profile }) {
@@ -415,8 +430,8 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
         try {
           const dateField = fields.find((f) => f.type === "date");
           const quotationDate = (dateField && values[dateField.key]) || new Date().toISOString().slice(0, 10);
-          await createCrmTask({ ctx, tpl, templates, profile, quotationDate, taskTitle: resolveQuotationName(ctx, fields) });
-          crmMsg = ` · Task created in ${CRM_TARGET.list}.`;
+          const { listName } = await createCrmTask({ ctx, tpl, templates, profile, quotationDate, taskTitle: resolveQuotationName(ctx, fields) });
+          crmMsg = ` · Task created in ${listName}.`;
         } catch (e) {
           crmMsg = ` · (CRM task not created: ${e.message})`;
         }
@@ -559,7 +574,7 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
 
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, fontSize: 13, color: "#555", cursor: "pointer" }}>
             <input type="checkbox" checked={makeTask} onChange={(e) => setMakeTask(e.target.checked)} style={{ width: 15, height: 15 }} />
-            Also create a task in <strong>{CRM_TARGET.list}</strong> (named by Business Activity, tagged with Free Zone)
+            Also create a task in <strong>{tpl && cleanFreezone(tpl.freezone) ? `CRM ${cleanFreezone(tpl.freezone)} Quotations` : CRM_TARGET.list}</strong> (named by Business Activity, tagged with Free Zone)
           </label>
           <button
             onClick={generateOne}
