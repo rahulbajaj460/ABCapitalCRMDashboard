@@ -97,11 +97,14 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
   // per item: {{ label }} | {{ amount }} | {{ amount_usd }} | {{ remarks }}.
   const items = [];
   let total = 0;
+  let totalUsd = 0; // sum of the per-line ROUNDED USD values (so the USD column foots)
   const pushItem = (label, n, remarks) => {
     const usd = n / rate;
+    const usdRounded = Math.round(usd);
     // amount_num keeps the raw AED number for CRM number fields
     items.push({ label, amount: fmtMoney(n), amount_usd: fmtUsd(usd), amount_num: n, remarks: remarks || "" });
     total += n;
+    totalUsd += usdRounded;
     return usd;
   };
 
@@ -127,7 +130,7 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
 
   ctx.items = items;
   ctx.total = fmtMoney(total);              // {{ total }}
-  ctx.total_usd = fmtUsd(total / rate);   // {{ total_usd }}
+  ctx.total_usd = fmtUsd(totalUsd);   // {{ total_usd }} — sum of the rounded line USDs, so it foots
   ctx.total_num = total;                    // raw AED total for the CRM field
   ctx.usd_rate = String(rate);
   if (!ctx.date) ctx.date = today();
