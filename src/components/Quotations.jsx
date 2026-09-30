@@ -579,9 +579,29 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
             )}
           </div>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, fontSize: 13, color: "#555", cursor: "pointer" }}>
-            <input type="checkbox" checked={makeTask} onChange={(e) => setMakeTask(e.target.checked)} style={{ width: 15, height: 15 }} />
-            Also create a task in <strong>{CRM_TARGET.list}</strong> (named by Business Activity, tagged with Free Zone; fees go into one Fee Breakdown field)
+          <label
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 11, marginTop: 22,
+              padding: "13px 15px", borderRadius: 10, cursor: "pointer",
+              border: `1px solid ${makeTask ? "var(--accent)" : "#e3e5e8"}`,
+              background: makeTask ? "var(--accent-weak, #e6f4f4)" : "#fff",
+              transition: "border-color .15s, background .15s",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={makeTask}
+              onChange={(e) => setMakeTask(e.target.checked)}
+              style={{ width: 16, height: 16, marginTop: 1, accentColor: "var(--accent)", flexShrink: 0 }}
+            />
+            <span style={{ minWidth: 0 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: "#1a1a1a" }}>
+                Also create a task in <span style={{ color: "var(--accent)" }}>{CRM_TARGET.list}</span>
+              </span>
+              <span style={{ display: "block", fontSize: 12, color: "#6b7280", marginTop: 3, lineHeight: 1.5 }}>
+                Named by Business Activity · tagged with Free Zone · fees stored in one Fee Breakdown field
+              </span>
+            </span>
           </label>
           <button
             onClick={generateOne}
