@@ -225,17 +225,19 @@ async function ensureField(space, list, name, type, options, order, cache) {
   return field;
 }
 
-// File a generated quotation as a task under Delivery ▸ Quotation. Each template
-// files into its own per-freezone list ("CRM <FREEZONE> Quotations", e.g.
-// "CRM RAKEZ Quotations"), created on demand if it doesn't exist yet; if the
-// freezone is unknown it falls back to the shared "Quotations by CRM" list.
-// Each fee's AED value becomes a number custom field (USD is skipped), plus a
-// Free Zone dropdown and Total (AED).
+// File a generated quotation as a task in the shared Delivery ▸ Quotation ▸
+// "Quotations by CRM" list. To keep the list from sprouting a new column per
+// template (and per ad-hoc row), we DON'T create a number field per fee. The
+// list has a fixed, small set of columns:
+//   Free Zone (dropdown) · Quotation Date (date) · Fee Breakdown (list) · Total (AED)
+// Every fee line and ad-hoc row is written as one line into the single
+// "Fee Breakdown" list field, so the column count never grows regardless of how
+// many templates or extra rows are involved.
 // Best-effort: callers catch errors so a failure never blocks the download.
 async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, taskTitle }) {
-  const findOne = async (table, filters, { ci } = {}) => {
+  const findOne = async (table, filters) => {
     let q = supabase.from(table).select("*").is("deleted_at", null);
-    for (const [k, v] of Object.entries(filters)) q = ci === k ? q.ilike(k, v) : q.eq(k, v);
+    for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
     const { data } = await q.limit(1).maybeSingle();
     return data;
   };
@@ -243,29 +245,16 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, task
   if (!space) throw new Error(`space "${CRM_TARGET.space}" not found`);
   const folder = await findOne("folders", { name: CRM_TARGET.folder, space_id: space.id });
   if (!folder) throw new Error(`folder "${CRM_TARGET.folder}" not found`);
-
-  // Clean, de-duplicated freezone names from all templates (e.g. "IFZA").
-  const freeZoneName = cleanFreezone(tpl.freezone);
-
-  // Route to the per-template list. Match case-insensitively so a list the user
-  // created ("CRM RAKEZ Quotations") is reused rather than duplicated; create it
-  // if absent. Fall back to the shared list when we can't derive a freezone.
-  const perTemplateName = freeZoneName ? `CRM ${freeZoneName} Quotations` : CRM_TARGET.list;
-  let list = await findOne("lists", { name: perTemplateName, folder_id: folder.id }, { ci: "name" });
-  if (!list) {
-    const { data: created, error: listErr } = await supabase
-      .from("lists").insert({ folder_id: folder.id, space_id: space.id, name: perTemplateName })
-      .select().single();
-    if (listErr) throw new Error("list: " + listErr.message);
-    list = created;
-  }
+  const list = await findOne("lists", { name: CRM_TARGET.list, folder_id: folder.id });
+  if (!list) throw new Error(`list "${CRM_TARGET.list}" not found`);
 
   const cache = new Map();
+  // Clean, de-duplicated freezone names from all templates (e.g. "IFZA").
+  const freeZoneName = cleanFreezone(tpl.freezone);
   const freeZoneOptions = [...new Set((templates || []).map((t) => cleanFreezone(t.freezone)).filter(Boolean))];
   const options = freeZoneOptions.length ? freeZoneOptions : [freeZoneName];
 
-  // Fields we'll set: Free Zone (dropdown) + one number field per fee (AED) +
-  // Total (AED). Build the (field, value) list first, then insert the task.
+  // Fixed columns: Free Zone (dropdown) + Quotation Date + Fee Breakdown + Total.
   const freeZone = await ensureField(space, list, FREEZONE_FIELD, "dropdown", options, 1, cache);
   // Keep the dropdown's options as the clean template set (drops any stale
   // "… Template" entries and stays editable via the field-options editor).
@@ -276,11 +265,18 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, task
   const dateField = await ensureField(space, list, "Quotation Date", "date", null, 2, cache);
   values.push({ field_id: dateField.id, value: quotationDate || new Date().toISOString().slice(0, 10) });
 
-  let order = 100;
-  for (const it of ctx.items || []) {
-    const f = await ensureField(space, list, `${it.label} (AED)`, "number", null, order++, cache);
-    values.push({ field_id: f.id, value: String(it.amount_num) });
-  }
+  // Fee Breakdown: one line per fee/ad-hoc row ("Label — AED 1,234 · remarks"),
+  // stored as a `list` field so it renders as a bullet list and never adds
+  // columns. `it.amount` is already the formatted AED string.
+  const breakdown = (ctx.items || [])
+    .map((it) => {
+      const base = `${it.label} — AED ${it.amount}`;
+      return it.remarks ? `${base} · ${it.remarks}` : base;
+    })
+    .join("\n");
+  const breakdownField = await ensureField(space, list, "Fee Breakdown", "list", null, 3, cache);
+  values.push({ field_id: breakdownField.id, value: breakdown });
+
   const totalField = await ensureField(space, list, "Total (AED)", "number", null, 900, cache);
   values.push({ field_id: totalField.id, value: String(ctx.total_num) });
 
@@ -574,7 +570,7 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
 
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 20, fontSize: 13, color: "#555", cursor: "pointer" }}>
             <input type="checkbox" checked={makeTask} onChange={(e) => setMakeTask(e.target.checked)} style={{ width: 15, height: 15 }} />
-            Also create a task in <strong>{tpl && cleanFreezone(tpl.freezone) ? `CRM ${cleanFreezone(tpl.freezone)} Quotations` : CRM_TARGET.list}</strong> (named by Business Activity, tagged with Free Zone)
+            Also create a task in <strong>{CRM_TARGET.list}</strong> (named by Business Activity, tagged with Free Zone; fees go into one Fee Breakdown field)
           </label>
           <button
             onClick={generateOne}
