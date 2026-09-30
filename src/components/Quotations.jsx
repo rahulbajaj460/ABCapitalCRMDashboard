@@ -37,6 +37,14 @@ const fmtMoney = (v) => {
   return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(v ?? "");
 };
 
+// USD amounts are shown as whole numbers (no decimals), rounded half-up: the
+// fractional part < .50 floors, >= .50 ceils (12.4 -> 12, 12.5 -> 13, 12.6 -> 13).
+// Math.round already rounds half-up for the non-negative values we deal with.
+const fmtUsd = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 }) : String(v ?? "");
+};
+
 const fmtDate = (v) => {
   if (v === "" || v === null || v === undefined) return "";
   const d = v instanceof Date ? v : new Date(v);
@@ -92,7 +100,7 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
   const pushItem = (label, n, remarks) => {
     const usd = n / rate;
     // amount_num keeps the raw AED number for CRM number fields
-    items.push({ label, amount: fmtMoney(n), amount_usd: fmtMoney(usd), amount_num: n, remarks: remarks || "" });
+    items.push({ label, amount: fmtMoney(n), amount_usd: fmtUsd(usd), amount_num: n, remarks: remarks || "" });
     total += n;
     return usd;
   };
@@ -105,7 +113,7 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
     if (!Number.isFinite(n)) continue; // non-numeric → omit (0 is kept, shows 0 / $0)
     const usd = pushItem(f.label, n, f.remarks);
     ctx[f.key] = fmtMoney(n);            // display the AED amount formatted
-    ctx[`${f.key}_usd`] = fmtMoney(usd); // e.g. {{ license_fee_usd }}
+    ctx[`${f.key}_usd`] = fmtUsd(usd); // e.g. {{ license_fee_usd }}
   }
 
   // ad-hoc rows added in the form (label + amount + remarks)
@@ -119,7 +127,7 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
 
   ctx.items = items;
   ctx.total = fmtMoney(total);              // {{ total }}
-  ctx.total_usd = fmtMoney(total / rate);   // {{ total_usd }}
+  ctx.total_usd = fmtUsd(total / rate);   // {{ total_usd }}
   ctx.total_num = total;                    // raw AED total for the CRM field
   ctx.usd_rate = String(rate);
   if (!ctx.date) ctx.date = today();
