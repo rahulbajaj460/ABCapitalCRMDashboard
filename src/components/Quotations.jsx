@@ -57,11 +57,18 @@ const stamp = () => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 };
 
+// Resolve the human name for a quotation (business activity / business name,
+// falling back to the first non-fee text field that has a value). Templates
+// differ in which key holds the activity (e.g. RAKEZ doesn't use
+// `business_activity`), so we can't rely on that one key alone.
+function resolveQuotationName(ctx, fields) {
+  const firstText = (fields || []).find((f) => !f.fee && f.type !== "date" && ctx[f.key]);
+  return ctx.business_activity || ctx.business_name || (firstText ? ctx[firstText.key] : "") || "";
+}
+
 // Output filename = <business activity / name> + date-time stamp.
 function docName(ctx, fields, extra = "") {
-  const firstText = fields.find((f) => !f.fee && f.type !== "date" && ctx[f.key]);
-  const name =
-    ctx.business_activity || ctx.business_name || (firstText ? ctx[firstText.key] : "") || "quotation";
+  const name = resolveQuotationName(ctx, fields) || "quotation";
   return `${safeName(name)} - ${stamp()}${extra}.docx`;
 }
 
@@ -222,7 +229,7 @@ async function ensureField(space, list, name, type, options, order, cache) {
 // CRM. Instead of a description blob, each fee's AED value becomes a number
 // custom field (USD is skipped), plus a Free Zone dropdown and Total (AED).
 // Best-effort: callers catch errors so a failure never blocks the download.
-async function createCrmTask({ ctx, tpl, templates, profile, quotationDate }) {
+async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, taskTitle }) {
   const findOne = async (table, filters) => {
     let q = supabase.from(table).select("*").is("deleted_at", null);
     for (const [k, v] of Object.entries(filters)) q = q.eq(k, v);
@@ -264,7 +271,7 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate }) {
 
   const status = await firstStatus(space.id, folder.id, list.id);
   const { data: task, error } = await supabase.from("tasks").insert({
-    title: ctx.business_activity || "Quotation",
+    title: (taskTitle && taskTitle.trim()) || ctx.business_activity || "Quotation",
     description: "",
     space_id: space.id, folder_id: folder.id, list_id: list.id,
     status, priority: "Medium", assignee: "", assignees: [],
@@ -408,7 +415,7 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
         try {
           const dateField = fields.find((f) => f.type === "date");
           const quotationDate = (dateField && values[dateField.key]) || new Date().toISOString().slice(0, 10);
-          await createCrmTask({ ctx, tpl, templates, profile, quotationDate });
+          await createCrmTask({ ctx, tpl, templates, profile, quotationDate, taskTitle: resolveQuotationName(ctx, fields) });
           crmMsg = ` · Task created in ${CRM_TARGET.list}.`;
         } catch (e) {
           crmMsg = ` · (CRM task not created: ${e.message})`;
