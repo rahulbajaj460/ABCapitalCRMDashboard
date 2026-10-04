@@ -174,6 +174,28 @@ export default function App() {
     if (user) fetchTaskCounts();
   }, [user, spaces]);
 
+  // Keep the sidebar task counts live: any task insert/update/delete (from this
+  // user or anyone else — new task, move between lists, trash, restore) refreshes
+  // the counts without a page reload. Debounced so a burst of changes (e.g. a CSV
+  // import) triggers a single refetch.
+  const countsRefreshTimer = useRef(null);
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => {
+      clearTimeout(countsRefreshTimer.current);
+      countsRefreshTimer.current = setTimeout(() => fetchTaskCounts(), 400);
+    };
+    const channel = supabase
+      .channel("sidebar-task-counts")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, refresh)
+      .subscribe();
+    return () => {
+      clearTimeout(countsRefreshTimer.current);
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, spaces]);
+
   useEffect(() => {
     if (profile && profile.role !== "admin") fetchAccessRules(profile);
     else if (profile?.role === "admin") setAccessRules({ restrictedSpaces: new Set(), allowedSpaces: new Set(), restrictedFolders: new Set(), allowedFolders: new Set() });
