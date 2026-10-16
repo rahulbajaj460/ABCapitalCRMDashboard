@@ -101,8 +101,11 @@ function buildContext(record, fields, seq, usdRate, extraRows = []) {
   const pushItem = (label, n, remarks) => {
     const usd = n / rate;
     const usdRounded = Math.round(usd);
+    // sl = running serial number (1, 2, 3 …) for the row, usable as {{ sl }}
+    // in a Sl. No. column inside the {{#items}} loop.
+    const sl = items.length + 1;
     // amount_num keeps the raw AED number for CRM number fields
-    items.push({ label, amount: fmtMoney(n), amount_usd: fmtUsd(usd), amount_num: n, remarks: remarks || "" });
+    items.push({ sl, label, amount: fmtMoney(n), amount_usd: fmtUsd(usd), amount_num: n, remarks: remarks || "" });
     total += n;
     totalUsd += usdRounded;
     return usd;
@@ -982,9 +985,10 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
                 <strong style={{ color: "#666" }}>For a table that supports extra rows,</strong> make the fee table a single
                 repeating row (put this in one table row of your .docx):
                 <br />
-                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{#items}} {{label}} | {{amount}} | {{amount_usd}} | {{remarks}} {{/items}}"}</code>
+                <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{#items}} {{sl}} | {{label}} | {{amount}} | {{amount_usd}} | {{remarks}} {{/items}}"}</code>
                 <br />
                 That one row auto-repeats for every fee <em>and</em> any additional rows added at generation time.
+                Use <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ sl }}"}</code> for an auto-incrementing serial number (1, 2, 3 …), and drop any column you don't need (e.g. omit <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ remarks }}"}</code> if there's no Remarks column).
                 <br />
                 <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total }}"}</code> (AED) and{" "}
                 <code style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 4, padding: "1px 5px" }}>{"{{ total_usd }}"}</code> include those extra rows too.
