@@ -837,6 +837,13 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
   const setField = (i, patch) => setFields((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const addField = () => setFields((fs) => [...fs, { key: "", label: "", type: "text", fee: false, remarks: "" }]);
   const removeField = (i) => setFields((fs) => fs.filter((_, j) => j !== i));
+  const moveField = (i, dir) => setFields((fs) => {
+    const j = i + dir;
+    if (j < 0 || j >= fs.length) return fs;
+    const next = [...fs];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
 
   async function save() {
     setErr(null);
@@ -955,11 +962,11 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
           </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 0.75fr 0.5fr 1.1fr 28px", gap: 8, fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".04em" }}>
-            <span>Label</span><span>Key (placeholder)</span><span>Type</span><span>Fee?</span><span>Remarks</span><span />
+          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 0.75fr 0.5fr 1.1fr 40px 28px", gap: 8, fontSize: 10.5, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".04em" }}>
+            <span>Label</span><span>Key (placeholder)</span><span>Type</span><span>Fee?</span><span>Remarks</span><span style={{ textAlign: "center" }}>Order</span><span />
           </div>
           {fields.map((f, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 0.75fr 0.5fr 1.1fr 28px", gap: 8, alignItems: "center" }}>
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 0.75fr 0.5fr 1.1fr 40px 28px", gap: 8, alignItems: "center" }}>
               <input value={f.label} placeholder="Business name"
                 onChange={(e) => setField(i, { label: e.target.value, key: f.key || slugify(e.target.value) })}
                 style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5 }} />
@@ -979,6 +986,12 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
                 title={f.fee ? "Shown in the fee table's Remarks column" : "Remarks apply to fee rows"}
                 onChange={(e) => setField(i, { remarks: e.target.value })}
                 style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #e0e0e0", fontSize: 12.5, background: f.fee ? "#fff" : "#f5f5f4" }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, justifySelf: "center" }}>
+                <button onClick={() => moveField(i, -1)} disabled={i === 0} title="Move up"
+                  style={{ border: "none", background: "none", cursor: i === 0 ? "default" : "pointer", color: i === 0 ? "#dcdcdc" : "#888", fontSize: 11, lineHeight: 1, padding: "1px 4px" }}>▲</button>
+                <button onClick={() => moveField(i, 1)} disabled={i === fields.length - 1} title="Move down"
+                  style={{ border: "none", background: "none", cursor: i === fields.length - 1 ? "default" : "pointer", color: i === fields.length - 1 ? "#dcdcdc" : "#888", fontSize: 11, lineHeight: 1, padding: "1px 4px" }}>▼</button>
+              </div>
               <button onClick={() => removeField(i)} title="Remove" style={{ border: "none", background: "none", cursor: "pointer", color: "#c4c9c9" }}>
                 <IconTrash size={15} />
               </button>
