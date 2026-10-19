@@ -291,6 +291,20 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, task
   const breakdownField = await ensureField(space, list, "Fee Breakdown", "list", null, 3, cache);
   values.push({ field_id: breakdownField.id, value: breakdown });
 
+  // Activity: if the template has a (non-fee) "Activity" field, map its value
+  // into an "Activity" text column on the task. Matched by key or label so it
+  // works whatever the template calls it, as long as it's "activity".
+  const activityField = (tpl.fields || []).find(
+    (f) => !f.fee && ((f.key || "").toLowerCase() === "activity" || (f.label || "").trim().toLowerCase() === "activity"),
+  );
+  if (activityField) {
+    const activityVal = ctx[activityField.key];
+    if (activityVal != null && String(activityVal).trim() !== "") {
+      const actField = await ensureField(space, list, "Activity", "text", null, 4, cache);
+      values.push({ field_id: actField.id, value: String(activityVal) });
+    }
+  }
+
   const totalField = await ensureField(space, list, "Total (AED)", "number", null, 900, cache);
   values.push({ field_id: totalField.id, value: String(ctx.total_num) });
 
