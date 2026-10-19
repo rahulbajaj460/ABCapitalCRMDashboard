@@ -292,16 +292,18 @@ async function createCrmTask({ ctx, tpl, templates, profile, quotationDate, task
   values.push({ field_id: breakdownField.id, value: breakdown });
 
   // Activity: if the template has a (non-fee) "Activity" field, map its value
-  // into an "Activity" text column on the task. Matched by key or label so it
-  // works whatever the template calls it, as long as it's "activity".
+  // into an "Activity" list column on the task (one activity per line → renders
+  // as bullets). Matched by key or label so it works whatever the template
+  // calls it, as long as it's "activity". Not rendered in the .docx — task only.
   const activityField = (tpl.fields || []).find(
     (f) => !f.fee && ((f.key || "").toLowerCase() === "activity" || (f.label || "").trim().toLowerCase() === "activity"),
   );
   if (activityField) {
-    const activityVal = ctx[activityField.key];
-    if (activityVal != null && String(activityVal).trim() !== "") {
-      const actField = await ensureField(space, list, "Activity", "text", null, 4, cache);
-      values.push({ field_id: actField.id, value: String(activityVal) });
+    const activityVal = String(ctx[activityField.key] ?? "")
+      .split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join("\n"); // drop blank lines
+    if (activityVal) {
+      const actField = await ensureField(space, list, "Activity", "list", null, 4, cache);
+      values.push({ field_id: actField.id, value: activityVal });
     }
   }
 
@@ -551,12 +553,22 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
                 <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 4 }}>
                   {f.label}{f.fee ? " (AED)" : ""}
                 </label>
-                <input
-                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                  value={values[f.key] ?? ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
-                />
+                {f.type === "list" ? (
+                  <textarea
+                    rows={4}
+                    placeholder="One per line…"
+                    value={values[f.key] ?? ""}
+                    onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                  />
+                ) : (
+                  <input
+                    type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                    value={values[f.key] ?? ""}
+                    onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                    style={{ width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -959,6 +971,7 @@ function TemplateEditor({ template, profile, onClose, onSaved }) {
                 <option value="text">text</option>
                 <option value="number">number</option>
                 <option value="date">date</option>
+                <option value="list">list (multi-line)</option>
               </select>
               <input type="checkbox" checked={!!f.fee} onChange={(e) => setField(i, { fee: e.target.checked })}
                 title="Include in the fee table and Total" style={{ justifySelf: "center", width: 16, height: 16 }} />
