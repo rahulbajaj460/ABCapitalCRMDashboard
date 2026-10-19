@@ -549,7 +549,7 @@ function GenerateTab({ templates, downloadTemplateBuffer, profile }) {
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {fields.map((f) => (
-              <div key={f.key}>
+              <div key={f.key} style={f.type === "list" ? { gridColumn: "1 / -1" } : undefined}>
                 <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 4 }}>
                   {f.label}{f.fee ? " (AED)" : ""}
                 </label>
